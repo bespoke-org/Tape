@@ -4,6 +4,7 @@ import LineCore
 struct TrackingPopover: View {
     let model: AppModel
     let dismiss: () -> Void
+    let contentSizeDidChange: (CGSize) -> Void
     @State private var taskName = ""
     @State private var isTaskPickerShown = false
     @FocusState private var isTaskFieldFocused: Bool
@@ -48,6 +49,11 @@ struct TrackingPopover: View {
         }
         .padding(20)
         .frame(width: 620)
+        .onGeometryChange(for: CGSize.self) { proxy in
+            proxy.size
+        } action: { size in
+            contentSizeDidChange(size)
+        }
         .onExitCommand {
             if isTaskPickerShown {
                 closeTaskPicker()

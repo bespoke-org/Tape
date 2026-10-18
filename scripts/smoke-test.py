@@ -37,6 +37,6 @@ with tempfile.TemporaryDirectory(prefix="line-smoke-") as data:
     # Reopen the real store after the app exits; clean shutdown must have fixed every endpoint.
     import json
     records = json.loads((Path(data) / "tracking.json").read_text())
-    assert len(records["entries"]) == 2
+    assert len(records["entries"]) == 7
     assert all(entry.get("end") is not None for entry in records["entries"])
     print("PASS: packaged app exited with completed entries saved.")

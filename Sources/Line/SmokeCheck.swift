@@ -6,11 +6,23 @@ import LineCore
 /// Drives its own native field editor without requiring system-wide Accessibility permission.
 @MainActor
 enum SmokeCheck {
+    private static var initialContentGap: CGFloat?
     static func run(button: NSStatusBarButton, popover: NSPopover, model: AppModel, output: URL) async {
+        initialContentGap = nil
+        // Keep unrelated desktop clicks from dismissing this isolated test window.
+        // Closing through the status item is still exercised below.
+        let originalBehavior = popover.behavior
+        popover.behavior = .applicationDefined
+        defer { popover.behavior = originalBehavior }
         do {
             try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
             try require(NSApp.activationPolicy() == .accessory, "App must have no Dock icon")
             try require(button.image != nil, "Status item must have an icon")
+            for name in ["Planning", "Writing", "Review", "Research"] {
+                try require(model.start(name), "Seed reusable tasks")
+                try require(model.stop(), "Stop seed entries")
+            }
+            let initialEntryCount = model.store!.entries.count
             try await settle()
             try clickStatusItem(button)
             try await settle()
@@ -19,6 +31,7 @@ enum SmokeCheck {
 
             try requirePickerHidden(popover)
             try await openPicker(named: "Start task", in: popover)
+            try requireAnchored(popover, to: button)
             try enterTaskName("Build Line", in: popover)
             try await settle()
             try require(model.store?.runningTask?.name == "Build Line", "Submitting the native text field must start tracking")
@@ -32,13 +45,21 @@ enum SmokeCheck {
             try require(spokenDuration?.isEmpty == false, "Elapsed time must expose its value to VoiceOver")
 
             try await openPicker(named: "Switch task", in: popover)
+            try requireAnchored(popover, to: button)
             try enterTaskName("Read", in: popover)
             try await settle()
             try require(model.store?.runningTask?.name == "Read", "Submitting another name must switch tasks")
-            try require(model.store?.entries.count == 2, "Switching must preserve the first entry")
-            try require(model.store?.entries.first?.start == firstStart, "Switching must preserve the original start")
-            try require(model.store?.entries.first?.end == model.store?.runningEntry?.start, "Switched entries must touch")
+            try require(model.store?.entries.count == initialEntryCount + 2, "Switching must preserve the first entry")
+            try require(model.store?.entries[initialEntryCount].start == firstStart, "Switching must preserve the original start")
+            try require(model.store?.entries[initialEntryCount].end == model.store?.runningEntry?.start, "Switched entries must touch")
             try requirePickerHidden(popover)
+            try requireAnchored(popover, to: button)
+            try await openPicker(named: "Switch task", in: popover)
+            try pressAccessibleButton(named: "Switch to Build Line", in: contentView(popover))
+            try await settle()
+            try require(model.store?.runningTask?.name == "Build Line", "Choosing an existing task must switch tracking")
+            try requirePickerHidden(popover)
+            try requireAnchored(popover, to: button)
             try await openPicker(named: "Switch task", in: popover)
             try enterTaskName("No matching task", in: popover, submit: false)
             try await settle()
@@ -60,7 +81,7 @@ enum SmokeCheck {
             try await settle()
             try require(!popover.isShown, "Status item must close its popover")
             try require(popover.contentViewController == nil, "Closing must remove the rendering schedule")
-            try require(model.store?.runningTask?.name == "Read", "Closing must not stop tracking")
+            try require(model.store?.runningTask?.name == "Build Line", "Closing must not stop tracking")
             try clickStatusItem(button)
             try await settle()
             try require(popover.isShown, "Popover must reopen")
@@ -105,6 +126,14 @@ enum SmokeCheck {
         }
         let anchor = anchorWindow.convertToScreen(button.convert(button.bounds, to: nil))
         let gap = anchor.minY - window.frame.maxY
+        let view = popover.contentViewController!.view
+        let content = window.convertToScreen(view.convert(view.bounds, to: nil))
+        let contentGap = anchor.minY - content.maxY
+        if let initialContentGap {
+            try require(abs(contentGap - initialContentGap) <= 2, "Popover content must stay anchored; initial gap \(initialContentGap), current gap \(contentGap)")
+        } else {
+            initialContentGap = contentGap
+        }
         try require(abs(gap) <= 12, "Popover must stay attached to its status item; vertical gap is \(gap) points (anchor: \(anchor), window: \(window.frame))")
     }
 

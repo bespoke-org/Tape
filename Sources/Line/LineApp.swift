@@ -109,6 +109,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         popover.animates = !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         let controller = NSHostingController(rootView: TrackingPopover(model: model, dismiss: { [weak self] in
             self?.popover.performClose(nil)
+        }, contentSizeDidChange: { [weak self] size in
+            self?.resizePopover(to: size)
         }))
         popover.contentViewController = controller
         // AppKit anchors using the initial size. A later shrink otherwise leaves a gap below the icon.
@@ -117,6 +119,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         NSApplication.shared.activate(ignoringOtherApps: true)
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         popover.contentViewController?.view.window?.makeKey()
+    }
+
+    private func resizePopover(to size: CGSize) {
+        guard let controller = popover.contentViewController else { return }
+        // Wait until SwiftUI has applied its layout, then refresh the native anchor.
+        DispatchQueue.main.async { [weak self, weak controller] in
+            guard let self, let controller,
+                  self.popover.isShown, self.popover.contentViewController === controller,
+                  let button = self.statusItem.button else { return }
+            self.popover.contentSize = size
+            self.popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        }
     }
 
     func popoverDidClose(_ notification: Notification) {
