@@ -16,6 +16,10 @@ Each ticket delivers usable behavior through UI, tracking operations, local stor
 | 06 | Resume interrupted work with a cancellable countdown | 04, 05 | Show a non-focus-stealing menu bar countdown, include its interval on completion, support Reject/dismiss/re-lock, and verify cancellation by all implemented creation/editing actions. |
 | 07 | Finish personal installation and verify complete workflows | 06 | Optional launch at login, reproducible local build/install instructions, and verification of the packaged app, native appearance/accessibility, persistence, and combined tracking workflows. |
 
+## Deferred follow-up
+
+- [08: Migrate local storage to SQLite](issues/08-migrate-local-storage-to-sqlite.md), blocked by 02. Replace whole-history JSON writes with transactional updates and visible-range queries; preserve existing data through a retry-safe migration and retain the JSON backup. Added at the user's request for later; it does not block tickets 01–07.
+
 ## Acceptance outline
 
 ### 01: Track tasks on a live timeline
