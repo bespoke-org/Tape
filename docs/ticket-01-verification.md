@@ -33,6 +33,10 @@ The user's screenshot exposed a detached popover below the menu bar. The native 
 
 After the task picker became collapsible, resizing reproduced an 8.5-point downward shift that the original 12-point tolerance missed. SwiftUI now reports content-size changes, and the app refreshes the native popover size and status-item anchor after layout without replacing the hosting controller. The smoke check seeds a full-height task list, exercises new and existing task selection, and measures the content's top edge relative to its initial position with a 2-point tolerance. The corrected run stayed within 0.5 points through expansion, selection, search filtering, Escape, and reopening. The isolated smoke popover uses application-defined dismissal to prevent unrelated desktop clicks from interrupting measurements; production still uses transient dismissal, and the test explicitly exercises closing through the status item.
 
+## Popover resize stability
+
+The anchor refresh exposed a layout feedback loop: SwiftUI measured the height offered by the hosting window, then that measurement resized the same window. A reopened popover repeatedly alternated between 182 and 183 points tall. Measuring the root view at its natural vertical size breaks that dependency while retaining dynamic picker resizing and native anchoring. The smoke check now samples content position and height 50 times over one second after opening, selecting an existing task, reopening, and stopping. It failed on the one-point oscillation before the fix and passes afterward, alongside the anchor checks.
+
 ## Timeline bounds correction
 
 An isolated SwiftUI ImageRenderer render of the actual LiveTimeline reproduced ticks extending 4 points below the 64-point strip, with the Now marker extending 10 points above and only 4 below. After clipping ticks to the rounded strip and deriving the marker height from a shared overhang, the same pixel check found no tick pixels below the strip and equal 10-point overhangs. The check used a fixed timestamp and a 2× dark render without opening an interactive popover. This verifies timeline geometry, not system-material compositing.

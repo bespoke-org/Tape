@@ -49,6 +49,8 @@ struct TrackingPopover: View {
         }
         .padding(20)
         .frame(width: 620)
+        // Measure natural height so resizing the popover cannot feed back into this measurement.
+        .fixedSize(horizontal: false, vertical: true)
         .onGeometryChange(for: CGSize.self) { proxy in
             proxy.size
         } action: { size in

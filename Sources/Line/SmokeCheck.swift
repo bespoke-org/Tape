@@ -28,6 +28,7 @@ enum SmokeCheck {
             try await settle()
             try require(popover.isShown, "Status item must open its popover")
             try requireAnchored(popover, to: button)
+            try await requireStablePosition(popover)
 
             try requirePickerHidden(popover)
             try await openPicker(named: "Start task", in: popover)
@@ -57,6 +58,7 @@ enum SmokeCheck {
             try require(model.store?.runningTask?.name == "Build Line", "Choosing an existing task must switch tracking")
             try requirePickerHidden(popover)
             try requireAnchored(popover, to: button)
+            try await requireStablePosition(popover)
             try await openPicker(named: "Switch task", in: popover)
             try enterTaskName("No matching task", in: popover, submit: false)
             try await settle()
@@ -84,13 +86,15 @@ enum SmokeCheck {
             try require(popover.isShown, "Popover must reopen")
             try requirePickerHidden(popover)
             try requireAnchored(popover, to: button)
+            try await requireStablePosition(popover)
 
             // Native Stop is a SwiftUI button. Its public accessibility action stays within this process.
             let content = try contentView(popover)
             try pressAccessibleButton(named: "Stop", in: content)
             try await settle()
             try require(model.store?.runningTask == nil, "Stop button must end tracking")
-            try Data("PASS: native status item, no Dock policy, task picker reveal/focus/collapse/Escape, task field submission, start/switch/stop, live duration, close/reopen, popover anchoring through content resizing.\n".utf8)
+            try await requireStablePosition(popover)
+            try Data("PASS: native status item, no Dock policy, task picker reveal/focus/collapse/Escape, task field submission, start/switch/stop, live duration, close/reopen, popover anchoring through content resizing, stable resting position and height.\n".utf8)
                 .write(to: output.appendingPathComponent("result.txt"))
             NSApp.terminate(nil)
         } catch {
@@ -103,6 +107,22 @@ enum SmokeCheck {
 
     private static func settle() async throws {
         try await Task.sleep(for: .milliseconds(600))
+    }
+
+    private static func requireStablePosition(_ popover: NSPopover) async throws {
+        var tops: [CGFloat] = []
+        var heights: [CGFloat] = []
+        for _ in 0..<50 {
+            let view = try contentView(popover)
+            guard let window = view.window else { throw NSError(domain: "LineSmokeCheck", code: 8) }
+            tops.append(window.convertToScreen(view.convert(view.bounds, to: nil)).maxY)
+            heights.append(view.bounds.height)
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        let movement = tops.max()! - tops.min()!
+        try require(movement <= 0.25, "Idle popover must not shake; its content moved \(movement) points in one second")
+        let resizing = heights.max()! - heights.min()!
+        try require(resizing <= 0.25, "Idle popover must not resize repeatedly; its content height varied by \(resizing) points in one second")
     }
 
     private static func requirePickerHidden(_ popover: NSPopover) throws {
