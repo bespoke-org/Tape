@@ -53,7 +53,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         statusItem.button?.target = self
-        statusItem.button?.action = #selector(togglePopover)
+        statusItem.button?.action = #selector(handleStatusItemClick)
+        statusItem.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
         popover.behavior = .transient
         popover.delegate = self
         updateStatus()
@@ -77,12 +78,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         #endif
     }
 
-    @objc private func togglePopover() {
+    @objc private func handleStatusItemClick() {
+        let event = NSApplication.shared.currentEvent
+        if event?.type == .rightMouseUp || event?.modifierFlags.contains(.control) == true {
+            showActionsMenu()
+            return
+        }
         if popover.isShown {
             popover.performClose(nil)
         } else {
             showPopover()
         }
+    }
+
+    private func showActionsMenu() {
+        popover.close()
+        let menu = NSMenu()
+        let quit = NSMenuItem(title: "Quit Line", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        quit.target = NSApplication.shared
+        menu.addItem(quit)
+
+        // Let the status item present its native menu, then restore left-click handling.
+        statusItem.menu = menu
+        defer { statusItem.menu = nil }
+        statusItem.button?.performClick(nil)
     }
 
     private func showPopover() {

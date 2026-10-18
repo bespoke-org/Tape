@@ -17,19 +17,7 @@ struct TrackingPopover: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Text("Line").font(.headline)
-                Spacer()
-                Menu {
-                    Button("Quit Line") { NSApplication.shared.terminate(nil) }
-                        .keyboardShortcut("q")
-                } label: {
-                    Image(systemName: "ellipsis")
-                }
-                .menuStyle(.borderlessButton)
-                .fixedSize()
-                .accessibilityLabel("Line menu")
-            }
+            Text("Line").font(.headline)
 
             if let store = model.store {
                 TimelineView(.periodic(from: .now, by: reduceMotion ? 5 : 1)) { context in

@@ -6,6 +6,7 @@ Working record of agreed behavior and unresolved decisions. This is not the impl
 
 - Line is a Swift macOS menu bar app with no Dock icon.
 - Clicking the menu bar icon opens a popover; clicking outside dismisses it. Tracking continues while it is closed, and the icon indicates whether tracking is running.
+- Secondary click on the menu bar icon opens a native actions menu containing only Quit Line for now. Trackpad secondary click and Control-click use this menu. The popover has no three-dot menu or Quit action.
 - The main view is a continuous horizontal timeline with extensive scrolling in either direction.
 - While following the present, time moves beneath a centered now marker. Browsing pauses following; a Now action returns to the present and resumes following. The now marker need not remain visible when browsing.
 - Click-and-drag on empty timeline space creates a time entry. Horizontal scrolling browses time; Shift+mouse-wheel provides a mouse alternative.

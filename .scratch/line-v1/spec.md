@@ -65,7 +65,7 @@ The app should look and behave like a native macOS 26 utility, using system cont
 
 - Build in Swift for macOS 26.0 or later, using SwiftUI and AppKit where needed for menu bar integration, focus behavior, and system lifecycle events. The verified development machine runs macOS 26.6.2 on Apple Silicon, with Xcode 26.5 and Swift 6.3.2.
 - Use a native status item/popover integration that supports both deliberate user interaction and automatic, non-focus-stealing continuation presentation. Verify these behaviors with a runnable app early; do not assume an ordinary interactive popover automatically meets the focus requirement.
-- Keep the menu bar icon compact; task names and elapsed time belong inside the popover. Provide Start/task selection, Stop, switch, Now while browsing, and access to preferences and Quit.
+- Keep the menu bar icon compact; task names and elapsed time belong inside the popover. Left-click opens the timeline with Start/task selection, Stop, switch, and Now while browsing. Secondary click (including trackpad secondary click and Control-click) opens a native actions menu containing only Quit Line for now. The popover has no three-dot menu or Quit action. Add access to preferences when the later settings features are implemented.
 - Keep tracking operations separate from view rendering and system-event delivery. Route mutations through a single application-level boundary so overlap validation, persistence, and cancellation rules apply consistently to every interaction.
 - Separate timeline coordinate/gesture calculations from tracking timestamps. Rendering cadence must not determine elapsed time or create persistent writes for every animation frame. Avoid continuous timeline rendering while its popover is closed.
 
