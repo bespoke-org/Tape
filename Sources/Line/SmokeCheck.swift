@@ -17,9 +17,12 @@ enum SmokeCheck {
             try require(popover.isShown, "Status item must open its popover")
             try requireAnchored(popover, to: button)
 
+            try requirePickerHidden(popover)
+            try await openPicker(named: "Start task…", in: popover)
             try enterTaskName("Build Line", in: popover)
             try await settle()
             try require(model.store?.runningTask?.name == "Build Line", "Submitting the native text field must start tracking")
+            try requirePickerHidden(popover)
             try requireAnchored(popover, to: button)
             let firstStart = model.store?.runningEntry?.start
             try await Task.sleep(for: .seconds(1))
@@ -28,17 +31,30 @@ enum SmokeCheck {
             let spokenDuration = elapsed.flatMap { attribute("accessibilityValue", of: $0) as? String }
             try require(spokenDuration?.isEmpty == false, "Elapsed time must expose its value to VoiceOver")
 
+            try await openPicker(named: "Switch task…", in: popover)
             try enterTaskName("Read", in: popover)
             try await settle()
             try require(model.store?.runningTask?.name == "Read", "Submitting another name must switch tasks")
             try require(model.store?.entries.count == 2, "Switching must preserve the first entry")
             try require(model.store?.entries.first?.start == firstStart, "Switching must preserve the original start")
             try require(model.store?.entries.first?.end == model.store?.runningEntry?.start, "Switched entries must touch")
+            try requirePickerHidden(popover)
+            try await openPicker(named: "Switch task…", in: popover)
             try enterTaskName("No matching task", in: popover, submit: false)
             try await settle()
             try requireAnchored(popover, to: button)
             try enterTaskName("", in: popover, submit: false)
             try await settle()
+            try requireAnchored(popover, to: button)
+            let window = try contentView(popover).window!
+            let escape = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [],
+                                          timestamp: ProcessInfo.processInfo.systemUptime,
+                                          windowNumber: window.windowNumber, context: nil,
+                                          characters: "\u{1b}", charactersIgnoringModifiers: "\u{1b}", isARepeat: false, keyCode: 53)!
+            window.sendEvent(escape)
+            try await settle()
+            try require(popover.isShown, "Escape in the picker must keep the timeline open")
+            try requirePickerHidden(popover)
             try requireAnchored(popover, to: button)
             try clickStatusItem(button)
             try await settle()
@@ -48,6 +64,7 @@ enum SmokeCheck {
             try clickStatusItem(button)
             try await settle()
             try require(popover.isShown, "Popover must reopen")
+            try requirePickerHidden(popover)
             try requireAnchored(popover, to: button)
 
             // Native Stop is a SwiftUI button. Its public accessibility action stays within this process.
@@ -55,7 +72,7 @@ enum SmokeCheck {
             try pressAccessibleButton(named: "Stop", in: content)
             try await settle()
             try require(model.store?.runningTask == nil, "Stop button must end tracking")
-            try Data("PASS: native status item, no Dock policy, task field submission, start/switch/stop, live duration, close/reopen, popover anchoring through content resizing, elapsed accessibility value.\n".utf8)
+            try Data("PASS: native status item, no Dock policy, task picker reveal/focus/collapse/Escape, task field submission, start/switch/stop, live duration, close/reopen, popover anchoring through content resizing, elapsed accessibility value.\n".utf8)
                 .write(to: output.appendingPathComponent("result.txt"))
             NSApp.terminate(nil)
         } catch {
@@ -68,6 +85,18 @@ enum SmokeCheck {
 
     private static func settle() async throws {
         try await Task.sleep(for: .milliseconds(600))
+    }
+
+    private static func requirePickerHidden(_ popover: NSPopover) throws {
+        let fields = descendants(try contentView(popover)).compactMap { $0 as? NSTextField }
+        try require(!fields.contains(where: \.isEditable), "Task picker must be hidden by default and after selection or Escape")
+    }
+
+    private static func openPicker(named title: String, in popover: NSPopover) async throws {
+        try pressAccessibleButton(named: title, in: contentView(popover))
+        try await settle()
+        let fields = descendants(try contentView(popover)).compactMap { $0 as? NSTextField }
+        try require(fields.contains(where: { $0.isEditable && $0.currentEditor() != nil }), "Revealing the picker must focus its search field")
     }
 
     private static func requireAnchored(_ popover: NSPopover, to button: NSStatusBarButton) throws {

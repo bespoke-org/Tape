@@ -5,6 +5,7 @@ struct TrackingPopover: View {
     let model: AppModel
     let dismiss: () -> Void
     @State private var taskName = ""
+    @State private var isTaskPickerShown = false
     @FocusState private var isTaskFieldFocused: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -24,7 +25,14 @@ struct TrackingPopover: View {
                         LiveTimeline(store: store, now: context.date)
                     }
                 }
-                taskPicker(store: store)
+                if isTaskPickerShown {
+                    taskPicker(store: store)
+                        .task {
+                            await Task.yield()
+                            guard !Task.isCancelled else { return }
+                            isTaskFieldFocused = true
+                        }
+                }
             } else {
                 ContentUnavailableView("Couldn’t open your time records", systemImage: "externaldrive.badge.exclamationmark")
                 Button("Try Again") { model.load() }
@@ -40,8 +48,13 @@ struct TrackingPopover: View {
         }
         .padding(20)
         .frame(width: 620)
-        .onAppear { isTaskFieldFocused = true }
-        .onExitCommand(perform: dismiss)
+        .onExitCommand {
+            if isTaskPickerShown {
+                closeTaskPicker()
+            } else {
+                dismiss()
+            }
+        }
     }
 
     @ViewBuilder
@@ -55,6 +68,7 @@ struct TrackingPopover: View {
                     .font(.system(.title3, design: .monospaced)).monospacedDigit()
                     .accessibilityLabel("Elapsed time")
                     .accessibilityValue(Duration.seconds(entry.duration(at: now)).formatted(.time(pattern: .hourMinuteSecond)))
+                pickerButton("Switch task…")
                 Button { _ = model.stop() } label: {
                     Label("Stop", systemImage: "stop.fill")
                 }
@@ -63,9 +77,27 @@ struct TrackingPopover: View {
             } else {
                 Text("Not tracking").font(.title3.weight(.medium))
                 Spacer()
+                pickerButton("Start task…")
             }
         }
         .frame(minHeight: 24)
+    }
+
+    private func pickerButton(_ title: String) -> some View {
+        Button(title) {
+            if isTaskPickerShown {
+                closeTaskPicker()
+            } else {
+                isTaskPickerShown = true
+            }
+        }
+        .buttonStyle(.glass)
+    }
+
+    private func closeTaskPicker() {
+        isTaskFieldFocused = false
+        isTaskPickerShown = false
+        taskName = ""
     }
 
     private func taskPicker(store: TrackingStore) -> some View {
@@ -108,7 +140,7 @@ struct TrackingPopover: View {
 
     private func start(_ name: String) {
         guard !name.isEmpty else { return }
-        if model.start(name) { taskName = "" }
+        if model.start(name) { closeTaskPicker() }
     }
 }
 
