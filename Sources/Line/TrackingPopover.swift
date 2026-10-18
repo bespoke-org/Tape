@@ -24,7 +24,6 @@ struct TrackingPopover: View {
                         LiveTimeline(store: store, now: context.date)
                     }
                 }
-                Divider()
                 taskPicker(store: store)
             } else {
                 ContentUnavailableView("Couldn’t open your time records", systemImage: "externaldrive.badge.exclamationmark")
