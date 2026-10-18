@@ -22,7 +22,7 @@ struct TrackingPopover: View {
             if let store = model.store {
                 TimelineView(.periodic(from: .now, by: reduceMotion ? 5 : 1)) { context in
                     VStack(alignment: .leading, spacing: 2) {
-                        runningControls(store: store, now: context.date)
+                        runningControls(store: store)
                         LiveTimeline(store: store, now: context.date)
                     }
                 }
@@ -64,16 +64,12 @@ struct TrackingPopover: View {
     }
 
     @ViewBuilder
-    private func runningControls(store: TrackingStore, now: Date) -> some View {
+    private func runningControls(store: TrackingStore) -> some View {
         HStack(spacing: 12) {
-            if let task = store.runningTask, let entry = store.runningEntry {
+            if let task = store.runningTask {
                 Circle().fill(task.color.displayColor).frame(width: 10, height: 10).accessibilityHidden(true)
                 Text(task.name).font(.title3.weight(.medium)).lineLimit(1)
                 Spacer(minLength: 8)
-                Text(Duration.seconds(entry.duration(at: now)), format: .time(pattern: .hourMinuteSecond))
-                    .font(.system(.title3, design: .monospaced)).monospacedDigit()
-                    .accessibilityLabel("Elapsed time")
-                    .accessibilityValue(Duration.seconds(entry.duration(at: now)).formatted(.time(pattern: .hourMinuteSecond)))
                 pickerButton("Switch task", systemImage: "arrow.left.arrow.right")
                 Button { _ = model.stop() } label: {
                     Label("Stop", systemImage: "stop.fill")

@@ -28,7 +28,7 @@ The app should look and behave like a native macOS 26 utility, using system cont
 8. As the user, I want to rename and recolor a task across all its entries, so that I can keep my records consistent.
 9. As the user, I want duplicate task names to be prevented regardless of capitalization or surrounding spaces, so that I do not accidentally split one activity into multiple tasks.
 10. As the user, I want to start, stop, and switch tasks, so that I can track what I am doing as it changes.
-11. As the user, I want to see the running task and its current entry's elapsed time, so that I know what Line is recording.
+11. As the user, I want to see the running task and its growing timeline entry, so that I know what Line is recording.
 12. As the user, I want to view recorded entries on a continuous horizontal timeline, so that I can understand where my time went.
 13. As the user, I want the timeline to follow the present beneath a centered now marker, so that the display stays current.
 14. As the user, I want to scroll backward and forward without the view snapping back, so that I can browse time freely.
@@ -65,7 +65,7 @@ The app should look and behave like a native macOS 26 utility, using system cont
 
 - Build in Swift for macOS 26.0 or later, using SwiftUI and AppKit where needed for menu bar integration, focus behavior, and system lifecycle events. The verified development machine runs macOS 26.6.2 on Apple Silicon, with Xcode 26.5 and Swift 6.3.2.
 - Use a native status item/popover integration that supports both deliberate user interaction and automatic, non-focus-stealing continuation presentation. Verify these behaviors with a runnable app early; do not assume an ordinary interactive popover automatically meets the focus requirement.
-- Keep the menu bar icon compact; task names and elapsed time belong inside the popover. Left-click opens the timeline with Start/task selection, Stop, switch, and Now while browsing. Secondary click (including trackpad secondary click and Control-click) opens a native actions menu containing only Quit Line for now. The popover has no three-dot menu or Quit action. Add access to preferences when the later settings features are implemented.
+- Keep the menu bar icon compact; task names belong inside the popover; omit the elapsed-time display for now. Left-click opens the timeline with Start/task selection, Stop, switch, and Now while browsing. Secondary click (including trackpad secondary click and Control-click) opens a native actions menu containing only Quit Line for now. The popover has no three-dot menu or Quit action. Add access to preferences when the later settings features are implemented.
 - Keep tracking operations separate from view rendering and system-event delivery. Route mutations through a single application-level boundary so overlap validation, persistence, and cancellation rules apply consistently to every interaction.
 - The default popover shows the current state and timeline, with task selection hidden behind Start task or Switch task. Revealing the inline picker focuses its search field. Successful task selection or Escape collapses the picker; Escape with no picker open dismisses the popover. Reopening starts with the picker hidden. Keep the layout compact without titles, subtitles, a current-date heading, or a divider above the picker.
 - Separate timeline coordinate/gesture calculations from tracking timestamps. Rendering cadence must not determine elapsed time or create persistent writes for every animation frame. Avoid continuous timeline rendering while its popover is closed.
@@ -74,7 +74,7 @@ The app should look and behave like a native macOS 26 utility, using system cont
 
 - A task has a stable identifier, display name, and color. Trim names, reject empty names, and compare names without case sensitivity when checking uniqueness. Renaming and recoloring retain identity and apply to all linked entries.
 - Assign a random initial color from a palette checked for legibility. Allow later color changes while keeping labels readable. Task color is not the only indication of identity.
-- A time entry has a stable identifier, task reference, start instant, and either a fixed end instant or running state. Only one entry can be running. Display elapsed time for that entry, not the task's lifetime total.
+- A time entry has a stable identifier, task reference, start instant, and either a fixed end instant or running state. Only one entry can be running. The running entry continues accumulating time without a numeric elapsed-time display.
 - Use absolute instants for storage and duration calculation, with local dates/times for presentation. Preserve durations across midnight and daylight-saving transitions; ambiguous local timestamp edits must identify the intended instant rather than silently changing duration.
 - Completed entries have positive duration, end no later than now, and do not overlap. Touching endpoints are allowed. Treat intervals as start-inclusive and end-exclusive so switching tasks at one instant produces adjacent entries.
 - Starting a different task ends the previous entry and starts the new entry at the same instant as one operation. Starting the already-running task is a no-op. These are implementation defaults that preserve the single-running-task rule.

@@ -40,9 +40,6 @@ enum SmokeCheck {
             let firstStart = model.store?.runningEntry?.start
             try await Task.sleep(for: .seconds(1))
             try require((model.store?.runningEntry?.duration(at: .now) ?? 0) >= 1, "Running entry must grow")
-            let elapsed = accessibilityElement(named: "Elapsed time", in: try contentView(popover))
-            let spokenDuration = elapsed.flatMap { attribute("accessibilityValue", of: $0) as? String }
-            try require(spokenDuration?.isEmpty == false, "Elapsed time must expose its value to VoiceOver")
 
             try await openPicker(named: "Switch task", in: popover)
             try requireAnchored(popover, to: button)
@@ -93,7 +90,7 @@ enum SmokeCheck {
             try pressAccessibleButton(named: "Stop", in: content)
             try await settle()
             try require(model.store?.runningTask == nil, "Stop button must end tracking")
-            try Data("PASS: native status item, no Dock policy, task picker reveal/focus/collapse/Escape, task field submission, start/switch/stop, live duration, close/reopen, popover anchoring through content resizing, elapsed accessibility value.\n".utf8)
+            try Data("PASS: native status item, no Dock policy, task picker reveal/focus/collapse/Escape, task field submission, start/switch/stop, live duration, close/reopen, popover anchoring through content resizing.\n".utf8)
                 .write(to: output.appendingPathComponent("result.txt"))
             NSApp.terminate(nil)
         } catch {

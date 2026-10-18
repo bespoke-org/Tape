@@ -22,7 +22,7 @@ Each ticket delivers usable behavior through UI, tracking operations, local stor
 
 - Build and run a native Swift app bundle on this Mac without a Dock icon; show a compact status item and a dismissible popover with system controls and materials.
 - Type to create or search reusable tasks; enforce trimmed, nonempty, case-insensitively unique names and persist a random legible color.
-- Start, stop, and switch tasks with a single-running-entry invariant, adjacent switch timestamps, elapsed display, and a running indicator. Closing the popover does not stop tracking.
+- Start, stop, and switch tasks with a single-running-entry invariant, adjacent switch timestamps, and a running indicator. Closing the popover does not stop tracking.
 - Show saved and growing entries with readable task labels/colors on a basic four-hour timeline centered on now. Follow time automatically beneath the now marker, with enough date/time context to read the strip.
 - Verify that starting a task grows its entry on the timeline, stopping fixes its endpoint, and switching produces adjacent entries. Keep the basic timeline legible in light/dark appearance and with accessibility preferences; closed popovers do not need continuous rendering.
 - Save mutations atomically; persist five-second running checkpoints; reopen the store; clean quit ends tracking and relaunch starts idle. Unexpected-exit recovery stops at the saved point rather than counting downtime.

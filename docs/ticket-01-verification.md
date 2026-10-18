@@ -5,13 +5,13 @@ Implementation: [Track tasks on a live timeline](../.scratch/line-v1/issues/01-t
 ## Automated checks
 
 - `swift test`: eight tests pass at the public tracking boundary with controlled time and real temporary storage.
-- `python3 scripts/smoke-test.py`: passes. The runner builds a separate debug app under `build/smoke/`, uses isolated data, and imposes a 20-second timeout on the app process. It submits text through the native field editor, invokes the public accessible Stop action, checks tracking transitions and elapsed accessibility output, and opens/closes/reopens the actual popover. It measures the popover's screen-space distance from the status item on opening, task creation, search-result height changes, and reopening. The debug-only driver is absent from release builds.
+- `python3 scripts/smoke-test.py`: passes. The runner builds a separate debug app under `build/smoke/`, uses isolated data, and imposes a 20-second timeout on the app process. It submits text through the native field editor, invokes the public accessible Stop action, checks tracking transitions and growing entry duration, and opens/closes/reopens the actual popover. It measures the popover's screen-space distance from the status item on opening, task creation, search-result height changes, and reopening. The debug-only driver is absent from release builds.
 - The smoke runner verifies that the process exited and persisted completed entries. No test instance is intentionally left running.
 - Release app built with `./scripts/build-app.sh release`; bundle signature and property-list validation run on the produced app.
 
 ## Standards review
 
-One finding: the elapsed text's accessibility label replaced its spoken duration without providing a value. Fixed by supplying the formatted duration as the accessibility value. The smoke check verifies that the value is present.
+One finding: the elapsed text's accessibility label replaced its spoken duration without providing a value. Fixed by supplying the formatted duration as the accessibility value. The elapsed-time display was subsequently removed at the user's request; the smoke check still verifies that the running entry accumulates time.
 
 No significant structural smell findings. Tracking operations remain separate from rendering, domain vocabulary is consistent, and system controls/materials are used.
 
