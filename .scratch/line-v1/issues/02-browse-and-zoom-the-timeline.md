@@ -21,7 +21,7 @@ Native macOS appearance, Liquid Glass use, and accessibility follow the spec and
 
 ## Verification
 
-- Thirteen core tests pass, including following/browsing, anchored zoom, adaptive ticks across daylight-saving changes, range-query endpoints, and backward-compatible zoom persistence.
+- Fourteen core tests pass, including following/browsing, anchored zoom, adaptive ticks across daylight-saving changes, multi-day labels, range-query endpoints, and backward-compatible zoom persistence.
 - Both bounded packaged-app smoke modes pass. Timeline mode tests synthetic AppKit input, Now, reopening, zoom persistence across fresh launches, and stable anchoring. Existing tracking and jitter regressions also pass.
 - Real trackpad scrolling/pinch and the complete appearance/accessibility matrix remain manual checks; synthetic inputs do not establish physical gesture behavior.
 - See [the verification record](../../../docs/ticket-02-verification.md).

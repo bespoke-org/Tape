@@ -12,9 +12,11 @@ The native input view monitors only scroll/magnify events in its own window and 
 
 ## Automated checks
 
-- `swift test`: 13 tests pass. Added coverage includes frozen browsing versus following, pointer-anchored zoom, finite scale bounds, adaptive/DST-aware ticks, interval-query boundaries, and zoom persistence from an older JSON store without changing crash-recovery timestamps.
+- `swift test`: 14 tests pass. Added coverage includes frozen browsing versus following, pointer-anchored zoom, finite scale bounds, adaptive/DST-aware ticks, multi-day labels, interval-query boundaries, and zoom persistence from an older JSON store without changing crash-recovery timestamps.
 - `python3 scripts/smoke-test.py`: existing task controls, checkpoint persistence, picker, anchoring, and jitter checks pass.
 - `python3 scripts/smoke-test.py --timeline`: synthetic events exercise the production AppKit handler for horizontal/Shift scroll, ignored vertical/outside events, cumulative pinch, zoom anchors, and persistence. The native Now button and reopening restore following. Two fresh app processes verify saved zoom. Each process has a 20-second timeout and isolated data.
+
+Standards and spec reviews found repeated date labels at subdaily intervals in wider views. Labels now show dates at midnight and times between them, with a regression test for a 48-hour view. The follow-up review confirmed the fix; no actionable findings remain.
 
 ## Limits and manual checks
 

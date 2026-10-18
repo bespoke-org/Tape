@@ -77,4 +77,12 @@ public struct TimelineViewport {
         }
         return result
     }
+
+    public static func tickLabel(for date: Date, calendar: Calendar = .current, locale: Locale = .current) -> String {
+        let format = Date.FormatStyle(locale: locale, calendar: calendar, timeZone: calendar.timeZone)
+        if calendar.component(.hour, from: date) == 0 && calendar.component(.minute, from: date) == 0 {
+            return date.formatted(format.month(.abbreviated).day())
+        }
+        return date.formatted(format.hour().minute())
+    }
 }

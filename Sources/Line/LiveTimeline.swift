@@ -38,7 +38,7 @@ struct LiveTimeline: View {
 
                     ForEach(ticks, id: \.self) { date in
                         let x = position(date, width: width)
-                        Text(tickLabel(date))
+                        Text(TimelineViewport.tickLabel(for: date))
                             .font(.caption2).monospacedDigit().foregroundStyle(.secondary)
                             .fixedSize()
                             .position(x: min(max(x, 22), width - 22), y: 108)
@@ -127,17 +127,6 @@ struct LiveTimeline: View {
         }
         return visibleRange.start.formatted(date: .abbreviated, time: .omitted) + " – " +
             visibleRange.end.formatted(date: .abbreviated, time: .omitted)
-    }
-
-    private func tickLabel(_ date: Date) -> String {
-        if viewport.span >= 2 * 86_400 {
-            return date.formatted(.dateTime.month(.abbreviated).day())
-        }
-        if !viewport.isFollowingNow && Calendar.current.component(.hour, from: date) == 0 &&
-            Calendar.current.component(.minute, from: date) == 0 {
-            return date.formatted(.dateTime.month(.abbreviated).day())
-        }
-        return date.formatted(.dateTime.hour().minute())
     }
 
     private func entryDescription(_ entry: TimeEntry, task: TrackedTask) -> String {

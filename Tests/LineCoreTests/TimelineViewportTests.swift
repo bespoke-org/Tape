@@ -3,6 +3,20 @@ import Testing
 import LineCore
 
 struct TimelineViewportTests {
+    @Test func multiDayTicksKeepHoursAndIdentifyMidnight() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let now = try #require(ISO8601DateFormatter().date(from: "2026-10-18T12:00:00Z"))
+        let viewport = TimelineViewport(span: 2 * 86_400)
+        let ticks = viewport.ticks(at: now, width: 580, calendar: calendar)
+        let labels = ticks.map { TimelineViewport.tickLabel(for: $0, calendar: calendar, locale: Locale(identifier: "en_US")) }
+        #expect(labels[0] != labels[1])
+        #expect(labels[0].contains(":"))
+        let midnight = try #require(ticks.firstIndex { calendar.component(.hour, from: $0) == 0 })
+        #expect(labels[midnight].contains("Oct"))
+        #expect(!labels[midnight].contains(":"))
+    }
+
     @Test func tickDensityAdaptsAndLocalDaysRespectDaylightSaving() throws {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = try #require(TimeZone(identifier: "America/New_York"))
