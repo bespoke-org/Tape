@@ -17,8 +17,6 @@ struct TrackingPopover: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Line").font(.headline)
-
             if let store = model.store {
                 TimelineView(.periodic(from: .now, by: reduceMotion ? 5 : 1)) { context in
                     VStack(alignment: .leading, spacing: 14) {
@@ -67,14 +65,11 @@ struct TrackingPopover: View {
                 .buttonStyle(.glass)
                 .help("Stop tracking this task")
             } else {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Not tracking").font(.title3.weight(.medium))
-                    Text("Choose a task to begin.").font(.caption).foregroundStyle(.secondary)
-                }
+                Text("Not tracking").font(.title3.weight(.medium))
                 Spacer()
             }
         }
-        .frame(height: 44)
+        .frame(height: store.runningTask == nil ? 24 : 44)
     }
 
     private func taskPicker(store: TrackingStore) -> some View {

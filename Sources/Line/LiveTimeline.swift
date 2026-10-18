@@ -21,8 +21,6 @@ struct LiveTimeline: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(now, format: .dateTime.weekday(.wide).month(.abbreviated).day())
-                .font(.caption).foregroundStyle(.secondary)
             GeometryReader { geometry in
                 let width = geometry.size.width
                 ZStack(alignment: .topLeading) {
