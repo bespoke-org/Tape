@@ -68,7 +68,7 @@ struct TrackingPopover: View {
                     .font(.system(.title3, design: .monospaced)).monospacedDigit()
                     .accessibilityLabel("Elapsed time")
                     .accessibilityValue(Duration.seconds(entry.duration(at: now)).formatted(.time(pattern: .hourMinuteSecond)))
-                pickerButton("Switch task…")
+                pickerButton("Switch task", systemImage: "arrow.left.arrow.right")
                 Button { _ = model.stop() } label: {
                     Label("Stop", systemImage: "stop.fill")
                 }
@@ -77,18 +77,24 @@ struct TrackingPopover: View {
             } else {
                 Text("Not tracking").font(.title3.weight(.medium))
                 Spacer()
-                pickerButton("Start task…")
+                pickerButton("Start task")
             }
         }
         .frame(minHeight: 24)
     }
 
-    private func pickerButton(_ title: String) -> some View {
-        Button(title) {
+    private func pickerButton(_ title: String, systemImage: String? = nil) -> some View {
+        Button {
             if isTaskPickerShown {
                 closeTaskPicker()
             } else {
                 isTaskPickerShown = true
+            }
+        } label: {
+            if let systemImage {
+                Label(title, systemImage: systemImage)
+            } else {
+                Text(title)
             }
         }
         .buttonStyle(.glass)

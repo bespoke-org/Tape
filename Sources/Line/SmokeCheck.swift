@@ -18,7 +18,7 @@ enum SmokeCheck {
             try requireAnchored(popover, to: button)
 
             try requirePickerHidden(popover)
-            try await openPicker(named: "Start task…", in: popover)
+            try await openPicker(named: "Start task", in: popover)
             try enterTaskName("Build Line", in: popover)
             try await settle()
             try require(model.store?.runningTask?.name == "Build Line", "Submitting the native text field must start tracking")
@@ -31,7 +31,7 @@ enum SmokeCheck {
             let spokenDuration = elapsed.flatMap { attribute("accessibilityValue", of: $0) as? String }
             try require(spokenDuration?.isEmpty == false, "Elapsed time must expose its value to VoiceOver")
 
-            try await openPicker(named: "Switch task…", in: popover)
+            try await openPicker(named: "Switch task", in: popover)
             try enterTaskName("Read", in: popover)
             try await settle()
             try require(model.store?.runningTask?.name == "Read", "Submitting another name must switch tasks")
@@ -39,7 +39,7 @@ enum SmokeCheck {
             try require(model.store?.entries.first?.start == firstStart, "Switching must preserve the original start")
             try require(model.store?.entries.first?.end == model.store?.runningEntry?.start, "Switched entries must touch")
             try requirePickerHidden(popover)
-            try await openPicker(named: "Switch task…", in: popover)
+            try await openPicker(named: "Switch task", in: popover)
             try enterTaskName("No matching task", in: popover, submit: false)
             try await settle()
             try requireAnchored(popover, to: button)

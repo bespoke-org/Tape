@@ -11,7 +11,7 @@ open build/Line.app
 
 The script builds a release executable and creates an ad-hoc-signed app bundle. For a debug build, use `./scripts/build-app.sh debug`. Open `Package.swift` in Xcode to work on the Swift package; launch the bundled app to verify its menu bar and no-Dock behavior.
 
-Click Line's menu bar icon to see the current state and timeline. Start task… or Switch task… reveals and focuses the task picker. Enter a name and press Return or Start, or choose an existing task from the list. Choosing a task or pressing Escape hides the picker. Switching tasks ends the previous entry at the new entry's start. Stop ends tracking; closing the popover leaves it running. The four-hour timeline follows now and shows saved and growing entries. Right-click the menu bar icon, including a trackpad secondary click or Control-click, for the native menu containing Quit Line.
+Click Line's menu bar icon to see the current state and timeline. Start task or Switch task reveals and focuses the task picker. Enter a name and press Return or Start, or choose an existing task from the list. Choosing a task or pressing Escape hides the picker. Switching tasks ends the previous entry at the new entry's start. Stop ends tracking; closing the popover leaves it running. The four-hour timeline follows now and shows saved and growing entries. Right-click the menu bar icon, including a trackpad secondary click or Control-click, for the native menu containing Quit Line.
 
 Ticket 1 supplies this basic tracking experience. Timeline scrolling/zooming, drawing/editing entries, lock/sleep handling, automatic continuation, and launch at login are subsequent tickets and are not implemented yet. Until lock/sleep handling lands, stop tracking before leaving the Mac.
 
