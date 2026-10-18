@@ -89,7 +89,7 @@ struct LiveTimeline: View {
                 }
                 .clipped()
             }
-            .frame(height: 124)
+            .frame(height: 116)
             .accessibilityElement(children: .contain)
             .accessibilityLabel("Timeline, four hours centered on now")
         }
