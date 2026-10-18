@@ -31,6 +31,10 @@ The environment could launch the native app and exercise its own controls, but e
 
 The user's screenshot exposed a detached popover below the menu bar. The native smoke check reproduced an 86-point vertical gap twice on the initial empty popover. AppKit positioned the initial fixed-height popover before SwiftUI shrank it to fit the content. Measuring the hosting view's fitting size before each presentation removed the offset. The regression check now requires the popover's top edge to remain within 12 points of the status item's bottom edge, including after content changes and reopening. The existing native animation and anchor rectangle remain unchanged.
 
+## Timeline bounds correction
+
+An isolated SwiftUI ImageRenderer render of the actual LiveTimeline reproduced ticks extending 4 points below the 64-point strip, with the Now marker extending 10 points above and only 4 below. After clipping ticks to the rounded strip and deriving the marker height from a shared overhang, the same pixel check found no tick pixels below the strip and equal 10-point overhangs. The check used a fixed timestamp and a 2× dark render without opening an interactive popover. This verifies timeline geometry, not system-material compositing.
+
 ## Limits of this slice
 
 This is the first runnable version. Scrolling, pinch zoom, drawing/editing entries, screen-lock/sleep stopping, continuation countdowns, and launch at login belong to later tickets. Stop tracking before leaving the Mac until lock/sleep handling is implemented.

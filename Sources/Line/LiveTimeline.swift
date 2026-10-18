@@ -8,6 +8,9 @@ struct LiveTimeline: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     private let span: TimeInterval = 4 * 60 * 60
+    private let stripTop: CGFloat = 28
+    private let stripHeight: CGFloat = 64
+    private let nowOverhang: CGFloat = 10
     private var lower: Date { now.addingTimeInterval(-span / 2) }
     private var upper: Date { now.addingTimeInterval(span / 2) }
     private var visibleEntries: [TimeEntry] {
@@ -26,12 +29,19 @@ struct LiveTimeline: View {
                 ZStack(alignment: .topLeading) {
                     RoundedRectangle(cornerRadius: 8)
                         .fill(reduceTransparency ? Color(nsColor: .controlBackgroundColor) : Color.primary.opacity(0.035))
-                        .frame(height: 64).offset(y: 28)
+                        .frame(height: stripHeight)
+                        .overlay(alignment: .topLeading) {
+                            ForEach(ticks, id: \.self) { date in
+                                Rectangle().fill(Color.primary.opacity(contrast == .increased ? 0.35 : 0.12))
+                                    .frame(width: 1, height: stripHeight)
+                                    .offset(x: position(date, width: width))
+                            }
+                        }
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .offset(y: stripTop)
 
                     ForEach(ticks, id: \.self) { date in
                         let x = position(date, width: width)
-                        Rectangle().fill(Color.primary.opacity(contrast == .increased ? 0.35 : 0.12))
-                            .frame(width: 1, height: 68).offset(x: x, y: 28)
                         Text(date, format: .dateTime.hour().minute())
                             .font(.caption2).monospacedDigit().foregroundStyle(.secondary)
                             .fixedSize()
@@ -58,7 +68,7 @@ struct LiveTimeline: View {
                                     }
                                 }
                                 .frame(width: entryWidth, height: 46)
-                                .offset(x: left, y: 37)
+                                .offset(x: left, y: stripTop + (stripHeight - 46) / 2)
                                 .help(entryDescription(entry, task: task))
                                 .accessibilityElement(children: .ignore)
                                 .accessibilityLabel(entryDescription(entry, task: task))
@@ -68,11 +78,11 @@ struct LiveTimeline: View {
                     if visibleEntries.isEmpty {
                         Text("Start a task to begin tracking.")
                             .font(.callout).foregroundStyle(.secondary)
-                            .frame(width: width / 2 - 12, height: 64).offset(y: 28)
+                            .frame(width: width / 2 - 12, height: stripHeight).offset(y: stripTop)
                     }
 
-                    Rectangle().fill(.primary).frame(width: 1.5, height: 78)
-                        .offset(x: width / 2, y: 18)
+                    Rectangle().fill(.primary).frame(width: 1.5, height: stripHeight + 2 * nowOverhang)
+                        .offset(x: width / 2, y: stripTop - nowOverhang)
                     Text("Now").font(.caption2.weight(.semibold))
                         .position(x: width / 2, y: 7)
                         .accessibilityLabel("Now, \(now.formatted(date: .omitted, time: .shortened))")
