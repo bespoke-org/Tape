@@ -5,7 +5,7 @@ Implementation: [Track tasks on a live timeline](../.scratch/line-v1/issues/01-t
 ## Automated checks
 
 - `swift test`: eight tests pass at the public tracking boundary with controlled time and real temporary storage.
-- `python3 scripts/smoke-test.py`: passes. The runner builds a debug app, uses isolated data, and imposes a 20-second timeout on the app process. It submits text through the native field editor, invokes the public accessible Stop action, checks tracking transitions and elapsed accessibility output, and opens/closes/reopens the actual popover. The debug-only driver is absent from release builds.
+- `python3 scripts/smoke-test.py`: passes. The runner builds a separate debug app under `build/smoke/`, uses isolated data, and imposes a 20-second timeout on the app process. It submits text through the native field editor, invokes the public accessible Stop action, checks tracking transitions and elapsed accessibility output, and opens/closes/reopens the actual popover. It measures the popover's screen-space distance from the status item on opening, task creation, search-result height changes, and reopening. The debug-only driver is absent from release builds.
 - The smoke runner verifies that the process exited and persisted completed entries. No test instance is intentionally left running.
 - Release app built with `./scripts/build-app.sh release`; bundle signature and property-list validation run on the produced app.
 
@@ -26,6 +26,10 @@ One finding: the same missing elapsed accessibility value. Fixed and checked. No
 - Exercise outside-click dismissal, task selection, and VoiceOver in ordinary desktop use.
 
 The environment could launch the native app and exercise its own controls, but external accessibility automation was disabled and a full window capture failed. View-cache bitmaps did not faithfully composite system materials, so those images are not accepted as visual evidence. The ticket retains the manual acceptance items unchecked.
+
+## Popover placement regression
+
+The user's screenshot exposed a detached popover below the menu bar. The native smoke check reproduced an 86-point vertical gap twice on the initial empty popover. AppKit positioned the initial fixed-height popover before SwiftUI shrank it to fit the content. Measuring the hosting view's fitting size before each presentation removed the offset. The regression check now requires the popover's top edge to remain within 12 points of the status item's bottom edge, including after content changes and reopening. The existing native animation and anchor rectangle remain unchanged.
 
 ## Limits of this slice
 

@@ -6,7 +6,9 @@ import subprocess
 import tempfile
 
 root = Path(__file__).resolve().parent.parent
-subprocess.run([str(root / "scripts/build-app.sh"), "debug"], cwd=root, check=True, timeout=180)
+app = root / "build/smoke/Line.app"
+subprocess.run([str(root / "scripts/build-app.sh"), "debug"], cwd=root,
+               env=dict(os.environ, LINE_APP_OUTPUT=str(app)), check=True, timeout=180)
 output = root / "build/smoke-results"
 output.mkdir(parents=True, exist_ok=True)
 report = output / "result.txt"
@@ -15,7 +17,7 @@ report.unlink(missing_ok=True)
 with tempfile.TemporaryDirectory(prefix="line-smoke-") as data:
     try:
         result = subprocess.run(
-            [str(root / "build/Line.app/Contents/MacOS/Line"), "--smoke-test", str(output)],
+            [str(app / "Contents/MacOS/Line"), "--smoke-test", str(output)],
             env=dict(os.environ, LINE_DATA_DIRECTORY=data),
             capture_output=True, text=True, timeout=20,
         )

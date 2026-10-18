@@ -15,10 +15,12 @@ enum SmokeCheck {
             try clickStatusItem(button)
             try await settle()
             try require(popover.isShown, "Status item must open its popover")
+            try requireAnchored(popover, to: button)
 
-            try submit("Build Line", in: popover)
+            try enterTaskName("Build Line", in: popover)
             try await settle()
             try require(model.store?.runningTask?.name == "Build Line", "Submitting the native text field must start tracking")
+            try requireAnchored(popover, to: button)
             let firstStart = model.store?.runningEntry?.start
             try await Task.sleep(for: .seconds(1))
             try require((model.store?.runningEntry?.duration(at: .now) ?? 0) >= 1, "Running entry must grow")
@@ -26,12 +28,18 @@ enum SmokeCheck {
             let spokenDuration = elapsed.flatMap { attribute("accessibilityValue", of: $0) as? String }
             try require(spokenDuration?.isEmpty == false, "Elapsed time must expose its value to VoiceOver")
 
-            try submit("Read", in: popover)
+            try enterTaskName("Read", in: popover)
             try await settle()
             try require(model.store?.runningTask?.name == "Read", "Submitting another name must switch tasks")
             try require(model.store?.entries.count == 2, "Switching must preserve the first entry")
             try require(model.store?.entries.first?.start == firstStart, "Switching must preserve the original start")
             try require(model.store?.entries.first?.end == model.store?.runningEntry?.start, "Switched entries must touch")
+            try enterTaskName("No matching task", in: popover, submit: false)
+            try await settle()
+            try requireAnchored(popover, to: button)
+            try enterTaskName("", in: popover, submit: false)
+            try await settle()
+            try requireAnchored(popover, to: button)
             try clickStatusItem(button)
             try await settle()
             try require(!popover.isShown, "Status item must close its popover")
@@ -40,13 +48,14 @@ enum SmokeCheck {
             try clickStatusItem(button)
             try await settle()
             try require(popover.isShown, "Popover must reopen")
+            try requireAnchored(popover, to: button)
 
             // Native Stop is a SwiftUI button. Its public accessibility action stays within this process.
             let content = try contentView(popover)
             try pressAccessibleButton(named: "Stop", in: content)
             try await settle()
             try require(model.store?.runningTask == nil, "Stop button must end tracking")
-            try Data("PASS: native status item, no Dock policy, task field submission, start/switch/stop, live duration, close/reopen, elapsed accessibility value.\n".utf8)
+            try Data("PASS: native status item, no Dock policy, task field submission, start/switch/stop, live duration, close/reopen, popover anchoring through content resizing, elapsed accessibility value.\n".utf8)
                 .write(to: output.appendingPathComponent("result.txt"))
             NSApp.terminate(nil)
         } catch {
@@ -59,6 +68,15 @@ enum SmokeCheck {
 
     private static func settle() async throws {
         try await Task.sleep(for: .milliseconds(600))
+    }
+
+    private static func requireAnchored(_ popover: NSPopover, to button: NSStatusBarButton) throws {
+        guard let anchorWindow = button.window, let window = popover.contentViewController?.view.window else {
+            throw NSError(domain: "LineSmokeCheck", code: 8, userInfo: [NSLocalizedDescriptionKey: "Popover or status item has no window"])
+        }
+        let anchor = anchorWindow.convertToScreen(button.convert(button.bounds, to: nil))
+        let gap = anchor.minY - window.frame.maxY
+        try require(abs(gap) <= 12, "Popover must stay attached to its status item; vertical gap is \(gap) points (anchor: \(anchor), window: \(window.frame))")
     }
 
     private static func clickStatusItem(_ button: NSStatusBarButton) throws {
@@ -79,7 +97,7 @@ enum SmokeCheck {
         return view
     }
 
-    private static func submit(_ name: String, in popover: NSPopover) throws {
+    private static func enterTaskName(_ name: String, in popover: NSPopover, submit: Bool = true) throws {
         let content = try contentView(popover)
         guard let field = descendants(content).compactMap({ $0 as? NSTextField }).first(where: \.isEditable),
               let window = field.window else {
@@ -91,6 +109,7 @@ enum SmokeCheck {
         }
         editor.selectAll(nil)
         editor.insertText(name, replacementRange: editor.selectedRange())
+        guard submit else { return }
         guard let event = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [],
                                           timestamp: ProcessInfo.processInfo.systemUptime,
                                           windowNumber: window.windowNumber, context: nil,

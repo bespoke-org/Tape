@@ -56,7 +56,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         statusItem.button?.action = #selector(togglePopover)
         popover.behavior = .transient
         popover.delegate = self
-        popover.contentSize = NSSize(width: 620, height: 420)
         updateStatus()
 
         let timer = Timer(timeInterval: 5, repeats: true) { [weak self] _ in
@@ -89,9 +88,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private func showPopover() {
         guard let button = statusItem.button else { return }
         popover.animates = !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-        popover.contentViewController = NSHostingController(rootView: TrackingPopover(model: model, dismiss: { [weak self] in
+        let controller = NSHostingController(rootView: TrackingPopover(model: model, dismiss: { [weak self] in
             self?.popover.performClose(nil)
         }))
+        popover.contentViewController = controller
+        // AppKit anchors using the initial size. A later shrink otherwise leaves a gap below the icon.
+        popover.contentSize = controller.view.fittingSize
         // This path is user-initiated. Automatic continuation gets its own non-activating path later.
         NSApplication.shared.activate(ignoringOtherApps: true)
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)

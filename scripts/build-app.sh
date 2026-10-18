@@ -11,7 +11,7 @@ esac
 
 swift build -c "$configuration"
 binary_dir="$(swift build -c "$configuration" --show-bin-path)"
-app_dir="$project_dir/build/Line.app"
+app_dir="${LINE_APP_OUTPUT:-$project_dir/build/Line.app}"
 mkdir -p "$app_dir/Contents/MacOS" "$app_dir/Contents/Resources"
 cp "$binary_dir/Line" "$app_dir/Contents/MacOS/Line"
 cp Resources/Info.plist "$app_dir/Contents/Info.plist"
