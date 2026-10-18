@@ -50,10 +50,7 @@ struct TrackingPopover: View {
         HStack(spacing: 12) {
             if let task = store.runningTask, let entry = store.runningEntry {
                 Circle().fill(task.color.displayColor).frame(width: 10, height: 10).accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(task.name).font(.title3.weight(.medium)).lineLimit(1)
-                    Text("Tracking").font(.caption).foregroundStyle(.secondary)
-                }
+                Text(task.name).font(.title3.weight(.medium)).lineLimit(1)
                 Spacer(minLength: 8)
                 Text(Duration.seconds(entry.duration(at: now)), format: .time(pattern: .hourMinuteSecond))
                     .font(.system(.title3, design: .monospaced)).monospacedDigit()
@@ -69,7 +66,7 @@ struct TrackingPopover: View {
                 Spacer()
             }
         }
-        .frame(height: store.runningTask == nil ? 24 : 44)
+        .frame(minHeight: 24)
     }
 
     private func taskPicker(store: TrackingStore) -> some View {
@@ -93,9 +90,7 @@ struct TrackingPopover: View {
                                     Circle().fill(task.color.displayColor).frame(width: 8, height: 8)
                                     Text(task.name).lineLimit(1)
                                     Spacer()
-                                    if task.id == store.runningTask?.id {
-                                        Text("Tracking").font(.caption).foregroundStyle(.secondary)
-                                    } else {
+                                    if task.id != store.runningTask?.id {
                                         Image(systemName: "play.fill").font(.caption2).foregroundStyle(.secondary)
                                     }
                                 }
@@ -108,8 +103,6 @@ struct TrackingPopover: View {
                     }
                 }
                 .frame(height: min(CGFloat(matches.count) * 32, 108))
-            } else if !trimmedName.isEmpty {
-                Text("A new task will be created.").font(.caption).foregroundStyle(.secondary)
             }
         }
     }
