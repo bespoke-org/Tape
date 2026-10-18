@@ -20,7 +20,7 @@ struct TrackingPopover: View {
         VStack(alignment: .leading, spacing: 16) {
             if let store = model.store {
                 TimelineView(.periodic(from: .now, by: reduceMotion ? 5 : 1)) { context in
-                    VStack(alignment: .leading, spacing: 14) {
+                    VStack(alignment: .leading, spacing: 6) {
                         runningControls(store: store, now: context.date)
                         LiveTimeline(store: store, now: context.date)
                     }
