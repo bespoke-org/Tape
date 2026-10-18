@@ -1,0 +1,127 @@
+import AppKit
+import SwiftUI
+
+@main
+enum LineApp {
+    @MainActor
+    static func main() {
+        let app = NSApplication.shared
+        let delegate = AppDelegate()
+        app.delegate = delegate
+        app.setActivationPolicy(.accessory)
+        app.mainMenu = makeMainMenu()
+        withExtendedLifetime(delegate) { app.run() }
+    }
+
+    @MainActor
+    private static func makeMainMenu() -> NSMenu {
+        let menu = NSMenu()
+        let application = NSMenu()
+        application.addItem(withTitle: "Quit Line", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        let applicationItem = NSMenuItem()
+        applicationItem.submenu = application
+        menu.addItem(applicationItem)
+        let edit = NSMenu(title: "Edit")
+        edit.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        edit.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        edit.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        edit.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        let editItem = NSMenuItem(title: "Edit", action: nil, keyEquivalent: "")
+        editItem.submenu = edit
+        menu.addItem(editItem)
+        return menu
+    }
+}
+
+@MainActor
+final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
+    private var statusItem: NSStatusItem!
+    private let popover = NSPopover()
+    private var model: AppModel!
+    private var checkpointTimer: Timer?
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        let directory: URL
+        if let override = ProcessInfo.processInfo.environment["LINE_DATA_DIRECTORY"] {
+            directory = URL(fileURLWithPath: override, isDirectory: true)
+        } else {
+            directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+                .appendingPathComponent("Line", isDirectory: true)
+        }
+        model = AppModel(storeURL: directory.appendingPathComponent("tracking.json"))
+        model.onChange = { [weak self] in self?.updateStatus() }
+
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        statusItem.button?.target = self
+        statusItem.button?.action = #selector(togglePopover)
+        popover.behavior = .transient
+        popover.delegate = self
+        popover.contentSize = NSSize(width: 620, height: 420)
+        updateStatus()
+
+        let timer = Timer(timeInterval: 5, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.model.checkpoint() }
+        }
+        timer.tolerance = 0.5
+        RunLoop.main.add(timer, forMode: .common)
+        checkpointTimer = timer
+
+        #if DEBUG
+        if let argument = CommandLine.arguments.firstIndex(of: "--smoke-test"),
+           CommandLine.arguments.indices.contains(argument + 1),
+           ProcessInfo.processInfo.environment["LINE_DATA_DIRECTORY"] != nil {
+            let output = URL(fileURLWithPath: CommandLine.arguments[argument + 1], isDirectory: true)
+            Task { @MainActor in
+                await SmokeCheck.run(button: statusItem.button!, popover: popover, model: model, output: output)
+            }
+        }
+        #endif
+    }
+
+    @objc private func togglePopover() {
+        if popover.isShown {
+            popover.performClose(nil)
+        } else {
+            showPopover()
+        }
+    }
+
+    private func showPopover() {
+        guard let button = statusItem.button else { return }
+        popover.animates = !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        popover.contentViewController = NSHostingController(rootView: TrackingPopover(model: model, dismiss: { [weak self] in
+            self?.popover.performClose(nil)
+        }))
+        // This path is user-initiated. Automatic continuation gets its own non-activating path later.
+        NSApplication.shared.activate(ignoringOtherApps: true)
+        popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        popover.contentViewController?.view.window?.makeKey()
+    }
+
+    func popoverDidClose(_ notification: Notification) {
+        // Destroy the TimelineView so no rendering schedule survives a closed popover.
+        popover.contentViewController = nil
+    }
+
+    private func updateStatus() {
+        let running = model.store?.runningTask
+        let symbol = model.errorMessage != nil ? "exclamationmark.circle" :
+            (running == nil ? "timeline.selection" : "record.circle")
+        let image = NSImage(systemSymbolName: symbol, accessibilityDescription: "Line")
+        image?.isTemplate = true
+        statusItem.button?.image = image
+        let description = model.errorMessage.map { "Line: \($0)" }
+            ?? running.map { "Line: tracking \($0.name)" } ?? "Line: not tracking"
+        statusItem.button?.toolTip = description
+        statusItem.button?.setAccessibilityLabel(description)
+    }
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard model.stop() else {
+            showPopover()
+            return .terminateCancel
+        }
+        checkpointTimer?.invalidate()
+        return .terminateNow
+    }
+}

@@ -85,4 +85,4 @@ Each ticket delivers usable behavior through UI, tracking operations, local stor
 
 ## Approval
 
-The user approved moving the basic live timeline into the first usable tracking slice while keeping navigation and zoom as a separate follow-up. The resulting seven tickets are published individually with ready-for-agent status and explicit blockers. Implementation has not started.
+The user approved moving the basic live timeline into the first usable tracking slice while keeping navigation and zoom as a separate follow-up. The resulting seven tickets are published individually with ready-for-agent status and explicit blockers. Ticket 01 is implemented, with manual appearance/accessibility checks still recorded in its acceptance criteria; the remaining tickets have not started.
