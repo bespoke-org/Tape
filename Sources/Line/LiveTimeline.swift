@@ -72,9 +72,18 @@ struct LiveTimeline: View {
                     }
 
                     if visibleEntries.isEmpty {
-                        Text(viewport.isFollowingNow && store.runningTask == nil ? "Start a task to begin tracking." : "No tracked time here.")
-                            .font(.callout).foregroundStyle(.secondary)
-                            .frame(width: width / 2 - 12, height: stripHeight).offset(y: stripTop)
+                        HStack {
+                            if let first = store.entries.first, first.start < visibleRange.start {
+                                historyIndicator("chevron.left", label: "Earlier tracked time")
+                            }
+                            Spacer(minLength: 0)
+                            if let last = store.entries.last, (last.end ?? now) > visibleRange.end {
+                                historyIndicator("chevron.right", label: "Later tracked time")
+                            }
+                        }
+                        .padding(.horizontal, 4)
+                        .frame(width: width, height: stripHeight)
+                        .offset(y: stripTop)
                     }
 
                     let nowX = position(now, width: width)
@@ -87,18 +96,19 @@ struct LiveTimeline: View {
                                 .accessibilityLabel("Now, \(now.formatted(date: .omitted, time: .shortened))")
                         }
                     }
-                    if !viewport.isFollowingNow {
-                        HStack {
-                            Text(dateContext).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
-                            Spacer()
+                    HStack {
+                        Text(dateContext).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                            .frame(maxWidth: viewport.isFollowingNow ? width / 2 - 24 : nil, alignment: .leading)
+                        Spacer()
+                        if !viewport.isFollowingNow {
                             Button { viewport.followNow() } label: {
                                 Label("Now", systemImage: "arrow.uturn.backward")
                             }
                             .buttonStyle(.glass).controlSize(.mini)
                             .accessibilityLabel("Return to Now")
                         }
-                        .frame(width: width, height: 20)
                     }
+                    .frame(width: width, height: 20)
 
                 }
                 .clipped()
@@ -109,7 +119,14 @@ struct LiveTimeline: View {
                     viewport.scroll(points: points, width: width, now: .now)
                 }, zoom: { factor, fraction in
                     viewport.zoom(factor: factor, anchorFraction: fraction, now: .now)
-                }, endZoom: saveZoom)
+                }, endZoom: saveZoom, resetZoom: {
+                    if abs(viewport.span - TimelineViewport.defaultSpan) < 0.001 {
+                        viewport.followNow()
+                    } else {
+                        viewport.zoom(factor: viewport.span / TimelineViewport.defaultSpan, anchorFraction: 0.5, now: .now)
+                    }
+                    saveZoom()
+                })
                 .accessibilityHidden(true)
             }
             .accessibilityElement(children: .contain)
@@ -119,6 +136,15 @@ struct LiveTimeline: View {
 
     private func position(_ date: Date, width: CGFloat) -> CGFloat {
         viewport.fraction(for: date, now: now) * width
+    }
+
+    private func historyIndicator(_ symbol: String, label: String) -> some View {
+        Image(systemName: symbol)
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .frame(width: 18, height: 18)
+            .help(label)
+            .accessibilityLabel(label)
     }
 
     private var dateContext: String {

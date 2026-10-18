@@ -1,11 +1,12 @@
 import AppKit
 import SwiftUI
 
-/// Native scroll and pinch delivery, confined to the timeline and its window.
+/// Native timeline gestures, confined to the timeline and its window.
 struct TimelineInput: NSViewRepresentable {
     let scroll: (Double, Double) -> Void
     let zoom: (Double, Double) -> Void
     let endZoom: () -> Void
+    let resetZoom: () -> Void
 
     func makeNSView(context: Context) -> TimelineInputView { TimelineInputView() }
 
@@ -13,6 +14,7 @@ struct TimelineInput: NSViewRepresentable {
         view.scroll = scroll
         view.zoom = zoom
         view.endZoom = endZoom
+        view.resetZoom = resetZoom
     }
 
     static func dismantleNSView(_ view: TimelineInputView, coordinator: ()) {
@@ -24,6 +26,7 @@ final class TimelineInputView: NSView {
     var scroll: (Double, Double) -> Void = { _, _ in }
     var zoom: (Double, Double) -> Void = { _, _ in }
     var endZoom: () -> Void = {}
+    var resetZoom: () -> Void = {}
     private var monitor: Any?
     private var magnificationScale: Double = 1
 
@@ -34,7 +37,7 @@ final class TimelineInputView: NSView {
         super.viewDidMoveToWindow()
         stopMonitoring()
         guard window != nil else { return }
-        monitor = NSEvent.addLocalMonitorForEvents(matching: [.scrollWheel, .magnify]) { [weak self] event in
+        monitor = NSEvent.addLocalMonitorForEvents(matching: [.scrollWheel, .magnify, .smartMagnify]) { [weak self] event in
             guard let self else { return event }
             return self.handle(event) ? nil : event
         }
@@ -50,6 +53,10 @@ final class TimelineInputView: NSView {
         guard let window, event.window === window,
               bounds.contains(convert(event.locationInWindow, from: nil)) else { return false }
         switch event.type {
+        case .smartMagnify:
+            magnificationScale = 1
+            resetZoom()
+            return true
         case .scrollWheel:
             let delta = event.scrollingDeltaX != 0 ? event.scrollingDeltaX :
                 (event.modifierFlags.contains(.shift) ? event.scrollingDeltaY : 0)

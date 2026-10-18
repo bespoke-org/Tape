@@ -8,7 +8,7 @@
 
 **Status:** ready-for-agent
 
-**Execution:** implemented; physical gesture and appearance/accessibility verification pending
+**Execution:** done
 
 ## Acceptance criteria
 
@@ -25,3 +25,5 @@ Native macOS appearance, Liquid Glass use, and accessibility follow the spec and
 - Both bounded packaged-app smoke modes pass. Timeline mode tests synthetic AppKit input, Now, reopening, zoom persistence across fresh launches, and stable anchoring. Existing tracking and jitter regressions also pass.
 - Real trackpad scrolling/pinch and the complete appearance/accessibility matrix remain manual checks; synthetic inputs do not establish physical gesture behavior.
 - See [the verification record](../../../docs/ticket-02-verification.md).
+
+- Accepted as done on 2026-10-18 after the user’s UI refinements and final standards/spec review. Both review axes found no actionable issues. Unverified physical gesture and appearance/accessibility checks remain unchecked and are deferred to ticket 07, not claimed as passed.
