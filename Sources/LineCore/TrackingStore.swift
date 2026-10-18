@@ -11,6 +11,7 @@ public final class TrackingStore {
 
     public var tasks: [TrackedTask] { snapshot.tasks }
     public var entries: [TimeEntry] { snapshot.entries }
+    public var timelineSpan: TimeInterval { TimelineViewport.usableSpan(snapshot.timelineSpan ?? TimelineViewport.defaultSpan) }
     public var runningEntry: TimeEntry? { entries.last(where: { $0.end == nil }) }
     public var runningTask: TrackedTask? {
         guard let entry = runningEntry else { return nil }
@@ -36,6 +37,21 @@ public final class TrackingStore {
 
     public func task(id: UUID) -> TrackedTask? {
         tasks.first { $0.id == id }
+    }
+
+    public func entries(overlapping range: DateInterval, now: Date) -> ArraySlice<TimeEntry> {
+        // Entries are chronological and non-overlapping. Skip history in logarithmic time.
+        var lower = 0
+        var upper = entries.count
+        while lower < upper {
+            let middle = (lower + upper) / 2
+            if (entries[middle].end ?? now) <= range.start {
+                lower = middle + 1
+            } else {
+                upper = middle
+            }
+        }
+        return entries[lower...].prefix { $0.start < range.end }
     }
 
     public func startTask(named rawName: String) throws {
@@ -67,6 +83,14 @@ public final class TrackingStore {
         guard runningEntry != nil else { return }
         var candidate = snapshot
         candidate.checkpoint = try checkedInstant()
+        try commit(candidate)
+    }
+
+    public func setTimelineSpan(_ span: TimeInterval) throws {
+        let span = TimelineViewport.usableSpan(span)
+        guard span != timelineSpan else { return }
+        var candidate = snapshot
+        candidate.timelineSpan = span
         try commit(candidate)
     }
 

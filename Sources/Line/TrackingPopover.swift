@@ -2,7 +2,7 @@ import SwiftUI
 import LineCore
 
 struct TrackingPopover: View {
-    let model: AppModel
+    @Bindable var model: AppModel
     let dismiss: () -> Void
     let contentSizeDidChange: (CGSize) -> Void
     @State private var taskName = ""
@@ -23,7 +23,7 @@ struct TrackingPopover: View {
                 TimelineView(.periodic(from: .now, by: reduceMotion ? 5 : 1)) { context in
                     VStack(alignment: .leading, spacing: 2) {
                         runningControls(store: store)
-                        LiveTimeline(store: store, now: context.date)
+                        LiveTimeline(store: store, now: context.date, viewport: $model.timeline, saveZoom: model.saveTimelineScale)
                     }
                 }
                 if isTaskPickerShown {
@@ -63,6 +63,7 @@ struct TrackingPopover: View {
                 dismiss()
             }
         }
+        .onDisappear { model.saveTimelineScale() }
     }
 
     @ViewBuilder

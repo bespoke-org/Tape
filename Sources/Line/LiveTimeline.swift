@@ -4,28 +4,24 @@ import LineCore
 struct LiveTimeline: View {
     let store: TrackingStore
     let now: Date
+    @Binding var viewport: TimelineViewport
+    let saveZoom: () -> Void
     @Environment(\.colorSchemeContrast) private var contrast
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
-    private let span: TimeInterval = 4 * 60 * 60
     private let stripTop: CGFloat = 28
     private let stripHeight: CGFloat = 64
     private let nowOverhang: CGFloat = 10
-    private var lower: Date { now.addingTimeInterval(-span / 2) }
-    private var upper: Date { now.addingTimeInterval(span / 2) }
-    private var visibleEntries: [TimeEntry] {
-        store.entries.filter { $0.start < upper && ($0.end ?? now) > lower }
-    }
-    private var ticks: [Date] {
-        let hour = Calendar.current.dateInterval(of: .hour, for: lower)?.start ?? lower
-        return (0...9).map { hour.addingTimeInterval(Double($0) * 1_800) }
-            .filter { $0 >= lower && $0 <= upper }
+    private var visibleRange: DateInterval { viewport.range(at: now) }
+    private var visibleEntries: ArraySlice<TimeEntry> {
+        store.entries(overlapping: visibleRange, now: now)
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             GeometryReader { geometry in
                 let width = geometry.size.width
+                let ticks = viewport.ticks(at: now, width: width)
                 ZStack(alignment: .topLeading) {
                     RoundedRectangle(cornerRadius: 8)
                         .fill(reduceTransparency ? Color(nsColor: .controlBackgroundColor) : Color.primary.opacity(0.035))
@@ -42,7 +38,7 @@ struct LiveTimeline: View {
 
                     ForEach(ticks, id: \.self) { date in
                         let x = position(date, width: width)
-                        Text(date, format: .dateTime.hour().minute())
+                        Text(tickLabel(date))
                             .font(.caption2).monospacedDigit().foregroundStyle(.secondary)
                             .fixedSize()
                             .position(x: min(max(x, 22), width - 22), y: 108)
@@ -76,27 +72,72 @@ struct LiveTimeline: View {
                     }
 
                     if visibleEntries.isEmpty {
-                        Text("Start a task to begin tracking.")
+                        Text(viewport.isFollowingNow && store.runningTask == nil ? "Start a task to begin tracking." : "No tracked time here.")
                             .font(.callout).foregroundStyle(.secondary)
                             .frame(width: width / 2 - 12, height: stripHeight).offset(y: stripTop)
                     }
 
-                    Rectangle().fill(.primary).frame(width: 1.5, height: stripHeight + 2 * nowOverhang)
-                        .offset(x: width / 2, y: stripTop - nowOverhang)
-                    Text("Now").font(.caption2.weight(.semibold))
-                        .position(x: width / 2, y: 7)
-                        .accessibilityLabel("Now, \(now.formatted(date: .omitted, time: .shortened))")
+                    let nowX = position(now, width: width)
+                    if nowX >= 0 && nowX <= width {
+                        Rectangle().fill(.primary).frame(width: 1.5, height: stripHeight + 2 * nowOverhang)
+                            .offset(x: nowX, y: stripTop - nowOverhang)
+                        if viewport.isFollowingNow {
+                            Text("Now").font(.caption2.weight(.semibold))
+                                .position(x: nowX, y: 7)
+                                .accessibilityLabel("Now, \(now.formatted(date: .omitted, time: .shortened))")
+                        }
+                    }
+                    if !viewport.isFollowingNow {
+                        HStack {
+                            Text(dateContext).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                            Spacer()
+                            Button { viewport.followNow() } label: {
+                                Label("Now", systemImage: "arrow.uturn.backward")
+                            }
+                            .buttonStyle(.glass).controlSize(.mini)
+                            .accessibilityLabel("Return to Now")
+                        }
+                        .frame(width: width, height: 20)
+                    }
+
                 }
                 .clipped()
             }
             .frame(height: 116)
+            .background {
+                TimelineInput(scroll: { points, width in
+                    viewport.scroll(points: points, width: width, now: .now)
+                }, zoom: { factor, fraction in
+                    viewport.zoom(factor: factor, anchorFraction: fraction, now: .now)
+                }, endZoom: saveZoom)
+                .accessibilityHidden(true)
+            }
             .accessibilityElement(children: .contain)
-            .accessibilityLabel("Timeline, four hours centered on now")
+            .accessibilityLabel("Timeline, \(dateContext), \(viewport.isFollowingNow ? "following now" : "browsing")")
         }
     }
 
     private func position(_ date: Date, width: CGFloat) -> CGFloat {
-        date.timeIntervalSince(lower) / span * width
+        viewport.fraction(for: date, now: now) * width
+    }
+
+    private var dateContext: String {
+        if Calendar.current.isDate(visibleRange.start, inSameDayAs: visibleRange.end) {
+            return visibleRange.start.formatted(date: .abbreviated, time: .omitted)
+        }
+        return visibleRange.start.formatted(date: .abbreviated, time: .omitted) + " – " +
+            visibleRange.end.formatted(date: .abbreviated, time: .omitted)
+    }
+
+    private func tickLabel(_ date: Date) -> String {
+        if viewport.span >= 2 * 86_400 {
+            return date.formatted(.dateTime.month(.abbreviated).day())
+        }
+        if !viewport.isFollowingNow && Calendar.current.component(.hour, from: date) == 0 &&
+            Calendar.current.component(.minute, from: date) == 0 {
+            return date.formatted(.dateTime.month(.abbreviated).day())
+        }
+        return date.formatted(.dateTime.hour().minute())
     }
 
     private func entryDescription(_ entry: TimeEntry, task: TrackedTask) -> String {

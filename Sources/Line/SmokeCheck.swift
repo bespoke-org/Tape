@@ -18,6 +18,13 @@ enum SmokeCheck {
             try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
             try require(NSApp.activationPolicy() == .accessory, "App must have no Dock icon")
             try require(button.image != nil, "Status item must have an icon")
+            if ProcessInfo.processInfo.environment["LINE_SMOKE_TIMELINE"] == "1" {
+                try await checkTimeline(button: button, popover: popover, model: model)
+                try Data("PASS: horizontal/Shift scroll, scoped input, pinch anchors, Now, saved zoom across reopen, stable popover.\n".utf8)
+                    .write(to: output.appendingPathComponent("result.txt"))
+                NSApp.terminate(nil)
+                return
+            }
             for name in ["Planning", "Writing", "Review", "Research"] {
                 try require(model.start(name), "Seed reusable tasks")
                 try require(model.stop(), "Stop seed entries")
@@ -107,6 +114,55 @@ enum SmokeCheck {
 
     private static func settle() async throws {
         try await Task.sleep(for: .milliseconds(600))
+    }
+
+    private static func checkTimeline(button: NSStatusBarButton, popover: NSPopover, model: AppModel) async throws {
+        try await settle()
+        try clickStatusItem(button)
+        try await settle()
+        try requireAnchored(popover, to: button)
+        let content = try contentView(popover)
+        guard let input = descendants(content).compactMap({ $0 as? TimelineInputView }).first,
+              let window = input.window else {
+            throw NSError(domain: "LineSmokeCheck", code: 9, userInfo: [NSLocalizedDescriptionKey: "Timeline input is missing"])
+        }
+        let initialSpan = model.store!.timelineSpan
+        try require(model.timeline.span == initialSpan && model.timeline.isFollowingNow, "Opening must restore saved zoom and follow now")
+        let location = input.convert(NSPoint(x: input.bounds.width / 4, y: input.bounds.height / 2), to: nil)
+        let vertical = TimelineTestEvent(type: .scrollWheel, window: window, location: location, dy: 20)
+        try require(!input.handle(vertical) && model.timeline.isFollowingNow, "Unmodified vertical scrolling must not browse")
+        let horizontal = TimelineTestEvent(type: .scrollWheel, window: window, location: location, dx: input.bounds.width)
+        try require(input.handle(horizontal) && !model.timeline.isFollowingNow, "Horizontal scrolling must enter browsing")
+        try await settle()
+        let range = model.timeline.range(at: .now)
+        try require(range.end < .now, "Scrolling a width into history must move actual now offscreen")
+        let shift = TimelineTestEvent(type: .scrollWheel, window: window, location: location, dy: -10, flags: .shift)
+        try require(input.handle(shift), "Shift-wheel must browse")
+        let shifted = model.timeline.range(at: .now)
+        try require(shifted.start > range.start, "Opposite scroll must move toward the future")
+        let outside = TimelineTestEvent(type: .scrollWheel, window: window, location: NSPoint(x: -100, y: -100), dx: 50)
+        try require(!input.handle(outside) && model.timeline.range(at: .now) == shifted, "Input outside the timeline must not navigate")
+        let anchor = model.timeline.date(at: 0.25, now: .now)
+        _ = input.handle(TimelineTestEvent(type: .magnify, window: window, location: location, magnification: 0.5, phase: .began))
+        _ = input.handle(TimelineTestEvent(type: .magnify, window: window, location: location, magnification: 0.5, phase: .changed))
+        _ = input.handle(TimelineTestEvent(type: .magnify, window: window, location: location, phase: .ended))
+        try require(model.timeline.span == initialSpan / 2, "Pinch increments must accumulate to a twofold zoom")
+        try require(abs(model.timeline.date(at: 0.25, now: .now).timeIntervalSince(anchor)) < 0.001, "Pinch must preserve the time under the pointer")
+        try require(model.store?.timelineSpan == initialSpan / 2, "Ending the pinch must persist zoom")
+        try await settle()
+        try requireAnchored(popover, to: button)
+        try await requireStablePosition(popover)
+        try pressAccessibleButton(named: "Return to Now", in: contentView(popover))
+        try await settle()
+        try require(model.timeline.isFollowingNow, "Now must resume following")
+        _ = input.handle(horizontal)
+        try clickStatusItem(button)
+        try await settle()
+        try clickStatusItem(button)
+        try await settle()
+        try require(model.timeline.isFollowingNow && model.timeline.span == initialSpan / 2, "Reopening must follow now at the saved scale")
+        try requireAnchored(popover, to: button)
+        try await requireStablePosition(popover)
     }
 
     private static func requireStablePosition(_ popover: NSPopover) async throws {
@@ -227,5 +283,36 @@ enum SmokeCheck {
         guard object.responds(to: selector) else { return nil }
         return object.perform(selector)?.takeUnretainedValue()
     }
+}
+
+/// Deterministic AppKit inputs exercise the same handler as the local event monitor.
+private final class TimelineTestEvent: NSEvent {
+    private let kind: NSEvent.EventType
+    private let target: NSWindow
+    private let location: NSPoint
+    private let dx: CGFloat
+    private let dy: CGFloat
+    private let flags: NSEvent.ModifierFlags
+    private let amount: CGFloat
+    private let gesturePhase: NSEvent.Phase
+
+    init(type: NSEvent.EventType, window: NSWindow, location: NSPoint, dx: CGFloat = 0, dy: CGFloat = 0,
+         flags: NSEvent.ModifierFlags = [], magnification: CGFloat = 0, phase: NSEvent.Phase = []) {
+        kind = type; target = window; self.location = location
+        self.dx = dx; self.dy = dy; self.flags = flags
+        amount = magnification; gesturePhase = phase
+        super.init()
+    }
+
+    required init?(coder: NSCoder) { fatalError("Not used") }
+    override var type: NSEvent.EventType { kind }
+    override var window: NSWindow? { target }
+    override var locationInWindow: NSPoint { location }
+    override var scrollingDeltaX: CGFloat { dx }
+    override var scrollingDeltaY: CGFloat { dy }
+    override var hasPreciseScrollingDeltas: Bool { true }
+    override var modifierFlags: NSEvent.ModifierFlags { flags }
+    override var magnification: CGFloat { amount }
+    override var phase: NSEvent.Phase { gesturePhase }
 }
 #endif

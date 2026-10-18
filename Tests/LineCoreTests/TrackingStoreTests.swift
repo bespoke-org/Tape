@@ -4,6 +4,45 @@ import LineCore
 
 @MainActor
 struct TrackingStoreTests {
+    @Test func visibleRangeIncludesSpanningEntriesButExcludesTouchingEndpoints() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let base = Date(timeIntervalSince1970: 1_800_000_000)
+        var now = base
+        let store = try TrackingStore(url: directory.appendingPathComponent("tracking.json"), now: { now })
+        try store.startTask(named: "First")
+        now += 60
+        try store.startTask(named: "Second")
+        now += 60
+        try store.startTask(named: "Third")
+        now += 60
+        let range = DateInterval(start: base.addingTimeInterval(60), duration: 60)
+        let visible = store.entries(overlapping: range, now: now)
+        #expect(visible.count == 1)
+        #expect(store.task(id: visible.first!.taskID)?.name == "Second")
+        #expect(store.entries(overlapping: DateInterval(start: base.addingTimeInterval(130), duration: 10), now: now).count == 1)
+        #expect(store.entries(overlapping: DateInterval(start: now, duration: 60), now: now).isEmpty)
+    }
+    @Test func zoomSurvivesReopeningOldStoresWithoutChangingRecoveryTime() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let url = directory.appendingPathComponent("tracking.json")
+        try Data(#"{"version":1,"tasks":[],"entries":[]}"#.utf8).write(to: url)
+        var now = Date(timeIntervalSince1970: 1_800_000_000)
+        let store = try TrackingStore(url: url, now: { now })
+        #expect(store.timelineSpan == 14_400)
+        try store.startTask(named: "Read")
+        now += 5
+        try store.checkpoint()
+        now += 10
+        try store.setTimelineSpan(7_200)
+        now += 3_600
+        let reopened = try TrackingStore(url: url, now: { now })
+        #expect(reopened.timelineSpan == 7_200)
+        #expect(reopened.entries.first?.duration(at: now) == 5)
+        #expect(reopened.runningTask == nil)
+    }
     @Test func recoveryDropsAnEntryThatNeverReachedItsFirstCheckpoint() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }

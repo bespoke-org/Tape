@@ -106,6 +106,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
     private func showPopover() {
         guard let button = statusItem.button else { return }
+        model.preparePopover()
         popover.animates = !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         let controller = NSHostingController(rootView: TrackingPopover(model: model, dismiss: { [weak self] in
             self?.popover.performClose(nil)

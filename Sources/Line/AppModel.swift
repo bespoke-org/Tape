@@ -7,6 +7,7 @@ import Observation
 final class AppModel {
     private(set) var store: TrackingStore?
     private(set) var errorMessage: String?
+    var timeline = TimelineViewport()
     private let storeURL: URL
     var onChange: (() -> Void)?
 
@@ -32,6 +33,15 @@ final class AppModel {
     func checkpoint() {
         guard store?.runningEntry != nil else { return }
         perform { try store?.checkpoint() }
+    }
+
+    func preparePopover() {
+        timeline = TimelineViewport(span: store?.timelineSpan ?? TimelineViewport.defaultSpan)
+    }
+
+    func saveTimelineScale() {
+        guard let store, timeline.span != store.timelineSpan else { return }
+        perform { try store.setTimelineSpan(timeline.span) }
     }
 
     @discardableResult
