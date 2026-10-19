@@ -167,7 +167,7 @@ struct TrackingPopover: View {
                 }
             }
             HStack {
-                TextField("Name a task or search…", text: $taskName)
+                TextField("Name a new task", text: $taskName)
                     .textFieldStyle(.plain)
                     .focused($isTaskFieldFocused)
                     .onSubmit { start(trimmedName) }

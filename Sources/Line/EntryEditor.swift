@@ -23,7 +23,7 @@ struct EntryEditor: View {
                 if let task = store.task(id: entry.taskID) {
                     TaskColorPicker(model: model, task: task)
                 }
-                TextField("Name a task or search…", text: $taskName)
+                TextField("Name a new task", text: $taskName)
                     .textFieldStyle(.plain)
                     .focused($isTaskFocused)
                     .onSubmit { chooseTask(taskName) }

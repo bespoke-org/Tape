@@ -277,7 +277,7 @@ enum SmokeCheck {
                     "Choosing a swatch must save the task color immediately")
         let colorFrame = colorPicker.convert(colorPicker.bounds, to: nil)
         guard let searchField = descendants(try contentView(popover)).compactMap({ $0 as? NSTextField })
-            .first(where: { $0.placeholderString == "Name a task or search…" }) else {
+            .first(where: { $0.placeholderString == "Name a new task" }) else {
             throw NSError(domain: "LineSmokeCheck", code: 16, userInfo: [NSLocalizedDescriptionKey: "Entry task search is missing"])
         }
         let searchFrame = searchField.convert(searchField.bounds, to: nil)
@@ -323,7 +323,7 @@ enum SmokeCheck {
         try await settle()
         try require(model.editingEntryID == running.id, "Running entries must be editable")
         guard let taskSearch = descendants(try contentView(popover)).compactMap({ $0 as? NSTextField })
-            .first(where: { $0.placeholderString == "Name a task or search…" }) else {
+            .first(where: { $0.placeholderString == "Name a new task" }) else {
             throw NSError(domain: "LineSmokeCheck", code: 17, userInfo: [NSLocalizedDescriptionKey: "Running entry task search is missing"])
         }
         _ = taskSearch.window?.makeFirstResponder(taskSearch)
