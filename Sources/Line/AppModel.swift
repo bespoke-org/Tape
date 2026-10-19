@@ -67,6 +67,8 @@ final class AppModel {
             return fraction >= left && fraction < max(left + minimumWidth, right)
         }) {
             editEntry(id: entry.id)
+        } else if editingEntryID != nil {
+            cancelEntry()
         }
     }
 

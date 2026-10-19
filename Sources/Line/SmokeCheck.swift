@@ -223,7 +223,10 @@ enum SmokeCheck {
         let width = try timelineInput(in: popover).bounds.width
         try clickEntry(original.start + model.timeline.span / width)
         try require(model.editingEntryID == original.id, "The entire two-point block of a short entry must be clickable")
-        model.cancelEntry()
+        let beforeDeselect = store.entries
+        try clickEntry(base - 2_400)
+        try require(model.editingEntryID == nil && store.entries == beforeDeselect && store.runningEntry?.id == running.id,
+                    "Clicking empty timeline space must deselect without changing entries or stopping tracking")
         try store.updateEntry(id: original.id, taskID: original.taskID, start: original.start, end: completed.start)
         try clickEntry(completed.start)
         try require(model.editingEntryID == completed.id, "A shared boundary must select the later entry")
