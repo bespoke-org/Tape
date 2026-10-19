@@ -253,7 +253,6 @@ extension TaskColor {
         case .purple: .purple
         case .red: .red
         case .yellow: .yellow
-        case .mint: .mint
         case .brown: .brown
         }
     }

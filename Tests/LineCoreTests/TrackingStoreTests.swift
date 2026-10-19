@@ -4,7 +4,7 @@ import LineCore
 
 @MainActor
 struct TrackingStoreTests {
-    @Test(arguments: ["cyan", "indigo"])
+    @Test(arguments: ["cyan", "indigo", "mint"])
     func removedShadesLoadWithoutLosingRecordedTime(legacyColor: String) throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -19,7 +19,7 @@ struct TrackingStoreTests {
         try Data(data.utf8).write(to: url)
         let store = try TrackingStore(url: url)
         #expect(store.tasks.count == 1)
-        #expect(store.task(id: taskID)?.color == (legacyColor == "cyan" ? .teal : .blue))
+        #expect(store.task(id: taskID)?.color == (legacyColor == "indigo" ? .blue : .teal))
         #expect(store.entries.count == 1 && store.entries[0].id == entryID)
         #expect(store.entries[0].duration(at: .now) == 60)
         // A later write must keep the replacement shade readable on reopening.

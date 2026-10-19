@@ -195,13 +195,13 @@ struct EntryEditingTests {
         try store.startTask(named: "Read")
         let build = store.entries[0].taskID
         let before = store.entries
-        try store.setTaskColor(id: build, color: .mint)
+        try store.setTaskColor(id: build, color: .teal)
         #expect(store.entries == before)
         #expect(store.task(id: build)?.name == "Build")
-        #expect(store.task(id: build)?.color == .mint)
+        #expect(store.task(id: build)?.color == .teal)
         #expect(throws: TrackingError.missingTask) { try store.setTaskColor(id: UUID(), color: .red) }
         #expect(store.task(id: build)?.name == "Build")
-        #expect(store.task(id: build)?.color == .mint)
+        #expect(store.task(id: build)?.color == .teal)
         let reopened = try TrackingStore(url: url, now: { now })
         #expect(reopened.task(id: build) == store.task(id: build))
     }

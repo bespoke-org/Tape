@@ -1,14 +1,14 @@
 import Foundation
 
 public enum TaskColor: String, Codable, CaseIterable, Sendable {
-    case red, orange, brown, yellow, green, mint, teal, blue, purple, pink
+    case red, orange, brown, yellow, green, teal, blue, purple, pink
 
     public init(from decoder: any Decoder) throws {
         let container = try decoder.singleValueContainer()
         let value = try container.decode(String.self)
         // Preserve saved tasks when loading shades removed from the palette.
         switch value {
-        case "cyan": self = .teal
+        case "cyan", "mint": self = .teal
         case "indigo": self = .blue
         default:
             guard let color = Self(rawValue: value) else {
