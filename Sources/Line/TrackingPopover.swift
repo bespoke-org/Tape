@@ -268,7 +268,7 @@ extension TaskColor {
         case .teal: .teal
         case .green: .green
         case .orange: .orange
-        case .pink: .pink
+        case .pink: Color(red: 240 / 255, green: 98 / 255, blue: 179 / 255)
         case .purple: .purple
         case .indigo: .indigo
         case .red: .red
