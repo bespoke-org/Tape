@@ -61,7 +61,7 @@ struct LiveTimeline: View {
                                                     stripes.move(to: CGPoint(x: x, y: size.height))
                                                     stripes.addLine(to: CGPoint(x: x + size.height, y: 0))
                                                 }
-                                                context.stroke(stripes, with: .color(task.color.displayColor.opacity(contrast == .increased ? 0.7 : 0.4)), lineWidth: 3)
+                                                context.stroke(stripes, with: .color(task.color.displayColor.opacity(contrast == .increased ? 0.7 : 0.4)), lineWidth: 5)
                                             }
                                             .clipShape(RoundedRectangle(cornerRadius: 4))
                                             .allowsHitTesting(false)
