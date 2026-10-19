@@ -22,6 +22,7 @@ struct EntryEditor: View {
             HStack(spacing: 8) {
                 if let task = store.task(id: entry.taskID) {
                     TaskColorPicker(model: model, task: task)
+                        .accessibilityLabel("Task color")
                 }
                 TextField("Name a new task", text: $taskName)
                     .textFieldStyle(.plain)
@@ -95,44 +96,81 @@ struct EntryEditor: View {
     }
 }
 
-private struct TaskColorPicker: View {
+private struct TaskColorPicker: NSViewRepresentable {
     let model: AppModel
     let task: TrackedTask
 
-    var body: some View {
-        Menu {
-            Picker("Task color", selection: Binding(get: { task.color }, set: {
-                _ = model.saveTaskColor(id: task.id, color: $0)
-            })) {
-                ForEach(TaskColor.allCases, id: \.self) { color in
-                    colorSwatch(color)
-                        .accessibilityLabel(color.rawValue.capitalized)
-                        .tag(color)
-                }
-            }
-            .pickerStyle(.inline)
-            .labelsHidden()
-        } label: {
-            colorSwatch(task.color, size: 20)
-                .frame(width: 28, height: 22)
-                .contentShape(Rectangle())
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    func makeNSView(context: Context) -> NSPopUpButton {
+        let button = NSPopUpButton(frame: .zero, pullsDown: true)
+        button.cell = ColorMenuCell(textCell: "", pullsDown: true)
+        button.isBordered = false
+        button.imagePosition = .imageOnly
+        button.setAccessibilityLabel("Task color")
+        button.toolTip = "Task color"
+        if let cell = button.cell as? NSPopUpButtonCell {
+            cell.arrowPosition = .noArrow
         }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
-        .fixedSize()
-        .help("Task color")
-        .accessibilityLabel("Task color")
+        let menu = NSMenu()
+        // Pull-down menus reserve the first item for the closed button's image.
+        menu.addItem(NSMenuItem(title: "", action: nil, keyEquivalent: ""))
+        for color in TaskColor.allCases {
+            let item = NSMenuItem(title: "", action: #selector(Coordinator.selectColor(_:)), keyEquivalent: "")
+            item.image = colorSwatch(color, diameter: 10)
+            item.representedObject = color.rawValue
+            item.setAccessibilityLabel(color.rawValue.capitalized)
+            item.target = context.coordinator
+            menu.addItem(item)
+        }
+        button.menu = menu
+        button.selectItem(at: 0)
+        return button
     }
 
-    private func colorSwatch(_ color: TaskColor, size: CGFloat = 12) -> Image {
+    func updateNSView(_ button: NSPopUpButton, context: Context) {
+        context.coordinator.onSelect = { color in
+            _ = model.saveTaskColor(id: task.id, color: color)
+        }
+        button.menu?.items.first?.image = colorSwatch(task.color, diameter: 15)
+        for item in button.menu?.items.dropFirst() ?? [] {
+            item.state = item.representedObject as? String == task.color.rawValue ? .on : .off
+        }
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSPopUpButton, context: Context) -> CGSize? {
+        CGSize(width: 28, height: 22)
+    }
+
+    private func colorSwatch(_ color: TaskColor, diameter: CGFloat) -> NSImage {
         let fill = NSColor(color.displayColor)
-        // Native menus tint template symbols, discarding SwiftUI foreground styles.
+        let size = diameter + 2
         let image = NSImage(size: NSSize(width: size, height: size), flipped: false) { rect in
             fill.setFill()
             NSBezierPath(ovalIn: rect.insetBy(dx: 1, dy: 1)).fill()
             return true
         }
         image.isTemplate = false
-        return Image(nsImage: image).renderingMode(.original)
+        return image
+    }
+
+    @MainActor
+    final class Coordinator: NSObject {
+        var onSelect: (TaskColor) -> Void = { _ in }
+
+        @objc func selectColor(_ sender: NSMenuItem) {
+            guard let value = sender.representedObject as? String, let color = TaskColor(rawValue: value) else { return }
+            onSelect(color)
+        }
+    }
+}
+
+private final class ColorMenuCell: NSPopUpButtonCell {
+    override func draw(withFrame cellFrame: NSRect, in controlView: NSView) {
+        // Keep native menu interaction, but draw the swatch without the pressed-state tint.
+        let highlighted = isHighlighted
+        isHighlighted = false
+        defer { isHighlighted = highlighted }
+        super.draw(withFrame: cellFrame, in: controlView)
     }
 }

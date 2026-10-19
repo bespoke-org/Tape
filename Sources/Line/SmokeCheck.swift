@@ -268,16 +268,34 @@ enum SmokeCheck {
         try require(swatchPixel.alphaComponent > 0.9 && swatchChannels.max()! - swatchChannels.min()! > 0.1,
                     "The closed color menu's circle must be visible and retain its task color")
         try require(!colorPicker.isBordered, "The color circle must not have a rectangular button bezel")
-        // SwiftUI Menu builds its native items on opening, unlike Picker.
-        let dismissMenu = Timer(timeInterval: 0.2, repeats: false) { _ in
-            MainActor.assumeIsolated {
-                colorPicker.menu?.cancelTrackingWithoutAnimation()
+        try require(swatch.size == NSSize(width: 17, height: 17), "The 15-point circle must have a one-point image inset")
+        func renderedSwatch(highlighted: Bool) throws -> NSColor {
+            let cell = colorPicker.cell!
+            cell.isHighlighted = highlighted
+            defer { cell.isHighlighted = false }
+            let image = NSImage(size: colorPicker.bounds.size, flipped: false) { rect in
+                cell.draw(withFrame: rect, in: colorPicker)
+                return true
             }
+            guard let data = image.tiffRepresentation, let bitmap = NSBitmapImageRep(data: data),
+                  let pixel = bitmap.colorAt(x: bitmap.pixelsWide / 2, y: bitmap.pixelsHigh / 2)?.usingColorSpace(.deviceRGB) else {
+                throw NSError(domain: "LineSmokeCheck", code: 18, userInfo: [NSLocalizedDescriptionKey: "Could not render color menu highlight"])
+            }
+            return pixel
+        }
+        let normalSwatch = try renderedSwatch(highlighted: false)
+        let pressedSwatch = try renderedSwatch(highlighted: true)
+        try require(abs(normalSwatch.redComponent - pressedSwatch.redComponent) < 0.02 &&
+                    abs(normalSwatch.greenComponent - pressedSwatch.greenComponent) < 0.02 &&
+                    abs(normalSwatch.blueComponent - pressedSwatch.blueComponent) < 0.02,
+                    "Opening the color menu must not change the circle color: \(normalSwatch) vs \(pressedSwatch)")
+        let dismissMenu = Timer(timeInterval: 0.2, repeats: false) { _ in
+            MainActor.assumeIsolated { colorPicker.menu?.cancelTrackingWithoutAnimation() }
         }
         RunLoop.main.add(dismissMenu, forMode: .eventTracking)
         colorPicker.performClick(nil)
         dismissMenu.invalidate()
-        let colorItems = colorPicker.menu?.items.filter { $0.image != nil } ?? []
+        let colorItems = Array(colorPicker.menu!.items.dropFirst())
         try require(colorItems.count == TaskColor.allCases.count, "The color menu must show every task color directly")
         for item in colorItems {
             try require(item.title.isEmpty, "Color choices must show swatches without visible color names")
