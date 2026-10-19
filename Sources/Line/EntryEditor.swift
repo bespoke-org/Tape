@@ -19,7 +19,6 @@ struct EntryEditor: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Divider().padding(.bottom, 4)
             HStack(spacing: 8) {
                 if let task = store.task(id: entry.taskID) {
                     TaskColorPicker(model: model, task: task)

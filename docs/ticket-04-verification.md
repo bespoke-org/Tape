@@ -6,7 +6,7 @@ Implemented on 2026-10-19; awaiting user acceptance.
 
 ## Behavior
 
-Click a timeline entry to open its settings inline below the divider, replacing the task picker. The color picker, task search field, and Delete share one row. Start and end controls have been removed; adjust times by dragging the entry edges. Choose a suggestion or press Return to reassign the entry, creating a task for a new name. Typing alone does not change records. Text fields have no opaque fill. Escape or closing the popover keeps saved changes. There are no Save or Cancel buttons. Failed edits preserve saved records and show a readable error.
+Click a timeline entry to open its settings inline below the timeline, replacing the task picker. The color picker, task search field, and Delete share one row. Start and end controls have been removed; adjust times by dragging the entry edges. Choose a suggestion or press Return to reassign the entry, creating a task for a new name. Typing alone does not change records. Text fields have no opaque fill. Escape or closing the popover keeps saved changes. There are no Save or Cancel buttons. Failed edits preserve saved records and show a readable error.
 
 The swatch-only color picker saves choices immediately across every entry for that task. Task renaming has been removed. Search reassigns only the selected entry, leaving other entries and task names unchanged.
 
