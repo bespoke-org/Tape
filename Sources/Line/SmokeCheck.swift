@@ -259,6 +259,15 @@ enum SmokeCheck {
               colorPicker.menu != nil else {
             throw NSError(domain: "LineSmokeCheck", code: 14, userInfo: [NSLocalizedDescriptionKey: "Native color menu is missing"])
         }
+        guard let swatch = colorPicker.image, !swatch.isTemplate,
+              let swatchData = swatch.tiffRepresentation, let swatchBitmap = NSBitmapImageRep(data: swatchData),
+              let swatchPixel = swatchBitmap.colorAt(x: swatchBitmap.pixelsWide / 2, y: swatchBitmap.pixelsHigh / 2)?.usingColorSpace(.deviceRGB) else {
+            throw NSError(domain: "LineSmokeCheck", code: 17, userInfo: [NSLocalizedDescriptionKey: "The closed color menu must display its full-color swatch image"])
+        }
+        let swatchChannels = [swatchPixel.redComponent, swatchPixel.greenComponent, swatchPixel.blueComponent]
+        try require(swatchPixel.alphaComponent > 0.9 && swatchChannels.max()! - swatchChannels.min()! > 0.1,
+                    "The closed color menu's circle must be visible and retain its task color")
+        try require(!colorPicker.isBordered, "The color circle must not have a rectangular button bezel")
         // SwiftUI Menu builds its native items on opening, unlike Picker.
         let dismissMenu = Timer(timeInterval: 0.2, repeats: false) { _ in
             MainActor.assumeIsolated {

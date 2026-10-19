@@ -113,9 +113,7 @@ private struct TaskColorPicker: View {
             .pickerStyle(.inline)
             .labelsHidden()
         } label: {
-            Circle()
-                .fill(task.color.displayColor)
-                .frame(width: 12, height: 12)
+            colorSwatch(task.color)
                 .frame(width: 28, height: 22)
                 .contentShape(Rectangle())
         }
