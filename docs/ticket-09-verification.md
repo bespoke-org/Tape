@@ -2,6 +2,8 @@
 
 Implementation: [Overwrite entries with Command-drag](../.scratch/line-v1/issues/09-overwrite-entries-with-command-drag.md).
 
+Accepted as done by the user on 2026-10-19, including cleanup of task names after their last entry is removed.
+
 ## Behavior
 
 Hold Command at mouse-down, then drag across timeline entries. The gesture retains overwrite intent after Command is released and while the task picker is open. Ordinary drawing keeps its existing empty-gap constraints. A gray striped preview, solid outline, and Overwrite indicator identify replacement mode. Task submission uses Overwrite or Overwrite & Start; choosing an existing task commits the same operation.

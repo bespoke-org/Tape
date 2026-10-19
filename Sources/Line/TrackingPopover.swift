@@ -102,7 +102,7 @@ struct TrackingPopover: View {
             } else {
                 Text("Not tracking").font(.title3.weight(.medium))
                 Spacer()
-                pickerButton("Start task", systemImage: "plus")
+                pickerButton("Start task", systemImage: "play.fill")
             }
         }
         .frame(minHeight: 24)

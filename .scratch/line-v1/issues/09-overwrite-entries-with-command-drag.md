@@ -27,4 +27,4 @@ Example: overwriting 10:20–10:40 inside an existing 10:00–11:00 entry leaves
 
 This ticket adds overwrite to interval drawing. It does not change ordinary entry resizing or timestamp editing into overwrite operations.
 
-Implemented on 2026-10-19. See [verification notes](../../../docs/ticket-09-verification.md) for automated checks, review results, and the physical gesture/appearance checks carried to ticket 07.
+Accepted as done by the user on 2026-10-19, including removal of tasks whose last entry disappears. See [verification notes](../../../docs/ticket-09-verification.md) for automated checks, review results, and the physical gesture/appearance checks carried to ticket 07.
