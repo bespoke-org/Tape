@@ -219,7 +219,9 @@ enum SmokeCheck {
         try require(NSCursor.current == NSCursor.arrow, "Command overwrite must not advertise resizing")
         hover(original.start)
         hover(running.start)
-        try require(NSCursor.current == NSCursor.arrow, "Running entries must not advertise resizing")
+        try require(NSCursor.current == EntryResizeCursor.start, "Running starts must show the start-edge bracket")
+        hover(.now)
+        try require(NSCursor.current == EntryResizeCursor.end, "Running ends at Now must show the end-edge bracket")
         hover(original.start)
         hover(original.start, y: 110)
         try require(NSCursor.current == NSCursor.arrow, "Leaving the strip must clear the resize cursor")
@@ -380,6 +382,22 @@ enum SmokeCheck {
         try await settle()
         try require(store.runningEntry?.id == remaining.id && store.runningEntry?.start == remaining.start && store.entries.count == 1,
                     "Releasing a resized end at Now must continue the same entry")
+        let movedStart = remaining.start + 120
+        try draw(model.timeline.fraction(for: remaining.start, now: .now),
+                 model.timeline.fraction(for: movedStart, now: .now), in: popover)
+        try require(store.runningEntry?.id == remaining.id && store.runningEntry?.start == movedStart,
+                    "Dragging the running start must preserve tracking")
+        let liveEnd = model.timeline.fraction(for: .now, now: .now)
+        try draw(liveEnd, liveEnd + 6 / width, in: popover)
+        try require(store.runningEntry?.id == remaining.id, "Dragging a running end beyond Now must keep tracking")
+        try draw(model.timeline.fraction(for: .now, now: .now),
+                 model.timeline.fraction(for: base - 600, now: .now), in: popover)
+        try await settle()
+        try require(store.runningEntry == nil && store.entries[0].end == base - 600 && store.entries[0].id == remaining.id,
+                    "Dragging the running end into the past must stop at that time")
+        try draw(model.timeline.fraction(for: base - 600, now: .now),
+                 model.timeline.fraction(for: .now, now: .now), in: popover)
+        try await settle()
         try pressAccessibleControl(named: "Stop", in: contentView(popover))
         try await settle()
         try require(store.runningEntry == nil && store.entries[0].id == remaining.id, "The continued entry must stop normally")

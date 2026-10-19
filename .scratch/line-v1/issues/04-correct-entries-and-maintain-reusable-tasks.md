@@ -16,7 +16,7 @@ Clicking an entry opens its settings inline below the timeline divider, in the s
 
 ## Acceptance criteria
 
-- [x] Click entries to edit task/start/end, and resize completed entries by dragging edges. Editing a running start/task keeps it running; setting a fixed end requires stopping. Dragging a completed end to or past Now continues the same entry as running, unless blocked by another entry.
+- [x] Click entries to edit task/start/end, and resize completed and running entries by dragging edges. Editing a running start/task keeps it running. Dragging its end into the past stops it at that time; leaving the end at or beyond Now keeps tracking. Dragging a completed end to or past Now continues the same entry as running, unless blocked by another entry.
 - [x] Recolor tasks across all entries. Reassigning one entry preserves existing task names and other entries.
 - [x] Require native deletion confirmation; cancellation preserves records and running state; confirming deletion of a running entry stops tracking. Deleting a task's last entry also removes that task from suggestions.
 - [x] Reject invalid or overlapping edits without altering existing data; persist successful corrections and verify storage reopening.

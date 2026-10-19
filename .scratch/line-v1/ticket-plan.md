@@ -50,7 +50,7 @@ Each ticket delivers usable behavior through UI, tracking operations, local stor
 
 ### 04: Correct entries and maintain reusable tasks
 
-- Click entries to edit task/start/end, and resize completed entries by dragging edges. Editing a running start/task keeps it running; setting a fixed end requires stopping.
+- Click entries to edit task/start/end, and resize completed and running entries by dragging edges. Editing a running start/task keeps it running. Dragging its end into the past stops it at that time; leaving the end at or beyond Now keeps tracking.
 - Recolor tasks across all entries. Reassigning one entry preserves existing task names and other entries.
 - Require native deletion confirmation; cancellation preserves records and running state; confirming deletion of a running entry stops tracking.
 - Reject invalid or overlapping edits without altering existing data; persist successful corrections and verify storage reopening.

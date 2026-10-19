@@ -108,7 +108,7 @@ final class AppModel {
                 fraction < timeline.fraction(for: $0.end ?? instant, now: instant)
         }?.id ?? editingEntryID
         let edges = visible.flatMap { entry -> [(UUID, EntryEdge, Double)] in
-            guard let end = entry.end else { return [] }
+            let end = entry.end ?? instant
             return [(entry.id, .start, timeline.fraction(for: entry.start, now: instant)),
                     (entry.id, .end, timeline.fraction(for: end, now: instant))]
         }.filter { $0.2 >= 0 && $0.2 <= 1 && abs($0.2 - fraction) <= tolerance }

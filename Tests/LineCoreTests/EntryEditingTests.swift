@@ -4,6 +4,57 @@ import LineCore
 
 @MainActor
 struct EntryEditingTests {
+    @Test func resizingRunningStartKeepsTrackingAndClampsToPreviousEntry() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("tracking.json")
+        let base = Date(timeIntervalSince1970: 1_800_000_000)
+        var now = base + 1_800
+        let store = try TrackingStore(url: url, now: { now })
+        try store.createEntry(named: "Earlier", selection: store.prepareEntry(from: base, to: base + 600))
+        try store.startTask(named: "Build")
+        let original = try #require(store.runningEntry)
+        now = base + 3_600
+        try store.resizeEntry(id: original.id, edge: .start, to: base + 300)
+        #expect(store.runningEntry?.start == base + 600)
+        #expect(store.runningEntry?.id == original.id && store.runningEntry?.taskID == original.taskID)
+        try store.resizeEntry(id: original.id, edge: .start, to: base + 2_430)
+        #expect(store.runningEntry?.start == base + 2_460)
+        let reopened = try TrackingStore(url: url, now: { now + 300 })
+        #expect(reopened.entries.last?.start == base + 2_460)
+        #expect(reopened.entries.last?.end == base + 3_600)
+    }
+
+    @Test func resizingRunningEndAtNowKeepsTrackingAndIntoPastStopsIt() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("tracking.json")
+        let base = Date(timeIntervalSince1970: 1_800_000_000)
+        var now = base
+        let store = try TrackingStore(url: url, now: { now })
+        try store.startTask(named: "Build")
+        let original = try #require(store.runningEntry)
+        now = base + 3_600.25
+        try store.resizeEntry(id: original.id, edge: .end, to: now + 60)
+        #expect(store.runningEntry == original)
+        try store.resizeEntry(id: original.id, edge: .end, to: now - 1, reachesNow: true)
+        #expect(store.runningEntry == original)
+        #expect(throws: TrackingError.emptyInterval) { try store.resizeEntry(id: original.id, edge: .end, to: base) }
+        #expect(store.runningEntry == original)
+        let preview = try store.prepareResize(id: original.id, edge: .end, to: base + 1_230)
+        #expect(preview.end == base + 1_260 && store.runningEntry == original)
+        try store.resizeEntry(id: original.id, edge: .end, to: base + 1_230)
+        #expect(store.runningEntry == nil)
+        #expect(store.entries[0].id == original.id && store.entries[0].start == base)
+        #expect(store.entries[0].end == base + 1_260)
+        let reopened = try TrackingStore(url: url, now: { now })
+        #expect(reopened.entries == store.entries && reopened.runningEntry == nil)
+        // The backdated end, not a stale running checkpoint, is now the latest tracked instant.
+        now = base + 1_800
+        try reopened.startTask(named: "Read")
+        #expect(reopened.runningTask?.name == "Read")
+    }
+
     @Test(arguments: [false, true])
     func resizingToNowContinuesTheSameEntryAndPersistsRecovery(nearMarker: Bool) throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
@@ -201,7 +252,8 @@ struct EntryEditingTests {
         #expect(store.entries[0].end == store.entries[1].start)
         try store.startTask(named: "Live")
         let live = try #require(store.runningEntry)
-        #expect(throws: TrackingError.trackingStateChanged) { try store.prepareResize(id: live.id, edge: .end, to: now + 30) }
+        now += 60
+        #expect(try store.prepareResize(id: live.id, edge: .end, to: now + 30).end == nil)
         #expect(store.runningEntry == live)
     }
 
@@ -274,6 +326,7 @@ struct EntryEditingTests {
         #expect(throws: (any Error).self) { try store.setTaskColor(id: entry.taskID, color: .red) }
         #expect(throws: (any Error).self) { try store.deleteEntry(id: entry.id) }
         #expect(throws: (any Error).self) { try store.reassignEntry(id: entry.id, taskName: "New task") }
+        #expect(throws: (any Error).self) { try store.resizeEntry(id: entry.id, edge: .end, to: base + 30) }
         #expect(store.entries == [entry] && store.tasks == tasks)
         #expect(store.runningEntry == entry)
         try FileManager.default.removeItem(at: parent)
