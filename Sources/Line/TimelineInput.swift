@@ -13,6 +13,7 @@ struct TimelineInput: NSViewRepresentable {
     let endDraw: (Double, Double) -> Void
     let cancelDraw: () -> Void
     let selectEntry: (Double, Double) -> Void
+    let canResize: (Double, Double) -> Bool
     let beginResize: (Double, Double) -> Bool
     let updateResize: (Double) -> Void
     let endResize: (Double) -> Void
@@ -31,10 +32,12 @@ struct TimelineInput: NSViewRepresentable {
         view.endDraw = endDraw
         view.cancelDraw = cancelDraw
         view.selectEntry = selectEntry
+        view.canResize = canResize
         view.beginResize = beginResize
         view.updateResize = updateResize
         view.endResize = endResize
         view.cancelEdit = cancelEdit
+        view.refreshCursor()
     }
 
     static func dismantleNSView(_ view: TimelineInputView, coordinator: ()) {
@@ -53,10 +56,14 @@ final class TimelineInputView: NSView {
     var endDraw: (Double, Double) -> Void = { _, _ in }
     var cancelDraw: () -> Void = {}
     var selectEntry: (Double, Double) -> Void = { _, _ in }
+    var canResize: (Double, Double) -> Bool = { _, _ in false }
     var beginResize: (Double, Double) -> Bool = { _, _ in false }
     var updateResize: (Double) -> Void = { _ in }
     var endResize: (Double) -> Void = { _ in }
     var cancelEdit: () -> Bool = { false }
+    private var hoverArea: NSTrackingArea?
+    private var showsResizeCursor = false
+    private let resizeTolerance: CGFloat = 5
     private var monitor: Any?
     private var magnificationScale: Double = 1
     private var dragOrigin: NSPoint?
@@ -69,18 +76,64 @@ final class TimelineInputView: NSView {
     // Leave hit testing to SwiftUI; the monitor handles timeline gestures.
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let hoverArea { removeTrackingArea(hoverArea) }
+        let area = NSTrackingArea(rect: .zero,
+                                  options: [.mouseMoved, .mouseEnteredAndExited, .cursorUpdate,
+                                            .activeInKeyWindow, .inVisibleRect, .enabledDuringMouseDrag],
+                                  owner: self, userInfo: nil)
+        addTrackingArea(area)
+        hoverArea = area
+    }
+
+    override func cursorUpdate(with event: NSEvent) {
+        updateCursor(at: convert(event.locationInWindow, from: nil), modifiers: event.modifierFlags)
+    }
+
+    override func mouseMoved(with event: NSEvent) { cursorUpdate(with: event) }
+    override func mouseEntered(with event: NSEvent) { cursorUpdate(with: event) }
+    override func mouseExited(with event: NSEvent) {
+        if !isResizing { clearResizeCursor() }
+    }
+
+    func refreshCursor(modifiers: NSEvent.ModifierFlags = NSEvent.modifierFlags) {
+        guard let window, window.isVisible, window.isKeyWindow else {
+            clearResizeCursor()
+            return
+        }
+        updateCursor(at: convert(window.mouseLocationOutsideOfEventStream, from: nil), modifiers: modifiers)
+    }
+
+    private func updateCursor(at point: NSPoint, modifiers: NSEvent.ModifierFlags) {
+        let resizing = isResizing || (!isDrawing && !modifiers.contains(.command) && !modifiers.contains(.control) &&
+            drawingBounds.contains(point) && canResize(point.x / max(bounds.width, 1), resizeTolerance / max(bounds.width, 1)))
+        if resizing {
+            NSCursor.columnResize.set()
+            showsResizeCursor = true
+        } else {
+            clearResizeCursor()
+        }
+    }
+
+    private func clearResizeCursor() {
+        if showsResizeCursor { NSCursor.arrow.set() }
+        showsResizeCursor = false
+    }
+
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         stopMonitoring()
         guard window != nil else { return }
         monitor = NSEvent.addLocalMonitorForEvents(matching: [.scrollWheel, .magnify, .smartMagnify,
-                                                            .leftMouseDown, .leftMouseDragged, .leftMouseUp, .keyDown]) { [weak self] event in
+                                                            .leftMouseDown, .leftMouseDragged, .leftMouseUp, .keyDown, .flagsChanged]) { [weak self] event in
             guard let self else { return event }
             return self.handle(event) ? nil : event
         }
     }
 
     func stopMonitoring() {
+        clearResizeCursor()
         if let monitor { NSEvent.removeMonitor(monitor) }
         monitor = nil
         dragOrigin = nil
@@ -92,6 +145,10 @@ final class TimelineInputView: NSView {
     @discardableResult
     func handle(_ event: NSEvent) -> Bool {
         guard let window, event.window === window else { return false }
+        if event.type == .flagsChanged {
+            refreshCursor(modifiers: event.modifierFlags)
+            return false
+        }
         if event.type == .keyDown {
             guard event.keyCode == 53, window.attachedSheet == nil, NSApp.modalWindow == nil else { return false }
             guard isDrawing || isResizing else { return cancelEdit() }
@@ -99,6 +156,7 @@ final class TimelineInputView: NSView {
             isDrawing = false
             isResizing = false
             cancelDraw()
+            refreshCursor()
             return true
         }
         let point = convert(event.locationInWindow, from: nil)
@@ -113,16 +171,18 @@ final class TimelineInputView: NSView {
             if !isDrawing && !isResizing {
                 guard abs(point.x - origin.x) >= 3 else { return false }
                 let start = origin.x / max(bounds.width, 1)
-                isResizing = !dragOverwrites && beginResize(start, 5 / max(bounds.width, 1))
+                isResizing = !dragOverwrites && beginResize(start, resizeTolerance / max(bounds.width, 1))
                 if !isResizing {
                     guard beginDraw(start, dragOverwrites) else { dragOrigin = nil; return false }
                     isDrawing = true
                 }
             }
             if isResizing { updateResize(fraction) } else { updateDraw(fraction) }
+            updateCursor(at: point, modifiers: event.modifierFlags)
             return true
         }
         if event.type == .leftMouseUp {
+            defer { updateCursor(at: point, modifiers: event.modifierFlags) }
             let origin = dragOrigin
             dragOrigin = nil
             if isResizing {

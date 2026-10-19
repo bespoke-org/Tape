@@ -202,6 +202,29 @@ enum SmokeCheck {
         }
 
         model.timeline.pauseFollowing(at: .now)
+        let hoverInput = try timelineInput(in: popover)
+        func hover(_ date: Date, y: CGFloat = 60, flags: NSEvent.ModifierFlags = []) {
+            let fraction = model.timeline.fraction(for: date, now: .now)
+            let point = hoverInput.convert(NSPoint(x: hoverInput.bounds.width * fraction, y: y), to: nil)
+            hoverInput.cursorUpdate(with: TimelineTestEvent(type: .cursorUpdate, window: hoverInput.window!, location: point, flags: flags))
+        }
+        let beforeHover = store.entries
+        hover(original.start)
+        try require(NSCursor.current == NSCursor.columnResize, "Completed entry starts must show the resize cursor")
+        hover(original.start + 300)
+        try require(NSCursor.current == NSCursor.arrow, "Entry interiors must clear the resize cursor")
+        hover(original.end!)
+        try require(NSCursor.current == NSCursor.columnResize, "Completed entry ends must show the resize cursor")
+        hover(original.end!, flags: .command)
+        try require(NSCursor.current == NSCursor.arrow, "Command overwrite must not advertise resizing")
+        hover(original.start)
+        hover(running.start)
+        try require(NSCursor.current == NSCursor.arrow, "Running entries must not advertise resizing")
+        hover(original.start)
+        hover(original.start, y: 110)
+        try require(NSCursor.current == NSCursor.arrow, "Leaving the strip must clear the resize cursor")
+        try require(store.entries == beforeHover && model.resizingEntryID == nil && model.editingEntryID == nil,
+                    "Hovering must not change records or begin editing")
         try store.updateEntry(id: original.id, taskID: original.taskID, start: original.start, end: original.start + 1)
         try await settle()
         let width = try timelineInput(in: popover).bounds.width

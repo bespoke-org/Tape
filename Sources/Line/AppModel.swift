@@ -96,9 +96,12 @@ final class AppModel {
         return deleted
     }
 
-    func beginResizing(at fraction: Double, tolerance: Double) -> Bool {
-        guard let store else { return false }
-        let instant = Date.now
+    func canResize(at fraction: Double, tolerance: Double) -> Bool {
+        resizeTarget(at: fraction, tolerance: tolerance, now: .now) != nil
+    }
+
+    private func resizeTarget(at fraction: Double, tolerance: Double, now instant: Date) -> (UUID, EntryEdge, Double)? {
+        guard let store else { return nil }
         let visible = store.entries(overlapping: timeline.range(at: instant), now: instant)
         let pointedEntryID = visible.reversed().first {
             timeline.fraction(for: $0.start, now: instant) <= fraction &&
@@ -109,14 +112,19 @@ final class AppModel {
             return [(entry.id, .start, timeline.fraction(for: entry.start, now: instant)),
                     (entry.id, .end, timeline.fraction(for: end, now: instant))]
         }.filter { $0.2 >= 0 && $0.2 <= 1 && abs($0.2 - fraction) <= tolerance }
-        guard let nearest = edges.min(by: {
+        return edges.min(by: {
             let firstDistance = abs($0.2 - fraction)
             let secondDistance = abs($1.2 - fraction)
             if firstDistance == secondDistance {
                 return $0.0 == pointedEntryID && $1.0 != pointedEntryID
             }
             return firstDistance < secondDistance
-        }) else { return false }
+        })
+    }
+
+    func beginResizing(at fraction: Double, tolerance: Double) -> Bool {
+        let instant = Date.now
+        guard let nearest = resizeTarget(at: fraction, tolerance: tolerance, now: instant) else { return false }
         cancelEntry()
         timeline.pauseFollowing(at: instant)
         resizingEntryID = nearest.0
