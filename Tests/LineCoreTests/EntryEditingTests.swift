@@ -4,6 +4,40 @@ import LineCore
 
 @MainActor
 struct EntryEditingTests {
+    @Test func reassigningByNameCreatesOrReusesTasksWithoutChangingTimeOrOtherEntries() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("tracking.json")
+        let base = Date(timeIntervalSince1970: 1_800_000_000)
+        var now = base + 7_200
+        let store = try TrackingStore(url: url, now: { now })
+        try store.createEntry(named: "Build", selection: store.prepareEntry(from: base, to: base + 600))
+        try store.createEntry(named: "Build", selection: store.prepareEntry(from: base + 900, to: base + 1_200))
+        let original = store.entries[0]
+        let untouched = store.entries[1]
+        try store.reassignEntry(id: original.id, taskName: "  Read  ")
+        #expect(store.entries[0].id == original.id)
+        #expect(store.entries[0].start == original.start && store.entries[0].end == original.end)
+        #expect(store.task(id: store.entries[0].taskID)?.name == "Read")
+        #expect(store.entries[1] == untouched && store.task(id: untouched.taskID)?.name == "Build")
+        try store.reassignEntry(id: original.id, taskName: "bUiLd")
+        #expect(store.entries[0] == original && store.tasks.count == 1)
+        #expect(throws: TrackingError.emptyTaskName) { try store.reassignEntry(id: original.id, taskName: " ") }
+        #expect(throws: TrackingError.missingEntry) { try store.reassignEntry(id: UUID(), taskName: "Missing") }
+        #expect(store.tasks.count == 1)
+        try store.startTask(named: "Build")
+        let running = try #require(store.runningEntry)
+        try store.reassignEntry(id: running.id, taskName: "Read")
+        #expect(store.runningEntry?.id == running.id && store.runningEntry?.start == running.start)
+        #expect(store.runningTask?.name == "Read")
+        now += 60
+        try store.checkpoint()
+        let reopened = try TrackingStore(url: url, now: { now })
+        #expect(reopened.entries[0] == original && reopened.entries[1] == untouched)
+        #expect(reopened.entries.last?.end == now)
+        #expect(reopened.tasks == store.tasks)
+    }
+
     @Test func correctionsReassignOneEntryPreserveIdentityAndSurviveReopening() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -171,6 +205,7 @@ struct EntryEditingTests {
         #expect(throws: (any Error).self) { try store.updateEntry(id: entry.id, taskID: entry.taskID, start: base + 30, end: nil) }
         #expect(throws: (any Error).self) { try store.updateTask(id: entry.taskID, name: "Read", color: .red) }
         #expect(throws: (any Error).self) { try store.deleteEntry(id: entry.id) }
+        #expect(throws: (any Error).self) { try store.reassignEntry(id: entry.id, taskName: "New task") }
         #expect(store.entries == [entry] && store.tasks == tasks)
         #expect(store.runningEntry == entry)
         try FileManager.default.removeItem(at: parent)

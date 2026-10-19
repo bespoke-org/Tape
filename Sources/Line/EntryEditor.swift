@@ -6,7 +6,8 @@ struct EntryEditor: View {
     @Bindable var model: AppModel
     let store: TrackingStore
     let entry: TimeEntry
-    @State private var taskID: UUID
+    @State private var taskName: String
+    @FocusState private var isTaskFocused: Bool
     @State private var start: Date
     @State private var end: Date
     @State private var confirmsDeletion = false
@@ -15,7 +16,7 @@ struct EntryEditor: View {
         self.model = model
         self.store = store
         self.entry = entry
-        _taskID = State(initialValue: entry.taskID)
+        _taskName = State(initialValue: store.task(id: entry.taskID)?.name ?? "")
         _start = State(initialValue: entry.start)
         _end = State(initialValue: entry.end ?? .now)
     }
@@ -23,14 +24,15 @@ struct EntryEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Divider().padding(.bottom, 4)
-            HStack {
-                Picker("Task", selection: $taskID) {
-                    ForEach(store.tasks.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }) { task in
-                        Text(task.name).tag(task.id)
-                    }
+            HStack(alignment: .top, spacing: 16) {
+                TimestampField(title: "Start", date: $start)
+                if entry.end != nil {
+                    TimestampField(title: "End", date: $end)
+                } else {
+                    Button("Stop tracking") { _ = model.stop() }
+                        .help("Stop this entry before setting its end time")
                 }
-                .accessibilityLabel("Entry task")
-                .frame(maxWidth: .infinity)
+                Spacer(minLength: 0)
                 Button { confirmsDeletion = true } label: {
                     Label("Delete entry", systemImage: "trash")
                         .labelStyle(.iconOnly)
@@ -39,23 +41,54 @@ struct EntryEditor: View {
                 .help("Delete entry")
                 .accessibilityLabel("Delete entry")
             }
-
-            HStack(alignment: .top, spacing: 16) {
-                TimestampField(title: "Start", date: $start)
-                if entry.end != nil {
-                    TimestampField(title: "End", date: $end)
-                } else {
-                    Spacer()
-                    Button("Stop tracking") { _ = model.stop() }
-                        .help("Stop this entry before setting its end time")
+            HStack(spacing: 8) {
+                if let task = store.task(id: entry.taskID) {
+                    TaskColorPicker(model: model, task: task)
                 }
+                TextField("Name a task or search…", text: $taskName)
+                    .textFieldStyle(.plain)
+                    .focused($isTaskFocused)
+                    .onSubmit { chooseTask(taskName) }
+                    .accessibilityLabel("Entry task name or search")
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 5))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 5)
+                            .strokeBorder(.quaternary, lineWidth: 0.5)
+                            .allowsHitTesting(false)
+                    }
             }
-            if let task = store.task(id: taskID) {
-                TaskSettings(model: model, task: task)
-                    .id(task.id)
+            if isTaskFocused && !matches.isEmpty {
+                ScrollView {
+                    LazyVStack(spacing: 2) {
+                        ForEach(matches) { task in
+                            Button { chooseTask(task.name) } label: {
+                                HStack(spacing: 8) {
+                                    Circle().fill(task.color.displayColor).frame(width: 8, height: 8)
+                                    Text(task.name).lineLimit(1)
+                                    Spacer()
+                                }
+                                .padding(.horizontal, 8).padding(.vertical, 7)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.borderless)
+                            .accessibilityLabel("Use \(task.name)")
+                        }
+                    }
+                }
+                .frame(height: min(CGFloat(matches.count) * 32, 108))
+            }
+            if let task = store.task(id: entry.taskID) {
+                TaskSettings(model: model, task: task).id(task.id)
             }
         }
-        .onChange(of: taskID) { saveChanges() }
+        .onChange(of: store.task(id: entry.taskID)?.name) { _, name in
+            if !isTaskFocused { taskName = name ?? "" }
+        }
+        .onChange(of: isTaskFocused) { _, focused in
+            if !focused { taskName = store.task(id: entry.taskID)?.name ?? "" }
+        }
         .onChange(of: start) { saveChanges() }
         .onChange(of: end) { saveChanges() }
         .onChange(of: entry.end) { _, value in
@@ -70,13 +103,28 @@ struct EntryEditor: View {
         }
     }
 
+    private var matches: [TrackedTask] {
+        let query = taskName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return store.tasks.filter { query.isEmpty || $0.name.localizedCaseInsensitiveContains(query) }
+            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
+
+    private func chooseTask(_ name: String) {
+        guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        if model.reassignEntry(id: entry.id, taskName: name) {
+            taskName = store.entries.first(where: { $0.id == entry.id })
+                .flatMap { store.task(id: $0.taskID)?.name } ?? name
+            isTaskFocused = false
+        }
+    }
+
     private func saveChanges() {
         let editedEnd = entry.end == nil ? nil : end
-        guard taskID != entry.taskID || start != entry.start || editedEnd != entry.end else {
+        guard start != entry.start || editedEnd != entry.end else {
             model.clearEntryError()
             return
         }
-        _ = model.saveEntry(id: entry.id, taskID: taskID, start: start, end: editedEnd)
+        _ = model.saveEntry(id: entry.id, taskID: entry.taskID, start: start, end: editedEnd)
     }
 }
 
@@ -94,32 +142,15 @@ private struct TaskSettings: View {
     }
 
     var body: some View {
-        DisclosureGroup("Rename and recolor task", isExpanded: $expanded) {
-            HStack {
-                Picker("", selection: Binding(get: { task.color }, set: {
-                    guard let current = model.store?.task(id: task.id) else { return }
-                    _ = model.saveTask(id: task.id, name: current.name, color: $0)
-                })) {
-                    ForEach(TaskColor.allCases, id: \.self) { color in
-                        colorSwatch(color)
-                            .accessibilityLabel(color.rawValue.capitalized)
-                            .tag(color)
-                    }
+        DisclosureGroup("Rename task", isExpanded: $expanded) {
+            TextField("Task name", text: $name)
+                .accessibilityLabel("Reusable task name")
+                .focused($isNameFocused)
+                .onSubmit(saveName)
+                .onChange(of: isNameFocused) { _, focused in
+                    if !focused { saveName() }
                 }
-                .labelsHidden()
-                .menuIndicator(.hidden)
-                .frame(width: 28)
-                .help("Task color")
-                .accessibilityLabel("Task color")
-                TextField("Task name", text: $name)
-                    .accessibilityLabel("Reusable task name")
-                    .focused($isNameFocused)
-                    .onSubmit(saveName)
-                    .onChange(of: isNameFocused) { _, focused in
-                        if !focused { saveName() }
-                    }
-            }
-            .padding(.top, 6)
+                .padding(.top, 6)
         }
         .onDisappear(perform: saveName)
     }
@@ -131,6 +162,29 @@ private struct TaskSettings: View {
             return
         }
         _ = model.saveTask(id: task.id, name: name, color: current.color)
+    }
+}
+
+private struct TaskColorPicker: View {
+    let model: AppModel
+    let task: TrackedTask
+
+    var body: some View {
+        Picker("", selection: Binding(get: { task.color }, set: {
+            guard let current = model.store?.task(id: task.id) else { return }
+            _ = model.saveTask(id: task.id, name: current.name, color: $0)
+        })) {
+            ForEach(TaskColor.allCases, id: \.self) { color in
+                colorSwatch(color)
+                    .accessibilityLabel(color.rawValue.capitalized)
+                    .tag(color)
+            }
+        }
+        .labelsHidden()
+        .menuIndicator(.hidden)
+        .frame(width: 28)
+        .help("Task color")
+        .accessibilityLabel("Task color")
     }
 
     private func colorSwatch(_ color: TaskColor) -> Image {

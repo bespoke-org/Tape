@@ -75,6 +75,11 @@ final class AppModel {
         return performEntryEdit { try store.updateEntry(id: id, taskID: taskID, start: start, end: end) }
     }
 
+    func reassignEntry(id: UUID, taskName: String) -> Bool {
+        guard let store else { return false }
+        return performEntryEdit { try store.reassignEntry(id: id, taskName: taskName) }
+    }
+
     func clearEntryError() {
         entryError = nil
     }

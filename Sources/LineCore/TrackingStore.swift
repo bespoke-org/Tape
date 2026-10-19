@@ -212,6 +212,20 @@ public final class TrackingStore {
         try commit(candidate)
     }
 
+    public func reassignEntry(id: UUID, taskName rawName: String) throws {
+        let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { throw TrackingError.emptyTaskName }
+        guard let index = entries.firstIndex(where: { $0.id == id }) else { throw TrackingError.missingEntry }
+        var candidate = snapshot
+        let task = tasks.first { $0.name.caseInsensitiveCompare(name) == .orderedSame }
+            ?? TrackedTask(id: UUID(), name: name, color: initialColor(in: candidate))
+        let entry = entries[index]
+        guard task.id != entry.taskID else { return }
+        if !candidate.tasks.contains(where: { $0.id == task.id }) { candidate.tasks.append(task) }
+        candidate.entries[index] = TimeEntry(id: entry.id, taskID: task.id, start: entry.start, end: entry.end)
+        try commit(candidate)
+    }
+
     public func updateEntry(id: UUID, taskID: UUID, start: Date, end: Date?) throws {
         guard let original = entries.first(where: { $0.id == id }) else { throw TrackingError.missingEntry }
         guard task(id: taskID) != nil else { throw TrackingError.missingTask }

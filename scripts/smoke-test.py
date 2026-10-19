@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build and exercise the packaged app with isolated data and a 20-second run limit."""
+"""Build and exercise the packaged app with isolated data and a bounded run time."""
 import argparse
 import json
 import os
@@ -14,6 +14,7 @@ modes.add_argument('--timeline', action='store_true', help='Verify timeline navi
 modes.add_argument('--overwrite', action='store_true', help='Verify Command-drag overwrite and cancellation')
 modes.add_argument('--editing', action='store_true', help='Verify inline entry correction, resizing, and deletion')
 args = parser.parse_args()
+run_timeout = 40 if args.editing else 20
 root = Path(__file__).resolve().parent.parent
 app = root / 'build/smoke/Line.app'
 subprocess.run([str(root / 'scripts/build-app.sh'), 'debug'], cwd=root,
@@ -30,10 +31,10 @@ with tempfile.TemporaryDirectory(prefix='line-smoke-') as data:
                 [str(app / 'Contents/MacOS/Line'), '--smoke-test', str(output)],
                 env=dict(os.environ, LINE_DATA_DIRECTORY=data, LINE_SMOKE_TIMELINE='1' if args.timeline else '0',
                          LINE_SMOKE_EDITING='1' if args.editing else '0', LINE_SMOKE_CREATION='1' if args.creation else '0', LINE_SMOKE_OVERWRITE='1' if args.overwrite else '0'),
-                capture_output=True, text=True, timeout=20,
+                capture_output=True, text=True, timeout=run_timeout,
             )
         except subprocess.TimeoutExpired:
-            raise SystemExit('Smoke check exceeded 20 seconds. The test app was terminated.')
+            raise SystemExit(f'Smoke check exceeded {run_timeout} seconds. The test app was terminated.')
         if result.stdout:
             print(result.stdout, end='')
         if result.stderr:

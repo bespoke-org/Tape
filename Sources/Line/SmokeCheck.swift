@@ -223,7 +223,7 @@ enum SmokeCheck {
         try await settle()
         try require(model.editingEntryID == original.id, "Clicking an entry must reveal its inline settings")
         try requireAnchored(popover, to: button)
-        try pressAccessibleControl(named: "Rename and recolor task", in: contentView(popover), role: .disclosureTriangle)
+        try pressAccessibleControl(named: "Rename task", in: contentView(popover), role: .disclosureTriangle)
         try await settle()
         guard let colorPicker = descendants(try contentView(popover)).compactMap({ $0 as? NSPopUpButton }).first(where: { $0.accessibilityLabel() == "Task color" }),
               let colorItems = colorPicker.menu?.items else {
@@ -249,11 +249,15 @@ enum SmokeCheck {
             throw NSError(domain: "LineSmokeCheck", code: 13, userInfo: [NSLocalizedDescriptionKey: "Task name field is missing"])
         }
         let colorFrame = colorPicker.convert(colorPicker.bounds, to: nil)
-        let nameFrame = nameField.convert(nameField.bounds, to: nil)
-        try require(colorFrame.maxX <= nameFrame.minX, "The color picker must precede the task name")
+        guard let searchField = descendants(try contentView(popover)).compactMap({ $0 as? NSTextField })
+            .first(where: { $0.placeholderString == "Name a task or search…" }) else {
+            throw NSError(domain: "LineSmokeCheck", code: 16, userInfo: [NSLocalizedDescriptionKey: "Entry task search is missing"])
+        }
+        let searchFrame = searchField.convert(searchField.bounds, to: nil)
+        try require(colorFrame.maxX <= searchFrame.minX, "The color picker must precede the task search")
         _ = nameField.window?.makeFirstResponder(nameField)
         try await settle()
-        try enterTaskName("Renamed", in: popover, submit: false)
+        try enterTaskName("Renamed", in: popover, submit: false, field: nameField)
         _ = nameField.window?.makeFirstResponder(nil)
         try await settle()
         try require(store.task(id: original.taskID)?.name == "Renamed", "Leaving the name field must save the task without a button")
@@ -309,6 +313,28 @@ enum SmokeCheck {
         try clickEntry(base - 300)
         try await settle()
         try require(model.editingEntryID == running.id, "Running entries must be editable")
+        guard let taskSearch = descendants(try contentView(popover)).compactMap({ $0 as? NSTextField })
+            .first(where: { $0.placeholderString == "Name a task or search…" }) else {
+            throw NSError(domain: "LineSmokeCheck", code: 17, userInfo: [NSLocalizedDescriptionKey: "Running entry task search is missing"])
+        }
+        _ = taskSearch.window?.makeFirstResponder(taskSearch)
+        try await settle()
+        try enterTaskName("New assignment", in: popover, submit: false)
+        try await settle()
+        try require(store.runningEntry?.taskID == running.taskID, "Typing must not reassign the entry")
+        try enterTaskName("New assignment", in: popover)
+        try await settle()
+        try require(store.runningTask?.name == "New assignment" && store.runningEntry?.id == running.id,
+                    "Return must create and assign a task without stopping the entry")
+        _ = taskSearch.window?.makeFirstResponder(taskSearch)
+        try await settle()
+        try enterTaskName("Keep", in: popover, submit: false)
+        try await settle()
+        try pressAccessibleControl(named: "Use Keep", in: contentView(popover))
+        try await settle()
+        try require(store.runningEntry?.taskID == completed.taskID && store.tasks.count == 1,
+                    "Choosing a suggestion must reuse its task and prune the abandoned task")
+        try requireAnchored(popover, to: button)
         try changeStart(to: base - 540)
         try await settle()
         try require(store.runningEntry?.start == base - 540, "Correcting a running start must keep tracking")
@@ -623,9 +649,9 @@ enum SmokeCheck {
         return view
     }
 
-    private static func enterTaskName(_ name: String, in popover: NSPopover, submit: Bool = true) throws {
+    private static func enterTaskName(_ name: String, in popover: NSPopover, submit: Bool = true, field target: NSTextField? = nil) throws {
         let content = try contentView(popover)
-        guard let field = descendants(content).compactMap({ $0 as? NSTextField }).first(where: \.isEditable),
+        guard let field = target ?? descendants(content).compactMap({ $0 as? NSTextField }).first(where: \.isEditable),
               let window = field.window else {
             throw NSError(domain: "LineSmokeCheck", code: 3, userInfo: [NSLocalizedDescriptionKey: "Native task field is missing"])
         }
