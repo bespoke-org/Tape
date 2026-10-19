@@ -1,7 +1,7 @@
 import AppKit
 import LineCore
 
-/// The bracket sits on the selected edge; the arrows sit inside its entry.
+/// A single bracket marks the selected edge and opens toward its entry.
 @MainActor
 enum EntryResizeCursor {
     static let start = make(mirrored: false)
@@ -15,23 +15,15 @@ enum EntryResizeCursor {
     }
 
     private static func make(mirrored: Bool) -> NSCursor {
-        let image = NSImage(size: NSSize(width: 30, height: 28), flipped: true) { _ in
+        let image = NSImage(size: NSSize(width: 12, height: 26), flipped: true) { _ in
             func point(_ x: CGFloat, _ y: CGFloat) -> NSPoint {
-                NSPoint(x: mirrored ? 30 - x : x, y: y)
+                NSPoint(x: mirrored ? 12 - x : x, y: y)
             }
             let path = NSBezierPath()
-            path.move(to: point(9, 5))
-            path.line(to: point(5, 5))
-            path.line(to: point(5, 23))
-            path.line(to: point(9, 23))
-            path.move(to: point(12, 14))
-            path.line(to: point(25, 14))
-            path.move(to: point(15, 11))
-            path.line(to: point(12, 14))
-            path.line(to: point(15, 17))
-            path.move(to: point(22, 11))
-            path.line(to: point(25, 14))
-            path.line(to: point(22, 17))
+            path.move(to: point(9, 4))
+            path.line(to: point(3, 4))
+            path.line(to: point(3, 22))
+            path.line(to: point(9, 22))
             path.lineCapStyle = .round
             path.lineJoinStyle = .round
             // Match the outlined system pointer's contrast on light and dark surfaces.
@@ -44,6 +36,6 @@ enum EntryResizeCursor {
             return true
         }
         image.isTemplate = false
-        return NSCursor(image: image, hotSpot: NSPoint(x: mirrored ? 25 : 5, y: 14))
+        return NSCursor(image: image, hotSpot: NSPoint(x: mirrored ? 9 : 3, y: 13))
     }
 }
