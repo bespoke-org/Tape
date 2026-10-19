@@ -46,6 +46,7 @@ struct LiveTimeline: View {
 
                     ForEach(visibleEntries) { entry in
                         if let task = store.task(id: entry.taskID) {
+                            let isSelected = model.editingEntryID == entry.id || model.resizingEntryID == entry.id
                             let preview = model.resizingEntryID == entry.id ? model.drawnRange : nil
                             let left = max(0, position(preview?.start ?? entry.start, width: width))
                             let right = min(width, position(preview?.end ?? entry.end ?? now, width: width))
@@ -54,13 +55,13 @@ struct LiveTimeline: View {
                                 RoundedRectangle(cornerRadius: 4)
                                     .fill(reduceTransparency ? Color(nsColor: .controlBackgroundColor) : task.color.displayColor.opacity(0.23))
                                     .overlay {
-                                        if model.editingEntryID == entry.id {
+                                        if isSelected {
                                             selectionStripes(color: task.color.displayColor)
                                         }
                                     }
                                     .overlay {
                                         RoundedRectangle(cornerRadius: 4)
-                                            .strokeBorder(task.color.displayColor, lineWidth: contrast == .increased || model.editingEntryID == entry.id ? 2 : 1)
+                                            .strokeBorder(task.color.displayColor, lineWidth: contrast == .increased || isSelected ? 2 : 1)
                                     }
                                     .overlay(alignment: .leading) {
                                         if entryWidth > 42 {
@@ -165,6 +166,7 @@ struct LiveTimeline: View {
     }
 
     private var selectionRange: DateInterval? {
+        guard model.resizingEntryID == nil else { return nil }
         if let range = model.drawnRange { return range }
         guard let selection = model.entrySelection else { return nil }
         return DateInterval(start: selection.start, end: max(selection.start, selection.end ?? now))
