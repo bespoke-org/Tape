@@ -12,7 +12,7 @@ The swatch-only color picker saves choices immediately. The separate expandable 
 
 Completed entries support dragging either edge, with minute snapping and exact neighboring boundaries. Command at mouse-down retains overwrite behavior instead. Previews do not write records, Escape cancels, and crossing the opposite edge cancels a resize. Coincident edges prefer the entry containing the pointer. Click targets match the rendered two-point minimum width; later entries win shared boundaries.
 
-Running entries can change task/start without stopping. Their editor offers Stop tracking before a fixed end can be assigned. Native deletion confirmation preserves records and tracking on cancellation; confirmation removes the entry and stops it if running. Removing a task's last entry prunes the task atomically.
+Running entries can change task/start without stopping. Stop tracking with the main status row’s stop icon before assigning a fixed end. The editor has no separate stop button. Native deletion confirmation preserves records and tracking on cancellation; confirmation removes the entry and stops it if running. Removing a task's last entry prunes the task atomically.
 
 Timestamp edits use absolute instants. During a repeated local hour, an additional UTC-offset choice distinguishes the two occurrences. This uses Foundation's [repeated-time matching policy](https://developer.apple.com/documentation/foundation/calendar/nextdate(after:matching:matchingpolicy:repeatedtimepolicy:direction:)).
 

@@ -28,9 +28,6 @@ struct EntryEditor: View {
                 TimestampField(title: "Start", date: $start)
                 if entry.end != nil {
                     TimestampField(title: "End", date: $end)
-                } else {
-                    Button("Stop tracking") { _ = model.stop() }
-                        .help("Stop this entry before setting its end time")
                 }
                 Spacer(minLength: 0)
                 Button { confirmsDeletion = true } label: {
