@@ -158,8 +158,6 @@ struct TrackingPopover: View {
 
     private func taskPicker(store: TrackingStore) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Divider()
-                .padding(.bottom, 6)
             if let selection = model.entrySelection, !selection.overwritesExisting {
                 HStack {
                     Text(selectionDescription(selection))
