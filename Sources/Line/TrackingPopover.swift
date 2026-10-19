@@ -140,7 +140,7 @@ struct TrackingPopover: View {
         VStack(alignment: .leading, spacing: 10) {
             Divider()
                 .padding(.bottom, 6)
-            if let selection = model.entrySelection {
+            if let selection = model.entrySelection, !selection.overwritesExisting {
                 HStack {
                     Text(selectionDescription(selection))
                         .font(.caption).foregroundStyle(.secondary)

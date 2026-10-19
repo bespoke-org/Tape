@@ -128,10 +128,6 @@ struct LiveTimeline: View {
                         Text(dateContext).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
                             .frame(maxWidth: model.timeline.isFollowingNow ? width / 2 - 24 : nil, alignment: .leading)
                         Spacer()
-                        if model.isOverwriting {
-                            Label("Overwrite", systemImage: "command")
-                                .font(.caption2.weight(.medium))
-                        }
                     }
                     .frame(width: width, height: 20)
 

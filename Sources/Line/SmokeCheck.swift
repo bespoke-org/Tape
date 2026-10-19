@@ -178,9 +178,11 @@ enum SmokeCheck {
         try require(model.entrySelection == nil && model.entryError == nil, "Collapsed overwrite must silently cancel")
         try draw(0.15, 0.25, in: popover, command: true)
         try await settle()
-        try pressAccessibleButton(named: "Cancel", in: contentView(popover))
+        try require(accessibilityElement(named: "Cancel", in: contentView(popover)) == nil,
+                    "Overwrite picker must use the compact layout without a Cancel button")
+        window.sendEvent(escape)
         try await settle()
-        try require(model.entrySelection == nil && store.entries == original, "Cancel must preserve overwritten entries")
+        try require(model.entrySelection == nil && store.entries == original, "Escape in the overwrite picker must preserve entries")
         try draw(0.15, 0.25, in: popover, command: true)
         try await settle()
         try clickStatusItem(button)
