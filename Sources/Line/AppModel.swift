@@ -70,18 +70,9 @@ final class AppModel {
         }
     }
 
-    func saveEntry(id: UUID, taskID: UUID, start: Date, end: Date?) -> Bool {
-        guard let store else { return false }
-        return performEntryEdit { try store.updateEntry(id: id, taskID: taskID, start: start, end: end) }
-    }
-
     func reassignEntry(id: UUID, taskName: String) -> Bool {
         guard let store else { return false }
         return performEntryEdit { try store.reassignEntry(id: id, taskName: taskName) }
-    }
-
-    func clearEntryError() {
-        entryError = nil
     }
 
     func saveTaskColor(id: UUID, color: TaskColor) -> Bool {

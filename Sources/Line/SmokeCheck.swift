@@ -20,7 +20,7 @@ enum SmokeCheck {
             try require(button.image != nil, "Status item must have an icon")
             if ProcessInfo.processInfo.environment["LINE_SMOKE_EDITING"] == "1" {
                 try await checkEditing(button: button, popover: popover, model: model)
-                try Data("PASS: inline entry editor, native timestamp autosave, Escape, deletion confirmation/cancellation, running deletion, edge resizing, and stable anchoring.\n".utf8)
+                try Data("PASS: inline entry editor, task reassignment and color changes, Escape, deletion confirmation/cancellation, running deletion, edge resizing, and stable anchoring.\n".utf8)
                     .write(to: output.appendingPathComponent("result.txt"))
                 NSApp.terminate(nil)
                 return
@@ -178,15 +178,6 @@ enum SmokeCheck {
             _ = input.handle(TimelineTestEvent(type: .leftMouseDown, window: input.window!, location: point))
             _ = input.handle(TimelineTestEvent(type: .leftMouseUp, window: input.window!, location: point))
         }
-        func changeStart(to date: Date) throws {
-            let pickers = descendants(try contentView(popover)).compactMap { $0 as? NSDatePicker }
-            guard let picker = pickers.first(where: { $0.accessibilityLabel() == "Entry start" }) else {
-                throw NSError(domain: "LineSmokeCheck", code: 11, userInfo: [NSLocalizedDescriptionKey: "Native timestamp editor is missing"])
-            }
-            try require(picker.acceptsFirstResponder, "Timestamp editor must accept keyboard focus")
-            picker.dateValue = date
-            _ = picker.sendAction(picker.action, to: picker.target)
-        }
         func confirm(_ title: String) throws {
             let host = try contentView(popover).window!
             let panel = host.attachedSheet ?? NSApp.modalWindow ??
@@ -288,23 +279,12 @@ enum SmokeCheck {
         }
         let searchFrame = searchField.convert(searchField.bounds, to: nil)
         try require(colorFrame.maxX <= searchFrame.minX, "The color picker must precede the task search")
-        try changeStart(to: base - 3_480)
-        try await settle()
-        try require(store.entries[0].start == base - 3_480, "Changing native timestamp controls must immediately save the entry")
-        try require(model.editingEntryID == original.id, "Automatic saving must keep the editor open")
+        try require(!descendants(try contentView(popover)).contains(where: { $0 is NSDatePicker }),
+                    "Entry times are edited by dragging edges, without date controls")
         try require(accessibilityElement(named: "Save entry", in: contentView(popover)) == nil &&
                     accessibilityElement(named: "Cancel", in: contentView(popover)) == nil, "The editor must not have Save or Cancel actions")
         try requireAnchored(popover, to: button)
 
-        try clickEntry(base - 3_300)
-        try await settle()
-        try changeStart(to: base - 2_940)
-        try await settle()
-        try require(model.entryError != nil && store.entries[0].start == base - 3_480, "An invalid edit must stay open and preserve saved time")
-        try changeStart(to: base - 3_480)
-        try await settle()
-        try require(model.entryError == nil && store.entries[0].start == base - 3_480,
-                    "Restoring the saved timestamp must clear validation without changing data")
         let window = try contentView(popover).window!
         let escape = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [],
                                       timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
@@ -314,7 +294,7 @@ enum SmokeCheck {
         let input = try timelineInput(in: popover)
         if !input.handle(escape) { window.sendEvent(escape) }
         try await settle()
-        try require(model.editingEntryID == nil && model.entryError == nil && store.entries[0].start == base - 3_480, "Escape must close the editor and retain previously saved edits")
+        try require(model.editingEntryID == nil && model.entryError == nil && store.entries[0].start == original.start && store.task(id: original.taskID)?.color == TaskColor.allCases[nextColorIndex], "Escape must close the editor and retain the saved color without changing entry times")
         try clickEntry(base - 3_300)
         try await settle()
         try pressAccessibleControl(named: "Delete entry", in: contentView(popover))
@@ -361,9 +341,6 @@ enum SmokeCheck {
         try require(store.runningEntry?.taskID == completed.taskID && store.tasks.count == 1,
                     "Choosing a suggestion must reuse its task and prune the abandoned task")
         try requireAnchored(popover, to: button)
-        try changeStart(to: base - 540)
-        try await settle()
-        try require(store.runningEntry?.start == base - 540, "Correcting a running start must keep tracking")
         try clickEntry(base - 300)
         try await settle()
         try pressAccessibleControl(named: "Delete entry", in: contentView(popover))
