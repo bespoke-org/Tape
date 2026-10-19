@@ -65,3 +65,5 @@ The editing smoke check uses native color controls and confirmation buttons alon
 - [Domain vocabulary](CONTEXT.md)
 - [Spec](.scratch/line-v1/spec.md)
 - [Tickets and dependencies](.scratch/line-v1/ticket-plan.md)
+
+The `python3 scripts/smoke-test.py --dismissal` check exercises the outside-click callback before using the color menu, after dismissing it, and after choosing a color. Physical outside-click delivery still needs a manual check.

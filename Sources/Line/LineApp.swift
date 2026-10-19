@@ -39,6 +39,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private let popover = NSPopover()
     private var model: AppModel!
     private var checkpointTimer: Timer?
+    private var outsideClickMonitor: Any?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let directory: URL
@@ -120,6 +121,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         NSApplication.shared.activate(ignoringOtherApps: true)
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         popover.contentViewController?.view.window?.makeKey()
+        if outsideClickMonitor == nil {
+            outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]) { [weak self] _ in
+                self?.dismissForOutsideClick()
+            }
+        }
     }
 
     private func resizePopover(to size: CGSize) {
@@ -135,8 +141,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     }
 
     func popoverDidClose(_ notification: Notification) {
+        if let outsideClickMonitor {
+            NSEvent.removeMonitor(outsideClickMonitor)
+            self.outsideClickMonitor = nil
+        }
         // Destroy the TimelineView so no rendering schedule survives a closed popover.
         popover.contentViewController = nil
+    }
+
+    func dismissForOutsideClick() {
+        // A nested menu can leave AppKit's transient dismissal inactive after it closes.
+        if popover.behavior == .transient {
+            popover.close()
+        }
     }
 
     private func updateStatus() {

@@ -18,6 +18,14 @@ enum SmokeCheck {
             try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
             try require(NSApp.activationPolicy() == .accessory, "App must have no Dock icon")
             try require(button.image != nil, "Status item must have an icon")
+            if ProcessInfo.processInfo.environment["LINE_SMOKE_DISMISSAL"] == "1" {
+                popover.behavior = .transient
+                try await checkDismissal(button: button, popover: popover, model: model)
+                try Data("PASS: popover dismisses before and after opening its color menu.\n".utf8)
+                    .write(to: output.appendingPathComponent("result.txt"))
+                NSApp.terminate(nil)
+                return
+            }
             if ProcessInfo.processInfo.environment["LINE_SMOKE_EDITING"] == "1" {
                 try await checkEditing(button: button, popover: popover, model: model)
                 try Data("PASS: inline entry editor, task reassignment and color changes, Escape, deletion confirmation/cancellation, running deletion, edge resizing, and stable anchoring.\n".utf8)
@@ -156,6 +164,38 @@ enum SmokeCheck {
         _ = input.handle(event(.leftMouseDown, from))
         _ = input.handle(event(.leftMouseDragged, to))
         if finish { _ = input.handle(event(.leftMouseUp, release ?? to)) }
+    }
+
+    private static func checkDismissal(button: NSStatusBarButton, popover: NSPopover, model: AppModel) async throws {
+        let store = model.store!
+        let now = Date.now
+        try store.createEntry(named: "Dismissal", selection: store.prepareEntry(from: now - 600, to: now - 300))
+        for menuAction in ["none", "cancel", "select"] {
+            try clickStatusItem(button)
+            try await settle()
+            model.editEntry(id: store.entries[0].id)
+            try await settle()
+            if menuAction != "none" {
+                guard let picker = descendants(try contentView(popover)).compactMap({ $0 as? NSPopUpButton }).first else {
+                    throw NSError(domain: "LineSmokeCheck", code: 19, userInfo: [NSLocalizedDescriptionKey: "Color menu is missing"])
+                }
+                let dismiss = Timer(timeInterval: 0.2, repeats: false) { _ in
+                    MainActor.assumeIsolated { picker.menu?.cancelTrackingWithoutAnimation() }
+                }
+                RunLoop.main.add(dismiss, forMode: .eventTracking)
+                picker.performClick(nil)
+                dismiss.invalidate()
+                if menuAction == "select", let menu = picker.menu {
+                    menu.performActionForItem(at: 1)
+                }
+                try await settle()
+                try require(popover.isShown, "Closing only the color menu must keep Line open")
+            }
+            // Exercise the production callback registered for clicks in other apps.
+            (NSApp.delegate as? AppDelegate)?.dismissForOutsideClick()
+            try await settle()
+            try require(!popover.isShown, "Leaving Line must dismiss its popover; color menu action: \(menuAction)")
+        }
     }
 
     private static func checkEditing(button: NSStatusBarButton, popover: NSPopover, model: AppModel) async throws {

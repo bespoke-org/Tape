@@ -12,6 +12,7 @@ modes = parser.add_mutually_exclusive_group()
 modes.add_argument('--creation', action='store_true', help='Verify drawing and task selection')
 modes.add_argument('--timeline', action='store_true', help='Verify timeline navigation and zoom across two launches')
 modes.add_argument('--overwrite', action='store_true', help='Verify Command-drag overwrite and cancellation')
+modes.add_argument('--dismissal', action='store_true', help='Verify outside-click dismissal after color menu use')
 modes.add_argument('--editing', action='store_true', help='Verify inline entry correction, resizing, and deletion')
 args = parser.parse_args()
 run_timeout = 40 if args.editing else 20
@@ -19,7 +20,7 @@ root = Path(__file__).resolve().parent.parent
 app = root / 'build/smoke/Line.app'
 subprocess.run([str(root / 'scripts/build-app.sh'), 'debug'], cwd=root,
                env=dict(os.environ, LINE_APP_OUTPUT=str(app)), check=True, timeout=180)
-output = root / 'build' / ('editing-smoke-results' if args.editing else 'overwrite-smoke-results' if args.overwrite else 'creation-smoke-results' if args.creation else 'timeline-smoke-results' if args.timeline else 'smoke-results')
+output = root / 'build' / ('dismissal-smoke-results' if args.dismissal else 'editing-smoke-results' if args.editing else 'overwrite-smoke-results' if args.overwrite else 'creation-smoke-results' if args.creation else 'timeline-smoke-results' if args.timeline else 'smoke-results')
 output.mkdir(parents=True, exist_ok=True)
 report = output / 'result.txt'
 
@@ -29,7 +30,7 @@ with tempfile.TemporaryDirectory(prefix='line-smoke-') as data:
         try:
             result = subprocess.run(
                 [str(app / 'Contents/MacOS/Line'), '--smoke-test', str(output)],
-                env=dict(os.environ, LINE_DATA_DIRECTORY=data, LINE_SMOKE_TIMELINE='1' if args.timeline else '0',
+                env=dict(os.environ, LINE_DATA_DIRECTORY=data, LINE_SMOKE_DISMISSAL='1' if args.dismissal else '0', LINE_SMOKE_TIMELINE='1' if args.timeline else '0',
                          LINE_SMOKE_EDITING='1' if args.editing else '0', LINE_SMOKE_CREATION='1' if args.creation else '0', LINE_SMOKE_OVERWRITE='1' if args.overwrite else '0'),
                 capture_output=True, text=True, timeout=run_timeout,
             )
@@ -49,7 +50,7 @@ with tempfile.TemporaryDirectory(prefix='line-smoke-') as data:
         if args.timeline:
             assert records['timelineSpan'] == 14_400 / (2 ** (launch + 1))
             assert records['entries'] == []
-        elif args.editing:
+        elif args.editing or args.dismissal:
             assert len(records['entries']) == 1
             assert len(records['tasks']) == 1
             assert all(entry.get('end') is not None for entry in records['entries'])
