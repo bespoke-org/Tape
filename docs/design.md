@@ -16,7 +16,7 @@ Working record of agreed behavior and unresolved decisions. This is not the impl
 - Creating or editing an entry cannot overlap another entry. Reject the overlap with an explanation and preserve existing entries.
 - Reopening the popover returns to now and retains the chosen zoom level.
 - Tasks are reusable across entries, days, and weeks. Starting another task ends the current entry. Only one task can run, and entries cannot overlap.
-- Tasks have a name and color only for the first version. Creating a task assigns it a random color. Users can rename and recolor tasks, updating all their entries. Names are unique ignoring capitalization and surrounding spaces.
+- Tasks have a name and color only for the first version. Creating a task assigns it a random color. Users can recolor tasks, updating all their entries. Task renaming is not supported. Names are unique ignoring capitalization and surrounding spaces.
 - The popover shows the running task, Stop, and task switching. The elapsed-time display is omitted for now. The menu bar shows a compact Line icon with a running indicator.
 - By default, the popover shows only the current state and timeline. Start task or Switch task reveals and focuses the inline task picker. Selecting a task or pressing Escape collapses it; reopening the popover starts with the picker hidden. Omit titles, subtitles, the current-date heading, and the divider above the picker.
 - The first version records actual time only. Recorded entries cannot extend into the future. Calendar events are a possible later feature.

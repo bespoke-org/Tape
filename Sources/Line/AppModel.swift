@@ -84,9 +84,9 @@ final class AppModel {
         entryError = nil
     }
 
-    func saveTask(id: UUID, name: String, color: TaskColor) -> Bool {
+    func saveTaskColor(id: UUID, color: TaskColor) -> Bool {
         guard let store else { return false }
-        return performEntryEdit { try store.updateTask(id: id, name: name, color: color) }
+        return performEntryEdit { try store.setTaskColor(id: id, color: color) }
     }
 
     func deleteEntry(id: UUID) -> Bool {

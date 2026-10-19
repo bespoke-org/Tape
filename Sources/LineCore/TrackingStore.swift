@@ -200,15 +200,10 @@ public final class TrackingStore {
         try commit(candidate)
     }
 
-    public func updateTask(id: UUID, name rawName: String, color: TaskColor) throws {
-        let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !name.isEmpty else { throw TrackingError.emptyTaskName }
+    public func setTaskColor(id: UUID, color: TaskColor) throws {
         guard let index = tasks.firstIndex(where: { $0.id == id }) else { throw TrackingError.missingTask }
-        guard !tasks.contains(where: { $0.id != id && $0.name.caseInsensitiveCompare(name) == .orderedSame }) else {
-            throw TrackingError.duplicateTaskName
-        }
         var candidate = snapshot
-        candidate.tasks[index] = TrackedTask(id: id, name: name, color: color)
+        candidate.tasks[index] = TrackedTask(id: id, name: tasks[index].name, color: color)
         try commit(candidate)
     }
 

@@ -11,7 +11,7 @@ Each ticket delivers usable behavior through UI, tracking operations, local stor
 | 01 | Track tasks on a live timeline | None | A runnable native menu bar app; create/search tasks, start/stop/switch, and watch entries grow on a four-hour timeline following now; preserve data and stop safely on quit or recovery. |
 | 02 | Browse and zoom the timeline | 01 | Scroll into history/future, return to now, pinch to zoom, adapt date/time ticks to scale, and retain scale across reopen/relaunch. |
 | 03 | Draw historical entries or start tracking from the past | 02 | Drag empty space, type/select a task, save historical time or keep running when drawing through now; support cancellation and reject overlaps without modifying existing entries. |
-| 04 | Correct entries and maintain reusable tasks | 03 | Edit tasks and timestamps, resize entries, rename/recolor tasks, and confirm deletion; keep running-entry behavior and validation consistent. |
+| 04 | Correct entries and maintain reusable tasks | 03 | Edit tasks and timestamps, resize entries, recolor tasks, and confirm deletion; keep running-entry behavior and validation consistent. |
 | 05 | Stop tracking on screen lock and sleep | 01 | Detect actual lock/sleep, save the interruption endpoint, distinguish usable return from wake-while-locked, and ignore ordinary inactivity/display-off. |
 | 06 | Resume interrupted work with a cancellable countdown | 04, 05 | Show a non-focus-stealing menu bar countdown, include its interval on completion, support Reject/dismiss/re-lock, and verify cancellation by all implemented creation/editing actions. |
 | 07 | Finish personal installation and verify complete workflows | 06 | Optional launch at login, reproducible local build/install instructions, and verification of the packaged app, native appearance/accessibility, persistence, and combined tracking workflows. |
@@ -51,7 +51,7 @@ Each ticket delivers usable behavior through UI, tracking operations, local stor
 ### 04: Correct entries and maintain reusable tasks
 
 - Click entries to edit task/start/end, and resize completed entries by dragging edges. Editing a running start/task keeps it running; setting a fixed end requires stopping.
-- Rename/recolor tasks across all entries, enforcing name uniqueness. Reassigning one entry does not rename its task globally.
+- Recolor tasks across all entries. Reassigning one entry preserves existing task names and other entries.
 - Require native deletion confirmation; cancellation preserves records and running state; confirming deletion of a running entry stops tracking.
 - Reject invalid or overlapping edits without altering existing data; persist successful corrections and verify storage reopening.
 - Verify keyboard editing, accessible labels, contrast, and editor behavior with real timeline interactions.

@@ -10,7 +10,6 @@ public enum TrackingError: LocalizedError {
     case missingEntry
     case missingTask
     case trackingStateChanged
-    case duplicateTaskName
 
     public var errorDescription: String? {
         switch self {
@@ -23,7 +22,6 @@ public enum TrackingError: LocalizedError {
         case .missingEntry: "This entry no longer exists."
         case .missingTask: "This task no longer exists."
         case .trackingStateChanged: "Stop tracking before setting an end time. Completed entries must keep an end time."
-        case .duplicateTaskName: "A task with this name already exists. Choose another name."
         }
     }
 }

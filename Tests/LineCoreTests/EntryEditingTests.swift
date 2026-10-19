@@ -63,7 +63,7 @@ struct EntryEditingTests {
         #expect(reopened.tasks == store.tasks)
     }
 
-    @Test func taskChangesApplyEverywhereAndRejectDuplicateNames() throws {
+    @Test func recoloringPreservesNamesAndEntriesAndSurvivesReopening() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         let url = directory.appendingPathComponent("tracking.json")
@@ -75,13 +75,12 @@ struct EntryEditingTests {
         try store.startTask(named: "Read")
         let build = store.entries[0].taskID
         let before = store.entries
-        try store.updateTask(id: build, name: "  Write  ", color: .mint)
+        try store.setTaskColor(id: build, color: .mint)
         #expect(store.entries == before)
-        #expect(store.task(id: build)?.name == "Write")
+        #expect(store.task(id: build)?.name == "Build")
         #expect(store.task(id: build)?.color == .mint)
-        #expect(throws: TrackingError.duplicateTaskName) { try store.updateTask(id: build, name: " read ", color: .red) }
-        #expect(throws: TrackingError.emptyTaskName) { try store.updateTask(id: build, name: " ", color: .red) }
-        #expect(store.task(id: build)?.name == "Write")
+        #expect(throws: TrackingError.missingTask) { try store.setTaskColor(id: UUID(), color: .red) }
+        #expect(store.task(id: build)?.name == "Build")
         #expect(store.task(id: build)?.color == .mint)
         let reopened = try TrackingStore(url: url, now: { now })
         #expect(reopened.task(id: build) == store.task(id: build))
@@ -186,7 +185,7 @@ struct EntryEditingTests {
         #expect(throws: TrackingError.trackingStateChanged) { try store.updateEntry(id: running.id, taskID: read, start: base + 3_660, end: nil) }
     }
 
-    @Test func failedCorrectionsRenamesAndDeletionNeverPublishOrLoseData() throws {
+    @Test func failedCorrectionsRecolorsAndDeletionNeverPublishOrLoseData() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         let parent = directory.appendingPathComponent("data")
@@ -203,7 +202,7 @@ struct EntryEditingTests {
         try FileManager.default.moveItem(at: parent, to: saved)
         try Data("not a directory".utf8).write(to: parent)
         #expect(throws: (any Error).self) { try store.updateEntry(id: entry.id, taskID: entry.taskID, start: base + 30, end: nil) }
-        #expect(throws: (any Error).self) { try store.updateTask(id: entry.taskID, name: "Read", color: .red) }
+        #expect(throws: (any Error).self) { try store.setTaskColor(id: entry.taskID, color: .red) }
         #expect(throws: (any Error).self) { try store.deleteEntry(id: entry.id) }
         #expect(throws: (any Error).self) { try store.reassignEntry(id: entry.id, taskName: "New task") }
         #expect(store.entries == [entry] && store.tasks == tasks)

@@ -223,9 +223,10 @@ enum SmokeCheck {
         try await settle()
         try require(model.editingEntryID == original.id, "Clicking an entry must reveal its inline settings")
         try requireAnchored(popover, to: button)
-        try pressAccessibleControl(named: "Rename task", in: contentView(popover), role: .disclosureTriangle)
-        try await settle()
-        guard let colorPicker = descendants(try contentView(popover)).compactMap({ $0 as? NSPopUpButton }).first(where: { $0.accessibilityLabel() == "Task color" }),
+        try require(accessibilityElement(named: "Task color", in: contentView(popover)) != nil,
+                    "The color picker must have an accessible label")
+        // SwiftUI can expose the label on its accessibility node instead of the native view.
+        guard let colorPicker = descendants(try contentView(popover)).compactMap({ $0 as? NSPopUpButton }).first,
               let colorItems = colorPicker.menu?.items else {
             throw NSError(domain: "LineSmokeCheck", code: 14, userInfo: [NSLocalizedDescriptionKey: "Native color menu is missing"])
         }
@@ -245,9 +246,6 @@ enum SmokeCheck {
         try await settle()
         try require(store.task(id: original.taskID)?.color == TaskColor.allCases[nextColorIndex],
                     "Choosing a swatch must save the task color immediately")
-        guard let nameField = descendants(try contentView(popover)).compactMap({ $0 as? NSTextField }).first(where: { $0.placeholderString == "Task name" }) else {
-            throw NSError(domain: "LineSmokeCheck", code: 13, userInfo: [NSLocalizedDescriptionKey: "Task name field is missing"])
-        }
         let colorFrame = colorPicker.convert(colorPicker.bounds, to: nil)
         guard let searchField = descendants(try contentView(popover)).compactMap({ $0 as? NSTextField })
             .first(where: { $0.placeholderString == "Name a task or search…" }) else {
@@ -255,13 +253,6 @@ enum SmokeCheck {
         }
         let searchFrame = searchField.convert(searchField.bounds, to: nil)
         try require(colorFrame.maxX <= searchFrame.minX, "The color picker must precede the task search")
-        _ = nameField.window?.makeFirstResponder(nameField)
-        try await settle()
-        try enterTaskName("Renamed", in: popover, submit: false, field: nameField)
-        _ = nameField.window?.makeFirstResponder(nil)
-        try await settle()
-        try require(store.task(id: original.taskID)?.name == "Renamed", "Leaving the name field must save the task without a button")
-        try require(accessibilityElement(named: "Save task", in: contentView(popover)) == nil, "Task settings must not have a Save button")
         try changeStart(to: base - 3_480)
         try await settle()
         try require(store.entries[0].start == base - 3_480, "Changing native timestamp controls must immediately save the entry")
@@ -649,9 +640,9 @@ enum SmokeCheck {
         return view
     }
 
-    private static func enterTaskName(_ name: String, in popover: NSPopover, submit: Bool = true, field target: NSTextField? = nil) throws {
+    private static func enterTaskName(_ name: String, in popover: NSPopover, submit: Bool = true) throws {
         let content = try contentView(popover)
-        guard let field = target ?? descendants(content).compactMap({ $0 as? NSTextField }).first(where: \.isEditable),
+        guard let field = descendants(content).compactMap({ $0 as? NSTextField }).first(where: \.isEditable),
               let window = field.window else {
             throw NSError(domain: "LineSmokeCheck", code: 3, userInfo: [NSLocalizedDescriptionKey: "Native task field is missing"])
         }

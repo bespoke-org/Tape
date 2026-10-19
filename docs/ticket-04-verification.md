@@ -8,7 +8,7 @@ Implemented on 2026-10-19; awaiting user acceptance.
 
 Click a timeline entry to open its settings inline below the divider, replacing the task picker. Timestamp controls and Delete appear above a task search field with a swatch picker on its left. Choose a suggestion or press Return to reassign the entry, creating a task for a new name. Typing alone does not change records. Text fields have no opaque fill. The native date control disables its background and bezel so the popover material remains visible, using AppKit’s [drawsBackground](https://developer.apple.com/documentation/appkit/nsdatepicker/drawsbackground) property. Timestamp changes save automatically while the editor stays open. Escape or closing the popover keeps successful changes and discards rejected timestamp drafts. There are no Save or Cancel buttons. Invalid edits stay open with a readable error and preserve saved records.
 
-The swatch-only color picker saves choices immediately. The separate expandable Rename task section saves names on Return, focus loss, or editor dismissal. Renaming/recoloring applies to every entry for that task; changing the entry's task does not rename the original task. Closing the editor retains saved global task changes.
+The swatch-only color picker saves choices immediately across every entry for that task. Task renaming has been removed. Search reassigns only the selected entry, leaving other entries and task names unchanged.
 
 Completed entries support dragging either edge, with minute snapping and exact neighboring boundaries. Command at mouse-down retains overwrite behavior instead. Previews do not write records, Escape cancels, and crossing the opposite edge cancels a resize. Coincident edges prefer the entry containing the pointer. Click targets match the rendered two-point minimum width; later entries win shared boundaries.
 
@@ -18,8 +18,8 @@ Timestamp edits use absolute instants. During a repeated local hour, an addition
 
 ## Automated checks
 
-- `swift test`: 44 tests passed in five suites. Nine editing tests cover reassignment, identity, rename/recolor uniqueness, deletion/orphan pruning, minute resizing, exact boundaries, invalid/stale edits, running recovery, write failures, reopening, midnight, and repeated-hour absolute timestamps.
-- `python3 scripts/smoke-test.py --editing`: passed. Exercises task search, creation on Return and reassignment from suggestions without stopping tracking, native date autosave, rename-on-blur without a Save button, full-color swatch-only native menu choices, left-side picker placement, immediate color selection, rejected-edit preservation, Escape, native deletion confirmation and cancellation, running corrections/deletion, short-entry clicks, shared boundaries, adjacent-entry resizing, and stable popover anchoring.
+- `swift test`: 44 tests passed in five suites. Nine editing tests cover reassignment, identity, recoloring with names preserved, deletion/orphan pruning, minute resizing, exact boundaries, invalid/stale edits, running recovery, write failures, reopening, midnight, and repeated-hour absolute timestamps.
+- `python3 scripts/smoke-test.py --editing`: passed. Exercises task search, creation on Return and reassignment from suggestions without stopping tracking, native date autosave, full-color swatch-only native menu choices, left-side picker placement, immediate color selection, rejected-edit preservation, Escape, native deletion confirmation and cancellation, running corrections/deletion, short-entry clicks, shared boundaries, adjacent-entry resizing, and stable popover anchoring.
 - Existing base, `--timeline`, `--creation`, and `--overwrite` packaged smoke checks all passed.
 - Each smoke process uses isolated temporary data and a bounded limit: 40 seconds for the expanded editing sequence, 20 seconds for other modes. Native controls are driven within the app; pointer and Escape inputs exercise the same handler as the local event monitor.
 

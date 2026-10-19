@@ -75,9 +75,6 @@ struct EntryEditor: View {
                 }
                 .frame(height: min(CGFloat(matches.count) * 32, 108))
             }
-            if let task = store.task(id: entry.taskID) {
-                TaskSettings(model: model, task: task).id(task.id)
-            }
         }
         .onChange(of: store.task(id: entry.taskID)?.name) { _, name in
             if !isTaskFocused { taskName = name ?? "" }
@@ -124,52 +121,13 @@ struct EntryEditor: View {
     }
 }
 
-private struct TaskSettings: View {
-    let model: AppModel
-    let task: TrackedTask
-    @State private var name: String
-    @FocusState private var isNameFocused: Bool
-    @State private var expanded = false
-
-    init(model: AppModel, task: TrackedTask) {
-        self.model = model
-        self.task = task
-        _name = State(initialValue: task.name)
-    }
-
-    var body: some View {
-        DisclosureGroup("Rename task", isExpanded: $expanded) {
-            TextField("Task name", text: $name)
-                .textFieldStyle(.plain)
-                .accessibilityLabel("Reusable task name")
-                .focused($isNameFocused)
-                .onSubmit(saveName)
-                .onChange(of: isNameFocused) { _, focused in
-                    if !focused { saveName() }
-                }
-                .padding(.top, 6)
-        }
-        .onDisappear(perform: saveName)
-    }
-
-    private func saveName() {
-        guard let current = model.store?.task(id: task.id) else { return }
-        guard name != current.name else {
-            model.clearEntryError()
-            return
-        }
-        _ = model.saveTask(id: task.id, name: name, color: current.color)
-    }
-}
-
 private struct TaskColorPicker: View {
     let model: AppModel
     let task: TrackedTask
 
     var body: some View {
         Picker("", selection: Binding(get: { task.color }, set: {
-            guard let current = model.store?.task(id: task.id) else { return }
-            _ = model.saveTask(id: task.id, name: current.name, color: $0)
+            _ = model.saveTaskColor(id: task.id, color: $0)
         })) {
             ForEach(TaskColor.allCases, id: \.self) { color in
                 colorSwatch(color)
