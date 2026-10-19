@@ -55,18 +55,7 @@ struct LiveTimeline: View {
                                     .fill(reduceTransparency ? Color(nsColor: .controlBackgroundColor) : task.color.displayColor.opacity(0.23))
                                     .overlay {
                                         if model.editingEntryID == entry.id {
-                                            Canvas { context, size in
-                                                var stripes = Path()
-                                                let horizontalOffset = size.height / tan(CGFloat.pi / 3)
-                                                for x in stride(from: -horizontalOffset, through: size.width, by: 16) {
-                                                    stripes.move(to: CGPoint(x: x, y: size.height))
-                                                    stripes.addLine(to: CGPoint(x: x + horizontalOffset, y: 0))
-                                                }
-                                                context.stroke(stripes, with: .color(task.color.displayColor.opacity(contrast == .increased ? 0.5 : 0.25)), lineWidth: 5)
-                                            }
-                                            .clipShape(RoundedRectangle(cornerRadius: 4))
-                                            .allowsHitTesting(false)
-                                            .accessibilityHidden(true)
+                                            selectionStripes(color: task.color.displayColor)
                                         }
                                     }
                                     .overlay {
@@ -97,17 +86,7 @@ struct LiveTimeline: View {
                             RoundedRectangle(cornerRadius: 4)
                                 .fill(Color.gray.opacity(reduceTransparency ? 0.35 : 0.18))
                                 .overlay {
-                                    if model.isOverwriting {
-                                        Canvas { context, size in
-                                            var lines = Path()
-                                            for x in stride(from: -size.height, through: size.width, by: 8) {
-                                                lines.move(to: CGPoint(x: x, y: size.height))
-                                                lines.addLine(to: CGPoint(x: x + size.height, y: 0))
-                                            }
-                                            context.stroke(lines, with: .color(.primary.opacity(contrast == .increased ? 0.5 : 0.25)), lineWidth: 1)
-                                        }
-                                        .clipShape(RoundedRectangle(cornerRadius: 4))
-                                    }
+                                    selectionStripes(color: .gray)
                                 }
                                 .overlay {
                                     RoundedRectangle(cornerRadius: 4)
@@ -189,6 +168,20 @@ struct LiveTimeline: View {
         if let range = model.drawnRange { return range }
         guard let selection = model.entrySelection else { return nil }
         return DateInterval(start: selection.start, end: max(selection.start, selection.end ?? now))
+    }
+
+    private func selectionStripes(color: Color) -> some View {
+        Canvas { context, size in
+            var stripes = Path()
+            for x in stride(from: -size.height, through: size.width, by: 16) {
+                stripes.move(to: CGPoint(x: x, y: size.height))
+                stripes.addLine(to: CGPoint(x: x + size.height, y: 0))
+            }
+            context.stroke(stripes, with: .color(color.opacity(contrast == .increased ? 0.5 : 0.25)), lineWidth: 5)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 4))
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 
     private func position(_ date: Date, width: CGFloat) -> CGFloat {
