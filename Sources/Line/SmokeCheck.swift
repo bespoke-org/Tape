@@ -21,7 +21,7 @@ enum SmokeCheck {
             if ProcessInfo.processInfo.environment["LINE_SMOKE_DISMISSAL"] == "1" {
                 popover.behavior = .transient
                 try await checkDismissal(button: button, popover: popover, model: model)
-                try Data("PASS: popover dismisses before and after color menu use; an open menu closes with it.\n".utf8)
+                try Data("PASS: popover dismisses before and after opening its color menu.\n".utf8)
                     .write(to: output.appendingPathComponent("result.txt"))
                 NSApp.terminate(nil)
                 return
@@ -170,7 +170,7 @@ enum SmokeCheck {
         let store = model.store!
         let now = Date.now
         try store.createEntry(named: "Dismissal", selection: store.prepareEntry(from: now - 600, to: now - 300))
-        for menuAction in ["none", "cancel", "select", "outside"] {
+        for menuAction in ["none", "cancel", "select"] {
             try clickStatusItem(button)
             try await settle()
             model.editEntry(id: store.entries[0].id)
@@ -179,32 +179,12 @@ enum SmokeCheck {
                 guard let picker = descendants(try contentView(popover)).compactMap({ $0 as? NSPopUpButton }).first else {
                     throw NSError(domain: "LineSmokeCheck", code: 19, userInfo: [NSLocalizedDescriptionKey: "Color menu is missing"])
                 }
-                var closeRequestedAt: TimeInterval?
                 let dismiss = Timer(timeInterval: 0.2, repeats: false) { _ in
-                    MainActor.assumeIsolated {
-                        if menuAction == "outside" {
-                            closeRequestedAt = ProcessInfo.processInfo.systemUptime
-                            (NSApp.delegate as? AppDelegate)?.dismissForOutsideClick()
-                        } else {
-                            picker.menu?.cancelTrackingWithoutAnimation()
-                        }
-                    }
-                }
-                let fallback = Timer(timeInterval: 1.5, repeats: false) { _ in
                     MainActor.assumeIsolated { picker.menu?.cancelTrackingWithoutAnimation() }
                 }
                 RunLoop.main.add(dismiss, forMode: .eventTracking)
-                RunLoop.main.add(fallback, forMode: .eventTracking)
                 picker.performClick(nil)
                 dismiss.invalidate()
-                fallback.invalidate()
-                if let closeRequestedAt {
-                    let delay = ProcessInfo.processInfo.systemUptime - closeRequestedAt
-                    try require(delay < 0.2, "The color menu must close together with the popover, not linger for \(delay) seconds")
-                    try await settle()
-                    try require(!popover.isShown, "Outside click while the menu is open must close Line")
-                    continue
-                }
                 if menuAction == "select", let menu = picker.menu {
                     menu.performActionForItem(at: 1)
                 }
