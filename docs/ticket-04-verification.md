@@ -8,7 +8,7 @@ Implemented on 2026-10-19; awaiting user acceptance.
 
 Click a timeline entry to open its settings inline below the divider, replacing the task picker. Native task and timestamp controls edit this entry. Task and timestamp changes save automatically while the editor stays open. Escape or closing the popover keeps successful changes and discards rejected timestamp drafts. There are no Save or Cancel buttons. Invalid edits stay open with a readable error and preserve saved records.
 
-The expandable task section saves color choices immediately and names on Return, focus loss, or editor dismissal. Renaming/recoloring applies to every entry for that task; changing the entry's task does not rename the original task. Closing the editor retains saved global task changes.
+The expandable task section places a swatch-only color picker before the name field. It saves color choices immediately and names on Return, focus loss, or editor dismissal. Renaming/recoloring applies to every entry for that task; changing the entry's task does not rename the original task. Closing the editor retains saved global task changes.
 
 Completed entries support dragging either edge, with minute snapping and exact neighboring boundaries. Command at mouse-down retains overwrite behavior instead. Previews do not write records, Escape cancels, and crossing the opposite edge cancels a resize. Coincident edges prefer the entry containing the pointer. Click targets match the rendered two-point minimum width; later entries win shared boundaries.
 
@@ -19,7 +19,7 @@ Timestamp edits use absolute instants. During a repeated local hour, an addition
 ## Automated checks
 
 - `swift test`: 43 tests passed in five suites. Eight editing tests cover reassignment, identity, rename/recolor uniqueness, deletion/orphan pruning, minute resizing, exact boundaries, invalid/stale edits, running recovery, write failures, reopening, midnight, and repeated-hour absolute timestamps.
-- `python3 scripts/smoke-test.py --editing`: passed. Exercises native date autosave, rename-on-blur without a Save button, full-color native menu swatches, rejected-edit preservation, Escape, native deletion confirmation and cancellation, running corrections/deletion, short-entry clicks, shared boundaries, adjacent-entry resizing, and stable popover anchoring.
+- `python3 scripts/smoke-test.py --editing`: passed. Exercises native date autosave, rename-on-blur without a Save button, full-color swatch-only native menu choices, left-side picker placement, immediate color selection, rejected-edit preservation, Escape, native deletion confirmation and cancellation, running corrections/deletion, short-entry clicks, shared boundaries, adjacent-entry resizing, and stable popover anchoring.
 - Existing base, `--timeline`, `--creation`, and `--overwrite` packaged smoke checks all passed.
 - Each smoke process uses isolated temporary data and a 20-second limit. Native controls are driven within the app; pointer and Escape inputs exercise the same handler as the local event monitor.
 

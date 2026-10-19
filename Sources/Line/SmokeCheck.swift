@@ -231,6 +231,7 @@ enum SmokeCheck {
         }
         try require(colorItems.count == TaskColor.allCases.count, "The color menu must show every task color")
         for item in colorItems {
+            try require(item.title.isEmpty, "Color choices must show swatches without visible color names")
             guard let image = item.image, !image.isTemplate, let data = image.tiffRepresentation,
                   let bitmap = NSBitmapImageRep(data: data),
                   let pixel = bitmap.colorAt(x: bitmap.pixelsWide / 2, y: bitmap.pixelsHigh / 2)?.usingColorSpace(.deviceRGB) else {
@@ -239,9 +240,17 @@ enum SmokeCheck {
             let channels = [pixel.redComponent, pixel.greenComponent, pixel.blueComponent]
             try require(channels.max()! - channels.min()! > 0.1, "Color swatch must not be monochrome: \(item.title)")
         }
+        let nextColorIndex = TaskColor.allCases.firstIndex { $0 != store.task(id: original.taskID)?.color }!
+        colorPicker.menu?.performActionForItem(at: nextColorIndex)
+        try await settle()
+        try require(store.task(id: original.taskID)?.color == TaskColor.allCases[nextColorIndex],
+                    "Choosing a swatch must save the task color immediately")
         guard let nameField = descendants(try contentView(popover)).compactMap({ $0 as? NSTextField }).first(where: { $0.placeholderString == "Task name" }) else {
             throw NSError(domain: "LineSmokeCheck", code: 13, userInfo: [NSLocalizedDescriptionKey: "Task name field is missing"])
         }
+        let colorFrame = colorPicker.convert(colorPicker.bounds, to: nil)
+        let nameFrame = nameField.convert(nameField.bounds, to: nil)
+        try require(colorFrame.maxX <= nameFrame.minX, "The color picker must precede the task name")
         _ = nameField.window?.makeFirstResponder(nameField)
         try await settle()
         try enterTaskName("Renamed", in: popover, submit: false)

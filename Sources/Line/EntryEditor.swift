@@ -96,6 +96,21 @@ private struct TaskSettings: View {
     var body: some View {
         DisclosureGroup("Rename and recolor task", isExpanded: $expanded) {
             HStack {
+                Picker("", selection: Binding(get: { task.color }, set: {
+                    guard let current = model.store?.task(id: task.id) else { return }
+                    _ = model.saveTask(id: task.id, name: current.name, color: $0)
+                })) {
+                    ForEach(TaskColor.allCases, id: \.self) { color in
+                        colorSwatch(color)
+                            .accessibilityLabel(color.rawValue.capitalized)
+                            .tag(color)
+                    }
+                }
+                .labelsHidden()
+                .menuIndicator(.hidden)
+                .frame(width: 28)
+                .help("Task color")
+                .accessibilityLabel("Task color")
                 TextField("Task name", text: $name)
                     .accessibilityLabel("Reusable task name")
                     .focused($isNameFocused)
@@ -103,20 +118,6 @@ private struct TaskSettings: View {
                     .onChange(of: isNameFocused) { _, focused in
                         if !focused { saveName() }
                     }
-                Picker("Color", selection: Binding(get: { task.color }, set: {
-                    guard let current = model.store?.task(id: task.id) else { return }
-                    _ = model.saveTask(id: task.id, name: current.name, color: $0)
-                })) {
-                    ForEach(TaskColor.allCases, id: \.self) { color in
-                        Label {
-                            Text(color.rawValue.capitalized)
-                        } icon: {
-                            colorSwatch(color)
-                        }.tag(color)
-                    }
-                }
-                .frame(width: 145)
-                .accessibilityLabel("Task color")
             }
             .padding(.top, 6)
         }
