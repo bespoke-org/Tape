@@ -17,7 +17,7 @@ struct TimelineInput: NSViewRepresentable {
     let resizeEdge: (Double, Double) -> EntryEdge?
     let beginResize: (Double, Double) -> EntryEdge?
     let updateResize: (Double) -> Void
-    let endResize: (Double) -> Void
+    let endResize: (Double, Double) -> Void
     let cancelEdit: () -> Bool
 
     func makeNSView(context: Context) -> TimelineInputView { TimelineInputView() }
@@ -60,7 +60,7 @@ final class TimelineInputView: NSView {
     var resizeEdge: (Double, Double) -> EntryEdge? = { _, _ in nil }
     var beginResize: (Double, Double) -> EntryEdge? = { _, _ in nil }
     var updateResize: (Double) -> Void = { _ in }
-    var endResize: (Double) -> Void = { _ in }
+    var endResize: (Double, Double) -> Void = { _, _ in }
     var cancelEdit: () -> Bool = { false }
     private var hoverArea: NSTrackingArea?
     private var showsResizeCursor = false
@@ -189,7 +189,7 @@ final class TimelineInputView: NSView {
             dragOrigin = nil
             if isResizing {
                 draggingEdge = nil
-                endResize(fraction)
+                endResize(fraction, 3 / max(bounds.width, 1))
                 return true
             }
             if !isDrawing, let origin, abs(point.x - origin.x) < 3, drawingBounds.contains(point), !dragOverwrites {

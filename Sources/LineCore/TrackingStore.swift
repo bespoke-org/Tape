@@ -175,7 +175,7 @@ public final class TrackingStore {
         return (unused.isEmpty ? TaskColor.allCases : unused).randomElement()!
     }
 
-    public func prepareResize(id: UUID, edge: EntryEdge, to date: Date) throws -> EntrySelection {
+    public func prepareResize(id: UUID, edge: EntryEdge, to date: Date, reachesNow: Bool = false) throws -> EntrySelection {
         guard let index = entries.firstIndex(where: { $0.id == id }) else { throw TrackingError.missingEntry }
         let entry = entries[index]
         guard let end = entry.end else { throw TrackingError.trackingStateChanged }
@@ -186,10 +186,21 @@ public final class TrackingStore {
         let upper = index + 1 < entries.count ? entries[index + 1].start : instant
         let startBoundary = date <= lower ? lower : max(lower, snapped)
         let endBoundary = date >= upper ? upper : min(upper, snapped)
+        let continues = edge == .end && index == entries.count - 1 && (reachesNow || date >= instant)
         let selection = EntrySelection(start: edge == .start ? startBoundary : entry.start,
-                                       end: edge == .end ? endBoundary : end, overwritesExisting: false)
+                                       end: continues ? nil : edge == .end ? endBoundary : end, overwritesExisting: false)
         try validate(selection, at: instant, excluding: id)
         return selection
+    }
+
+    public func resizeEntry(id: UUID, edge: EntryEdge, to date: Date, reachesNow: Bool = false) throws {
+        let selection = try prepareResize(id: id, edge: edge, to: date, reachesNow: reachesNow)
+        guard let index = entries.firstIndex(where: { $0.id == id }) else { throw TrackingError.missingEntry }
+        var candidate = snapshot
+        candidate.entries[index] = TimeEntry(id: id, taskID: entries[index].taskID,
+                                            start: selection.start, end: selection.end)
+        if selection.end == nil { candidate.checkpoint = try checkedInstant() }
+        try commit(candidate)
     }
 
     public func deleteEntry(id: UUID) throws {

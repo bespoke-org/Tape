@@ -135,21 +135,23 @@ final class AppModel {
     func updateResizing(to fraction: Double) {
         guard let id = resizingEntryID, let edge = resizingEdge, let store else { return }
         let date = timeline.date(at: min(max(fraction, 0), 1), now: .now)
-        if let selection = try? store.prepareResize(id: id, edge: edge, to: date), let end = selection.end {
-            drawnRange = DateInterval(start: selection.start, end: end)
+        if let selection = try? store.prepareResize(id: id, edge: edge, to: date) {
+            drawnRange = DateInterval(start: selection.start, end: selection.end ?? .now)
         } else {
             drawnRange = nil
         }
     }
 
-    func finishResizing(at fraction: Double) {
-        guard let id = resizingEntryID, let edge = resizingEdge, let store,
-              let entry = store.entries.first(where: { $0.id == id }) else { cancelEntry(); return }
-        let date = timeline.date(at: min(max(fraction, 0), 1), now: .now)
+    func finishResizing(at fraction: Double, tolerance: Double) {
+        guard let id = resizingEntryID, let edge = resizingEdge, let store else { cancelEntry(); return }
+        let instant = Date.now
+        let date = timeline.date(at: min(max(fraction, 0), 1), now: instant)
+        let reachesNow = abs(date.timeIntervalSince(instant)) <= timeline.span * tolerance
         cancelEntry()
         do {
-            let selection = try store.prepareResize(id: id, edge: edge, to: date)
-            _ = saveEntry(id: id, taskID: entry.taskID, start: selection.start, end: selection.end)
+            try store.resizeEntry(id: id, edge: edge, to: date, reachesNow: reachesNow)
+            errorMessage = nil
+            onChange?()
         } catch TrackingError.emptyInterval {
             // Dragging an edge through the other edge abandons the resize.
         } catch {

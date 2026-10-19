@@ -369,6 +369,20 @@ enum SmokeCheck {
         try confirm("Delete")
         try await settle()
         try require(store.runningEntry == nil && store.entries.count == 1, "Deleting the running entry must stop tracking")
+        let remaining = store.entries[0]
+        let resizeInstant = Date.now
+        let endFraction = model.timeline.fraction(for: remaining.end!, now: resizeInstant)
+        let nowFraction = model.timeline.fraction(for: resizeInstant, now: resizeInstant)
+        try draw(endFraction, nowFraction + 1 / width, in: popover, finish: false)
+        try require(model.drawnRange != nil, "Resizing through Now must retain the preview")
+        let nowPoint = hoverInput.convert(NSPoint(x: hoverInput.bounds.width * nowFraction, y: 60), to: nil)
+        _ = hoverInput.handle(TimelineTestEvent(type: .leftMouseUp, window: hoverInput.window!, location: nowPoint))
+        try await settle()
+        try require(store.runningEntry?.id == remaining.id && store.runningEntry?.start == remaining.start && store.entries.count == 1,
+                    "Releasing a resized end at Now must continue the same entry")
+        try pressAccessibleControl(named: "Stop", in: contentView(popover))
+        try await settle()
+        try require(store.runningEntry == nil && store.entries[0].id == remaining.id, "The continued entry must stop normally")
         try requireAnchored(popover, to: button)
         try await requireStablePosition(popover)
     }

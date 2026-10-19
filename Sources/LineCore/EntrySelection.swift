@@ -10,7 +10,7 @@ public enum EntrySnap: TimeInterval, Sendable {
     case quarterHour = 900
 }
 
-/// An unsaved interval. A nil end retains the intent to start tracking after task selection.
+/// An unsaved interval. A nil end means the committed entry should keep tracking.
 public struct EntrySelection: Equatable, Sendable {
     public let start: Date
     public let end: Date?

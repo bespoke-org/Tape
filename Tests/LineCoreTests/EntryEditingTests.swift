@@ -4,6 +4,75 @@ import LineCore
 
 @MainActor
 struct EntryEditingTests {
+    @Test(arguments: [false, true])
+    func resizingToNowContinuesTheSameEntryAndPersistsRecovery(nearMarker: Bool) throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("tracking.json")
+        let base = Date(timeIntervalSince1970: 1_800_000_000)
+        var now = base + 7_200.25
+        let store = try TrackingStore(url: url, now: { now })
+        try store.createEntry(named: "Build", selection: store.prepareEntry(from: base, to: base + 600))
+        let original = store.entries[0]
+        try store.resizeEntry(id: original.id, edge: .end, to: nearMarker ? now - 1 : now, reachesNow: nearMarker)
+        #expect(store.runningEntry?.id == original.id)
+        #expect(store.runningEntry?.start == original.start)
+        #expect(store.runningEntry?.taskID == original.taskID)
+        #expect(store.entries.count == 1)
+        let recovered = try TrackingStore(url: url, now: { now + 300 })
+        #expect(recovered.entries[0].end == base + 7_200.25)
+        now += 60
+        try store.checkpoint()
+        let reopened = try TrackingStore(url: url, now: { now + 300 })
+        #expect(reopened.entries[0].end == base + 7_260.25)
+        #expect(reopened.entries[0].id == original.id)
+    }
+
+    @Test(arguments: [false, true])
+    func resizeToNowStopsAtNeighborsAddedAfterPreview(runningNeighbor: Bool) throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let base = Date(timeIntervalSince1970: 1_800_000_000)
+        let now = base + 7_200.25
+        let store = try TrackingStore(url: directory.appendingPathComponent("tracking.json"), now: { now })
+        try store.createEntry(named: "Build", selection: store.prepareEntry(from: base, to: base + 600))
+        let original = store.entries[0]
+        #expect(try store.prepareResize(id: original.id, edge: .end, to: now).end == nil)
+        if runningNeighbor {
+            try store.startTask(named: "Other")
+        } else {
+            try store.createEntry(named: "Other", selection: store.prepareEntry(from: base + 1_200, to: base + 1_800))
+        }
+        let neighbor = store.entries[1]
+        try store.resizeEntry(id: original.id, edge: .end, to: now + 60, reachesNow: true)
+        #expect(store.entries[0].end == neighbor.start)
+        #expect(store.entries[1] == neighbor)
+        #expect(store.runningEntry?.id == (runningNeighbor ? neighbor.id : nil))
+        try store.resizeEntry(id: original.id, edge: .start, to: base + 60, reachesNow: true)
+        #expect(store.entries[0].start == base + 60 && store.entries[0].end == neighbor.start)
+    }
+
+    @Test func failedResizeToNowLeavesTheEntryCompleted() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let parent = directory.appendingPathComponent("data")
+        let saved = directory.appendingPathComponent("saved")
+        let url = parent.appendingPathComponent("tracking.json")
+        let base = Date(timeIntervalSince1970: 1_800_000_000)
+        let now = base + 7_200
+        let store = try TrackingStore(url: url, now: { now })
+        try store.createEntry(named: "Build", selection: store.prepareEntry(from: base, to: base + 600))
+        let original = store.entries[0]
+        try FileManager.default.moveItem(at: parent, to: saved)
+        try Data("not a directory".utf8).write(to: parent)
+        #expect(throws: (any Error).self) { try store.resizeEntry(id: original.id, edge: .end, to: now) }
+        #expect(store.entries == [original] && store.runningEntry == nil)
+        try FileManager.default.removeItem(at: parent)
+        try FileManager.default.moveItem(at: saved, to: parent)
+        let reopened = try TrackingStore(url: url, now: { now })
+        #expect(reopened.entries == [original])
+    }
+
     @Test func reassigningByNameCreatesOrReusesTasksWithoutChangingTimeOrOtherEntries() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -127,7 +196,7 @@ struct EntryEditingTests {
         #expect(right.start == entry.start)
         #expect(right.end == base + 1_920)
         let atNow = try store.prepareResize(id: entry.id, edge: .end, to: now + 1)
-        #expect(atNow.end == now)
+        #expect(atNow.end == nil)
         try store.updateEntry(id: entry.id, taskID: entry.taskID, start: left.start, end: left.end)
         #expect(store.entries[0].end == store.entries[1].start)
         try store.startTask(named: "Live")
