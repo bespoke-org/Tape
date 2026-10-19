@@ -19,6 +19,8 @@ Hold ⌘ when starting a drag to overwrite existing time, even when starting ins
 
 Tickets 1–3 and 9 supply tracking, browsing, drawing entries, and Command-drag overwrite. Editing entries, lock/sleep handling, automatic continuation, and launch at login are subsequent tickets and are not implemented yet. Until lock/sleep handling lands, stop tracking before leaving the Mac.
 
+New tasks use a 12-color native palette, choosing an unused color when available before repeating colors. Existing tasks keep their assigned colors.
+
 ## Local data
 
 Records are stored in `~/Library/Application Support/Line/tracking.json`, independently of the source checkout and app bundle. Accepted changes are saved atomically. A five-second checkpoint timer limits recovery to the last saved point after an unexpected exit; quitting normally saves the exact stop time. Relaunch always starts idle. Very short, zero-duration entries are discarded on recovery or stop.

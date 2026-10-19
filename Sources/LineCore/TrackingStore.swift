@@ -63,11 +63,11 @@ public final class TrackingStore {
         let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { throw TrackingError.emptyTaskName }
         var candidate = snapshot
-        let task = candidate.tasks.first { $0.name.caseInsensitiveCompare(name) == .orderedSame }
-            ?? TrackedTask(id: UUID(), name: name, color: TaskColor.allCases.randomElement()!)
-        guard runningTask?.id != task.id else { return }
+        let existingTask = candidate.tasks.first { $0.name.caseInsensitiveCompare(name) == .orderedSame }
+        if let existingTask, runningTask?.id == existingTask.id { return }
         let instant = try checkedInstant()
         finishRunning(in: &candidate, at: instant)
+        let task = existingTask ?? TrackedTask(id: UUID(), name: name, color: initialColor(in: candidate))
         if !candidate.tasks.contains(where: { $0.id == task.id }) {
             candidate.tasks.append(task)
         }
@@ -143,7 +143,7 @@ public final class TrackingStore {
             }
         }
         let task = candidate.tasks.first { $0.name.caseInsensitiveCompare(name) == .orderedSame }
-            ?? TrackedTask(id: UUID(), name: name, color: TaskColor.allCases.randomElement()!)
+            ?? TrackedTask(id: UUID(), name: name, color: initialColor(in: candidate))
         if !candidate.tasks.contains(where: { $0.id == task.id }) { candidate.tasks.append(task) }
         let entry = TimeEntry(id: UUID(), taskID: task.id, start: selection.start, end: selection.end)
         var index = candidate.entries.firstIndex { $0.start >= entry.start } ?? candidate.entries.endIndex
@@ -166,6 +166,13 @@ public final class TrackingStore {
         }
         if selection.end == nil { candidate.checkpoint = instant }
         try commit(candidate)
+    }
+
+    private func initialColor(in candidate: TrackingSnapshot) -> TaskColor {
+        let usedTasks = Set(candidate.entries.map(\.taskID))
+        let usedColors = Set(candidate.tasks.filter { usedTasks.contains($0.id) }.map(\.color))
+        let unused = TaskColor.allCases.filter { !usedColors.contains($0) }
+        return (unused.isEmpty ? TaskColor.allCases : unused).randomElement()!
     }
 
     private func validate(_ selection: EntrySelection, at instant: Date) throws {

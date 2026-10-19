@@ -4,6 +4,56 @@ import LineCore
 
 @MainActor
 struct TrackingStoreTests {
+    @Test func switchingAwayFromZeroDurationTaskReusesItsFreedColor() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        var now = Date(timeIntervalSince1970: 1_800_000_000)
+        let store = try TrackingStore(url: directory.appendingPathComponent("tracking.json"), now: { now })
+        for index in 0..<11 {
+            try store.startTask(named: "Saved \(index)")
+            now += 60
+            try store.stop()
+        }
+        try store.startTask(named: "Discarded")
+        let freedColor = try #require(store.runningTask).color
+        try store.startTask(named: "Replacement")
+        #expect(store.tasks.count == 12)
+        #expect(store.runningTask?.color == freedColor)
+        #expect(Set(store.tasks.map(\.color)).count == 12)
+    }
+
+    @Test func newTasksUseTwelveDistinctColorsBeforeRepeatingAndKeepAssignedColors() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("tracking.json")
+        let base = Date(timeIntervalSince1970: 1_800_000_000)
+        var now = base + 7_200
+        let store = try TrackingStore(url: url, now: { now })
+        for index in 0..<12 {
+            if index.isMultiple(of: 2) {
+                try store.startTask(named: "Task \(index)")
+                now += 60
+                try store.stop()
+            } else {
+                let start = base + Double(index) * 120
+                try store.createEntry(named: "Task \(index)", selection: store.prepareEntry(from: start, to: start + 60))
+            }
+        }
+        let assigned = store.tasks
+        let colors = Set(assigned.map(\.color))
+        #expect(assigned.count == 12 && colors.count == 12)
+        try store.startTask(named: "task 0")
+        now += 60
+        try store.stop()
+        #expect(store.tasks == assigned)
+        try store.startTask(named: "Overflow")
+        #expect(colors.contains(try #require(store.runningTask).color))
+        now += 60
+        try store.stop()
+        let reopened = try TrackingStore(url: url, now: { now })
+        #expect(reopened.tasks == store.tasks)
+    }
+
     @Test func loadingRemovesPreviouslyUnusedTasksAndPreservesRecordedWork() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
