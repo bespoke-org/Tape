@@ -155,10 +155,18 @@ struct TrackingPopover: View {
             }
             HStack {
                 TextField("Name a task or search…", text: $taskName)
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.plain)
                     .focused($isTaskFieldFocused)
                     .onSubmit { start(trimmedName) }
                     .accessibilityLabel("Task name or search")
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 5))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 5)
+                            .strokeBorder(.quaternary, lineWidth: 0.5)
+                            .allowsHitTesting(false)
+                    }
                 Button(pickerAction(store: store)) { start(trimmedName) }
                     .buttonStyle(.glassProminent)
                     .disabled(trimmedName.isEmpty)
