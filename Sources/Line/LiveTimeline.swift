@@ -57,9 +57,10 @@ struct LiveTimeline: View {
                                         if model.editingEntryID == entry.id {
                                             Canvas { context, size in
                                                 var stripes = Path()
-                                                for x in stride(from: -size.height, through: size.width, by: 16) {
+                                                let horizontalOffset = size.height / tan(CGFloat.pi / 3)
+                                                for x in stride(from: -horizontalOffset, through: size.width, by: 16) {
                                                     stripes.move(to: CGPoint(x: x, y: size.height))
-                                                    stripes.addLine(to: CGPoint(x: x + size.height, y: 0))
+                                                    stripes.addLine(to: CGPoint(x: x + horizontalOffset, y: 0))
                                                 }
                                                 context.stroke(stripes, with: .color(task.color.displayColor.opacity(contrast == .increased ? 0.5 : 0.25)), lineWidth: 5)
                                             }
