@@ -86,25 +86,29 @@ struct TrackingPopover: View {
     private func runningControls(store: TrackingStore) -> some View {
         HStack(spacing: 12) {
             if let task = store.runningTask {
-                Circle().fill(task.color.displayColor).frame(width: 10, height: 10).accessibilityHidden(true)
+                RunningTaskIndicator(color: task.color.displayColor)
                 Text(task.name).font(.title3.weight(.medium)).lineLimit(1)
                 Spacer(minLength: 8)
                 pickerButton("Switch task", systemImage: "arrow.left.arrow.right")
                 Button { _ = model.stop() } label: {
                     Label("Stop", systemImage: "stop.fill")
+                        .labelStyle(.iconOnly)
+                        .frame(width: 24, height: 24)
+                        .contentShape(Rectangle())
                 }
-                .buttonStyle(.glass)
+                .buttonStyle(.plain)
+                .accessibilityLabel("Stop")
                 .help("Stop tracking this task")
             } else {
                 Text("Not tracking").font(.title3.weight(.medium))
                 Spacer()
-                pickerButton("Start task")
+                pickerButton("Start task", systemImage: "plus")
             }
         }
         .frame(minHeight: 24)
     }
 
-    private func pickerButton(_ title: String, systemImage: String? = nil) -> some View {
+    private func pickerButton(_ title: String, systemImage: String) -> some View {
         Button {
             if isTaskPickerShown && model.entrySelection == nil {
                 closeTaskPicker()
@@ -115,13 +119,14 @@ struct TrackingPopover: View {
                 isTaskFieldFocused = true
             }
         } label: {
-            if let systemImage {
-                Label(title, systemImage: systemImage)
-            } else {
-                Text(title)
-            }
+            Label(title, systemImage: systemImage)
+                .labelStyle(.iconOnly)
+                .frame(width: 24, height: 24)
+                .contentShape(Rectangle())
         }
-        .buttonStyle(.glass)
+        .buttonStyle(.plain)
+        .help(title)
+        .accessibilityLabel(title)
     }
 
     private func closeTaskPicker() {
@@ -195,6 +200,34 @@ struct TrackingPopover: View {
             return "\(start) – \(end.formatted(date: .abbreviated, time: .shortened))"
         }
         return "\(start) – Now · starts tracking"
+    }
+}
+
+private struct RunningTaskIndicator: View {
+    let color: Color
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        Circle()
+            .fill(color)
+            .frame(width: 10, height: 10)
+            .background {
+                if !reduceMotion {
+                    TimelineView(.animation(minimumInterval: 1.0 / 30)) { context in
+                        let cycle = context.date.timeIntervalSinceReferenceDate / 2.4
+                        ZStack {
+                            ForEach(0..<2) { index in
+                                let phase = (cycle + Double(index) / 2).truncatingRemainder(dividingBy: 1)
+                                Circle()
+                                    .fill(color.opacity(0.4 * (1 - phase) * (1 - phase)))
+                                    .scaleEffect(1 + 1.4 * phase)
+                            }
+                        }
+                    }
+                }
+            }
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
     }
 }
 
