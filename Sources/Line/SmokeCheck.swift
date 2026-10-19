@@ -256,10 +256,20 @@ enum SmokeCheck {
                     "The color picker must have an accessible label")
         // SwiftUI can expose the label on its accessibility node instead of the native view.
         guard let colorPicker = descendants(try contentView(popover)).compactMap({ $0 as? NSPopUpButton }).first,
-              let colorItems = colorPicker.menu?.items else {
+              colorPicker.menu != nil else {
             throw NSError(domain: "LineSmokeCheck", code: 14, userInfo: [NSLocalizedDescriptionKey: "Native color menu is missing"])
         }
-        try require(colorItems.count == TaskColor.allCases.count, "The color menu must show every task color")
+        // SwiftUI Menu builds its native items on opening, unlike Picker.
+        let dismissMenu = Timer(timeInterval: 0.2, repeats: false) { _ in
+            MainActor.assumeIsolated {
+                colorPicker.menu?.cancelTrackingWithoutAnimation()
+            }
+        }
+        RunLoop.main.add(dismissMenu, forMode: .eventTracking)
+        colorPicker.performClick(nil)
+        dismissMenu.invalidate()
+        let colorItems = colorPicker.menu?.items.filter { $0.image != nil } ?? []
+        try require(colorItems.count == TaskColor.allCases.count, "The color menu must show every task color directly")
         for item in colorItems {
             try require(item.title.isEmpty, "Color choices must show swatches without visible color names")
             guard let image = item.image, !image.isTemplate, let data = image.tiffRepresentation,
@@ -271,7 +281,8 @@ enum SmokeCheck {
             try require(channels.max()! - channels.min()! > 0.1, "Color swatch must not be monochrome: \(item.title)")
         }
         let nextColorIndex = TaskColor.allCases.firstIndex { $0 != store.task(id: original.taskID)?.color }!
-        colorPicker.menu?.performActionForItem(at: nextColorIndex)
+        let nativeIndex = colorPicker.menu!.index(of: colorItems[nextColorIndex])
+        colorPicker.menu?.performActionForItem(at: nativeIndex)
         try await settle()
         try require(store.task(id: original.taskID)?.color == TaskColor.allCases[nextColorIndex],
                     "Choosing a swatch must save the task color immediately")

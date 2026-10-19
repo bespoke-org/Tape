@@ -100,18 +100,28 @@ private struct TaskColorPicker: View {
     let task: TrackedTask
 
     var body: some View {
-        Picker("", selection: Binding(get: { task.color }, set: {
-            _ = model.saveTaskColor(id: task.id, color: $0)
-        })) {
-            ForEach(TaskColor.allCases, id: \.self) { color in
-                colorSwatch(color)
-                    .accessibilityLabel(color.rawValue.capitalized)
-                    .tag(color)
+        Menu {
+            Picker("Task color", selection: Binding(get: { task.color }, set: {
+                _ = model.saveTaskColor(id: task.id, color: $0)
+            })) {
+                ForEach(TaskColor.allCases, id: \.self) { color in
+                    colorSwatch(color)
+                        .accessibilityLabel(color.rawValue.capitalized)
+                        .tag(color)
+                }
             }
+            .pickerStyle(.inline)
+            .labelsHidden()
+        } label: {
+            Circle()
+                .fill(task.color.displayColor)
+                .frame(width: 12, height: 12)
+                .frame(width: 28, height: 22)
+                .contentShape(Rectangle())
         }
-        .labelsHidden()
+        .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
-        .frame(width: 28)
+        .fixedSize()
         .help("Task color")
         .accessibilityLabel("Task color")
     }
