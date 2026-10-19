@@ -23,12 +23,22 @@ struct EntryEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Divider().padding(.bottom, 4)
-            Picker("Task", selection: $taskID) {
-                ForEach(store.tasks.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }) { task in
-                    Text(task.name).tag(task.id)
+            HStack {
+                Picker("Task", selection: $taskID) {
+                    ForEach(store.tasks.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }) { task in
+                        Text(task.name).tag(task.id)
+                    }
                 }
+                .accessibilityLabel("Entry task")
+                .frame(maxWidth: .infinity)
+                Button { confirmsDeletion = true } label: {
+                    Label("Delete entry", systemImage: "trash")
+                        .labelStyle(.iconOnly)
+                }
+                .buttonStyle(.borderless)
+                .help("Delete entry")
+                .accessibilityLabel("Delete entry")
             }
-            .accessibilityLabel("Entry task")
 
             HStack(alignment: .top, spacing: 16) {
                 TimestampField(title: "Start", date: $start)
@@ -43,16 +53,6 @@ struct EntryEditor: View {
             if let task = store.task(id: taskID) {
                 TaskSettings(model: model, task: task)
                     .id(task.id)
-            }
-            HStack {
-                Button { confirmsDeletion = true } label: {
-                    Label("Delete entry", systemImage: "trash")
-                        .labelStyle(.iconOnly)
-                }
-                .buttonStyle(.borderless)
-                .help("Delete entry")
-                .accessibilityLabel("Delete entry")
-                Spacer()
             }
         }
         .onChange(of: taskID) { saveChanges() }
