@@ -16,6 +16,9 @@ struct TrackingPopover: View {
             trimmedName.isEmpty || $0.name.localizedCaseInsensitiveContains(trimmedName)
         }.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
     }
+    private var taskListBottomInset: CGFloat {
+        isTaskPickerShown && !matches.isEmpty && model.entryError == nil && model.errorMessage == nil ? 20 : 0
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -47,7 +50,9 @@ struct TrackingPopover: View {
                     .accessibilityLabel(message)
             }
         }
-        .padding(20)
+        .padding(.horizontal, 20)
+        .padding(.top, 20)
+        .padding(.bottom, 20 - taskListBottomInset)
         .frame(width: 620)
         // Measure natural height so resizing the popover cannot feed back into this measurement.
         .fixedSize(horizontal: false, vertical: true)
@@ -175,8 +180,9 @@ struct TrackingPopover: View {
                             .accessibilityLabel("\(model.entrySelection != nil ? "Use" : store.runningTask == nil ? "Start" : "Switch to") \(task.name)")
                         }
                     }
+                    .padding(.bottom, taskListBottomInset)
                 }
-                .frame(height: min(CGFloat(matches.count) * 32, 108))
+                .frame(height: min(CGFloat(matches.count) * 32, 108) + taskListBottomInset)
             }
         }
     }
