@@ -36,3 +36,5 @@ No remaining blockers. Review identified minimum-width click targets and coincid
 Physical mouse/trackpad and keyboard delivery, VoiceOver navigation, the complete light/dark and accessibility appearance matrix, and the repeated-hour UTC-offset control need hands-on verification. Synthetic event delivery and native control actions do not establish these. The user should try the inline layout before accepting the ticket.
 
 Color-menu regression: the original SF Symbol images arrived in the native menu as monochrome templates. Non-template swatch images preserve the task colors. The packaged editing check inspects every native menu image and its center pixel; it failed on the original blue swatch and passes with full-color images.
+
+Resize transition regression: switching between stopped and running changed the menu-bar image dimensions and shifted the popover vertically by one point, despite an unchanged content size. Rendering both status symbols within the same 18-point canvas keeps the native anchor stable. The editing smoke check compares window position and height across both stop-by-resize and resume-by-resize transitions.

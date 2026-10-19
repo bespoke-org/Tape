@@ -143,7 +143,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         let running = model.store?.runningTask
         let symbol = model.errorMessage != nil ? "exclamationmark.circle" :
             (running == nil ? "timeline.selection" : "record.circle")
-        let image = NSImage(systemSymbolName: symbol, accessibilityDescription: "Line")
+        let glyph = NSImage(systemSymbolName: symbol, accessibilityDescription: "Line")
+        // AppKit anchors status-item popovers to the image. Keep its canvas constant across states.
+        let image = glyph.map { glyph in
+            NSImage(size: NSSize(width: 18, height: 18), flipped: false) { rect in
+                let scale = min(1, rect.width / glyph.size.width, rect.height / glyph.size.height)
+                let size = NSSize(width: glyph.size.width * scale, height: glyph.size.height * scale)
+                glyph.draw(in: NSRect(x: rect.midX - size.width / 2, y: rect.midY - size.height / 2,
+                                     width: size.width, height: size.height))
+                return true
+            }
+        }
         image?.isTemplate = true
         statusItem.button?.image = image
         let description = model.errorMessage.map { "Line: \($0)" }

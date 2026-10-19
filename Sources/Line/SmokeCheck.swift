@@ -387,6 +387,7 @@ enum SmokeCheck {
                  model.timeline.fraction(for: movedStart, now: .now), in: popover)
         try require(store.runningEntry?.id == remaining.id && store.runningEntry?.start == movedStart,
                     "Dragging the running start must preserve tracking")
+        let runningFrame = try contentView(popover).window!.frame
         let liveEnd = model.timeline.fraction(for: .now, now: .now)
         try draw(liveEnd, liveEnd + 6 / width, in: popover)
         try require(store.runningEntry?.id == remaining.id, "Dragging a running end beyond Now must keep tracking")
@@ -395,9 +396,15 @@ enum SmokeCheck {
         try await settle()
         try require(store.runningEntry == nil && store.entries[0].end == base - 600 && store.entries[0].id == remaining.id,
                     "Dragging the running end into the past must stop at that time")
+        let stoppedFrame = try contentView(popover).window!.frame
+        try require(abs(runningFrame.minY - stoppedFrame.minY) < 0.25 && abs(runningFrame.height - stoppedFrame.height) < 0.25,
+                    "Stopping by resize must not shift the popover: running \(runningFrame), stopped \(stoppedFrame)")
         try draw(model.timeline.fraction(for: base - 600, now: .now),
                  model.timeline.fraction(for: .now, now: .now), in: popover)
         try await settle()
+        let resumedFrame = try contentView(popover).window!.frame
+        try require(abs(stoppedFrame.minY - resumedFrame.minY) < 0.25 && abs(stoppedFrame.height - resumedFrame.height) < 0.25,
+                    "Resuming by resize must not shift the popover: stopped \(stoppedFrame), resumed \(resumedFrame)")
         try pressAccessibleControl(named: "Stop", in: contentView(popover))
         try await settle()
         try require(store.runningEntry == nil && store.entries[0].id == remaining.id, "The continued entry must stop normally")
