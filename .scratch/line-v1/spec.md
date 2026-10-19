@@ -72,7 +72,7 @@ The app should look and behave like a native macOS 26 utility, using system cont
 
 ### Records and invariants
 
-- A task has a stable identifier, display name, and color. Trim names, reject empty names, and compare names without case sensitivity when checking uniqueness. Renaming and recoloring retain identity and apply to all linked entries.
+- A task has a stable identifier, display name, and color. Remove tasks with no remaining entries as part of the same atomic save; tasks with recorded time remain reusable. Trim names, reject empty names, and compare names without case sensitivity when checking uniqueness. Renaming and recoloring retain identity and apply to all linked entries.
 - Assign a random initial color from a palette checked for legibility. Allow later color changes while keeping labels readable. Task color is not the only indication of identity.
 - A time entry has a stable identifier, task reference, start instant, and either a fixed end instant or running state. Only one entry can be running. The running entry continues accumulating time without a numeric elapsed-time display.
 - Use absolute instants for storage and duration calculation, with local dates/times for presentation. Preserve durations across midnight and daylight-saving transitions; ambiguous local timestamp edits must identify the intended instant rather than silently changing duration.
@@ -95,7 +95,7 @@ The app should look and behave like a native macOS 26 utility, using system cont
 ### Command-drag overwrite
 
 - [Ticket 09](issues/09-overwrite-entries-with-command-drag.md) adds overwrite drawing. Hold Command at the start of a drag to select across existing entries, including starting inside one. Retain overwrite intent through task selection and show a gray striped preview before committing, with an Overwrite indicator and explicit Overwrite or Overwrite & Start submission.
-- Committing replaces the selected time: trim partially covered edges, delete fully covered entries, and split an entry into two surviving fragments if the new interval covers its middle. Keep uncovered timestamps and task assignments unchanged. Reusable tasks are not deleted.
+- Committing replaces the selected time: trim partially covered edges, delete fully covered entries, and split an entry into two surviving fragments if the new interval covers its middle. Keep uncovered timestamps and task assignments unchanged. Delete a task when its final entry disappears; retain tasks referenced by any surviving or replacement entry. Clean up unused task records from earlier versions on load.
 - Preserve ordinary drawing's snapping, cancellation, and historical/through-Now semantics. A historical overwrite leaves any uncovered running tail running; an overwrite through Now starts the selected task instead. Apply the entire replacement atomically after revalidation, preserving the single-running-entry and non-overlap invariants. Cancellation or failure changes no records.
 
 ### Corrections and deletion

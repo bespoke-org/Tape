@@ -4,6 +4,28 @@ import LineCore
 
 @MainActor
 struct TrackingStoreTests {
+    @Test func loadingRemovesPreviouslyUnusedTasksAndPreservesRecordedWork() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let url = directory.appendingPathComponent("tracking.json")
+        try Data(#"""
+        {"version":1,"timelineSpan":7200,"tasks":[
+          {"id":"00000000-0000-0000-0000-000000000001","name":"Removed work","color":"blue"},
+          {"id":"00000000-0000-0000-0000-000000000002","name":"Keep","color":"green"}
+        ],"entries":[
+          {"id":"00000000-0000-0000-0000-000000000003","taskID":"00000000-0000-0000-0000-000000000002","start":0,"end":60}
+        ]}
+        """#.utf8).write(to: url)
+        let store = try TrackingStore(url: url)
+        #expect(store.tasks.map(\.name) == ["Keep"])
+        #expect(store.tasks.first?.color == .green)
+        #expect(store.entries.count == 1 && store.entries.first?.duration(at: .now) == 60)
+        #expect(store.timelineSpan == 7_200)
+        let reopened = try TrackingStore(url: url)
+        #expect(reopened.tasks == store.tasks && reopened.entries == store.entries)
+    }
+
     @Test func visibleRangeIncludesSpanningEntriesButExcludesTouchingEndpoints() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -53,7 +75,7 @@ struct TrackingStoreTests {
         now += 3_600
         let recovered = try TrackingStore(url: url, now: { now })
         #expect(recovered.entries.isEmpty)
-        #expect(recovered.tasks.count == 1)
+        #expect(recovered.tasks.isEmpty)
         #expect(recovered.runningTask == nil)
     }
 

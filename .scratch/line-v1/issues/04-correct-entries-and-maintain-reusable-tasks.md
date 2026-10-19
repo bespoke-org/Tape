@@ -14,7 +14,7 @@
 
 - [ ] Click entries to edit task/start/end, and resize completed entries by dragging edges. Editing a running start/task keeps it running; setting a fixed end requires stopping.
 - [ ] Rename/recolor tasks across all entries, enforcing name uniqueness. Reassigning one entry does not rename its task globally.
-- [ ] Require native deletion confirmation; cancellation preserves records and running state; confirming deletion of a running entry stops tracking.
+- [ ] Require native deletion confirmation; cancellation preserves records and running state; confirming deletion of a running entry stops tracking. Deleting a task's last entry also removes that task from suggestions.
 - [ ] Reject invalid or overlapping edits without altering existing data; persist successful corrections and verify storage reopening.
 - [ ] Verify keyboard editing, accessible labels, contrast, and editor behavior with real timeline interactions.
 

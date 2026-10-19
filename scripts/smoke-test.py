@@ -49,7 +49,7 @@ with tempfile.TemporaryDirectory(prefix='line-smoke-') as data:
             assert records['entries'] == []
         elif args.overwrite:
             assert len(records['entries']) == 3
-            assert len(records['tasks']) == 3
+            assert len(records['tasks']) == 2
             assert all(entry.get('end') is not None for entry in records['entries'])
         elif args.creation:
             assert len(records['entries']) == 3

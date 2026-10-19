@@ -32,6 +32,11 @@ public final class TrackingStore {
             finishRunning(in: &recovered, at: checkpoint)
             recovered.checkpoint = nil
             try commit(recovered)
+        } else {
+            let usedTasks = Set(entries.map(\.taskID))
+            if tasks.contains(where: { !usedTasks.contains($0.id) }) {
+                try commit(snapshot)
+            }
         }
     }
 
@@ -198,6 +203,9 @@ public final class TrackingStore {
     }
 
     private func commit(_ candidate: TrackingSnapshot) throws {
+        var candidate = candidate
+        let usedTasks = Set(candidate.entries.map(\.taskID))
+        candidate.tasks.removeAll { !usedTasks.contains($0.id) }
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         let data = try JSONEncoder().encode(candidate)
         try data.write(to: url, options: .atomic)

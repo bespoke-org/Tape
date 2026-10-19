@@ -209,6 +209,13 @@ enum SmokeCheck {
         try await settle()
         try require(store.runningEntry?.start == live.start && store.runningTask?.name == "Original" && store.entries.count == 3,
                     "Through-Now overwrite must start the chosen task and remove covered entries")
+        try require(store.tasks.count == 2 && !store.tasks.contains(where: { $0.name == "Tail" }),
+                    "Overwriting a task's final entry must delete the task")
+        try await openPicker(named: "Switch task", in: popover)
+        try require(accessibilityElement(named: "Switch to Tail", in: contentView(popover)) == nil,
+                    "Deleted tasks must disappear from picker suggestions")
+        try pressAccessibleButton(named: "Switch task", in: contentView(popover))
+        try await settle()
         try requireAnchored(popover, to: button)
         try await requireStablePosition(popover)
     }

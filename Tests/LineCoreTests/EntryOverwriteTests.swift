@@ -4,6 +4,22 @@ import LineCore
 
 @MainActor
 struct EntryOverwriteTests {
+    @Test func overwriteKeepsTasksUsedElsewhereOrChosenForTheReplacement() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let base = Date(timeIntervalSince1970: 1_800_000_000)
+        let store = try TrackingStore(url: directory.appendingPathComponent("tracking.json"), now: { base + 3_600 })
+        try store.createEntry(named: "Original", selection: store.prepareEntry(from: base, to: base + 600))
+        try store.createEntry(named: "Original", selection: store.prepareEntry(from: base + 1_200, to: base + 1_800))
+        let original = try #require(store.tasks.first)
+        try store.createEntry(named: "Replacement", selection: store.prepareEntry(from: base, to: base + 600, overwriting: true))
+        #expect(store.task(id: original.id) == original)
+        try store.createEntry(named: " original ", selection: store.prepareEntry(from: base + 1_200, to: base + 1_800, overwriting: true))
+        #expect(store.task(id: original.id) == original)
+        #expect(store.entries.last?.taskID == original.id)
+        #expect(store.tasks.count == 2)
+    }
+
     @Test func invalidDraftsAndFailedOverwriteLeaveStoredAndRunningStateIntact() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -17,7 +33,7 @@ struct EntryOverwriteTests {
         now = base + 180
         try store.checkpoint()
         now = base + 300
-        let draft = try store.prepareEntry(from: base + 60, to: base + 120, overwriting: true)
+        let draft = try store.prepareEntry(from: base, to: now, overwriting: true)
         let entries = store.entries
         let tasks = store.tasks
         #expect(throws: TrackingError.emptyInterval) {
@@ -56,7 +72,8 @@ struct EntryOverwriteTests {
         try store.startTask(named: "Intervening")
         now += 30
         try store.createEntry(named: "Replacement", selection: draft)
-        #expect(store.entries.count == 2 && store.tasks.count == 3)
+        #expect(store.entries.count == 2 && store.tasks.count == 2)
+        #expect(!store.tasks.contains { $0.name == "Intervening" })
         #expect(store.entries[0].start == base && store.entries[0].end == base + 120)
         #expect(store.runningEntry?.start == base + 120 && store.runningTask?.name == "Replacement")
         #expect(store.runningEntry?.duration(at: now) == 600.75)
@@ -66,7 +83,7 @@ struct EntryOverwriteTests {
         #expect(reopened.runningEntry == nil)
     }
 
-    @Test func reverseOverwriteTrimsEdgesDeletesCoveredEntriesAndKeepsTasks() throws {
+    @Test func reverseOverwriteDeletesOnlyTasksWhoseLastEntryDisappears() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         let base = Date(timeIntervalSince1970: 1_800_000_000)
@@ -81,7 +98,6 @@ struct EntryOverwriteTests {
         try store.stop()
         now = base + 3_600
         let before = store.entries
-        let tasks = store.tasks
         let draft = try store.prepareEntry(from: base + 1_479, to: base + 311, snap: .fiveMinutes, overwriting: true)
         #expect(draft.start == base + 300 && draft.end == base + 1_500)
         try store.createEntry(named: "Replacement", selection: draft)
@@ -89,13 +105,16 @@ struct EntryOverwriteTests {
         #expect(store.entries.map(\.end) == [base + 300, base + 1_500, base + 1_800.75])
         #expect(store.entries[0].id == before[0].id && store.entries[2].id == before[2].id)
         #expect(!store.entries.contains { $0.id == before[1].id })
-        #expect(store.tasks.count == 4 && tasks.allSatisfy { store.tasks.contains($0) })
+        #expect(store.tasks.count == 3 && store.task(id: before[1].taskID) == nil)
+        #expect(store.task(id: before[0].taskID) != nil && store.task(id: before[2].taskID) != nil)
         let neighbors = [store.entries[0], store.entries[2]]
         let replacementTask = store.entries[1].taskID
         // Replacing the same interval again must leave touching neighbors exactly intact.
         try store.createEntry(named: " replacement ", selection: draft)
         #expect([store.entries[0], store.entries[2]] == neighbors)
-        #expect(store.entries[1].taskID == replacementTask && store.tasks.count == 4)
+        #expect(store.entries[1].taskID == replacementTask && store.tasks.count == 3)
+        let reopened = try TrackingStore(url: directory.appendingPathComponent("tracking.json"), now: { now })
+        #expect(reopened.tasks == store.tasks && reopened.entries == store.entries)
     }
 
     @Test(arguments: [false, true])
