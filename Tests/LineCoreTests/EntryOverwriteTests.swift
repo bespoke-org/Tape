@@ -4,6 +4,90 @@ import LineCore
 
 @MainActor
 struct EntryOverwriteTests {
+    @Test func overwriteBridgesSameTaskNeighborsWithoutMergingUnrelatedHistory() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let base = Date(timeIntervalSince1970: 1_800_000_000)
+        let store = try TrackingStore(url: directory.appendingPathComponent("tracking.json"), now: { base + 3_600 })
+        for (start, end) in [(0.0, 60.0), (60, 120), (600, 900), (900, 1_200), (1_800, 2_100), (2_100, 2_400), (2_460, 2_520)] {
+            try store.createEntry(named: "Build", selection: store.prepareEntry(from: base + start, to: base + end))
+        }
+        try store.createEntry(named: "Read", selection: store.prepareEntry(from: base + 2_400, to: base + 2_460))
+        let before = store.entries
+        #expect(before.count == 8) // Ordinary creation retains separate entries.
+        try store.createEntry(named: "Build", selection: store.prepareEntry(from: base + 1_200, to: base + 1_800, overwriting: true))
+        #expect(store.entries.count == 5)
+        #expect(store.entries[2].start == base + 600 && store.entries[2].end == base + 2_400)
+        #expect(Array(store.entries.prefix(2)) == Array(before.prefix(2)))
+        #expect(Array(store.entries.suffix(2)) == Array(before.suffix(2)))
+    }
+
+    @Test(arguments: [false, true])
+    func sameTaskOverwriteKeepsOneRunningEntryAndRecoversAtCheckpoint(throughNow: Bool) throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("tracking.json")
+        let base = Date(timeIntervalSince1970: 1_800_000_000)
+        var now = base + 300
+        let store = try TrackingStore(url: url, now: { now })
+        try store.startTask(named: "Build")
+        let task = try #require(store.runningTask)
+        now = base + 900
+        let draft = try store.prepareEntry(from: base + 420, to: throughNow ? now : base + 600, overwriting: true)
+        now += 90.25 // Include time spent choosing the same task.
+        try store.createEntry(named: "Build", selection: draft)
+        #expect(store.entries.count == 1)
+        #expect(store.runningEntry?.start == base + 300 && store.runningTask == task)
+        now += 3_600
+        let reopened = try TrackingStore(url: url, now: { now })
+        #expect(reopened.entries.count == 1 && reopened.runningEntry == nil)
+        #expect(reopened.entries[0].start == base + 300 && reopened.entries[0].end == base + 990.25)
+    }
+
+    @Test func mergingIntoATouchingRunningEntryPreservesItsSavedCheckpoint() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("tracking.json")
+        let base = Date(timeIntervalSince1970: 1_800_000_000)
+        var now = base + 1_800
+        let store = try TrackingStore(url: url, now: { now })
+        try store.startTask(named: "Build")
+        now += 5
+        try store.checkpoint()
+        now = base + 2_000
+        try store.createEntry(named: "Build", selection: store.prepareEntry(from: base + 1_200, to: base + 1_800, overwriting: true))
+        #expect(store.entries.count == 1 && store.runningEntry?.start == base + 1_200)
+        now += 3_600
+        let reopened = try TrackingStore(url: url, now: { now })
+        #expect(reopened.entries.count == 1 && reopened.entries[0].end == base + 1_805)
+    }
+
+    @Test func sameTaskOverwriteMergesInsideExtensionsAndTouchingIntervals() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("tracking.json")
+        let base = Date(timeIntervalSince1970: 1_800_000_000)
+        let store = try TrackingStore(url: url, now: { base + 3_600 })
+        try store.createEntry(named: "Build", selection: store.prepareEntry(from: base + 600, to: base + 1_200))
+        let task = try #require(store.tasks.first)
+        for (from, to, expectedStart, expectedEnd) in [
+            (780.0, 960.0, 600.0, 1_200.0), // Inside: keep the original interval.
+            (900, 1_500, 600, 1_500),       // Extend the right edge.
+            (600, 300, 300, 1_500),        // Extend left with a reverse drag.
+            (1_500, 1_800, 300, 1_800),    // Touch the right edge.
+            (300, 0, 0, 1_800)            // Touch the left edge.
+        ] {
+            let draft = try store.prepareEntry(from: base + from, to: base + to, overwriting: true)
+            try store.createEntry(named: " build ", selection: draft)
+            try #require(store.entries.count == 1)
+            #expect(store.entries[0].start == base + expectedStart)
+            #expect(store.entries[0].end == base + expectedEnd)
+            #expect(store.entries[0].taskID == task.id && store.tasks == [task])
+        }
+        let reopened = try TrackingStore(url: url)
+        #expect(reopened.entries == store.entries && reopened.tasks == [task])
+    }
+
     @Test func overwriteKeepsTasksUsedElsewhereOrChosenForTheReplacement() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }

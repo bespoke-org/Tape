@@ -146,8 +146,24 @@ public final class TrackingStore {
             ?? TrackedTask(id: UUID(), name: name, color: TaskColor.allCases.randomElement()!)
         if !candidate.tasks.contains(where: { $0.id == task.id }) { candidate.tasks.append(task) }
         let entry = TimeEntry(id: UUID(), taskID: task.id, start: selection.start, end: selection.end)
-        let index = candidate.entries.firstIndex { $0.start >= entry.start } ?? candidate.entries.endIndex
+        var index = candidate.entries.firstIndex { $0.start >= entry.start } ?? candidate.entries.endIndex
         candidate.entries.insert(entry, at: index)
+        if selection.overwritesExisting {
+            // Merge only the continuous same-task run joined by this overwrite.
+            while index > 0,
+                  candidate.entries[index - 1].taskID == task.id,
+                  candidate.entries[index - 1].end == candidate.entries[index].start {
+                candidate.entries[index - 1].end = candidate.entries[index].end
+                candidate.entries.remove(at: index)
+                index -= 1
+            }
+            while index + 1 < candidate.entries.count,
+                  candidate.entries[index + 1].taskID == task.id,
+                  candidate.entries[index].end == candidate.entries[index + 1].start {
+                candidate.entries[index].end = candidate.entries[index + 1].end
+                candidate.entries.remove(at: index + 1)
+            }
+        }
         if selection.end == nil { candidate.checkpoint = instant }
         try commit(candidate)
     }
