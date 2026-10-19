@@ -140,6 +140,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         }
     }
 
+    func popoverWillClose(_ notification: Notification) {
+        guard let view = popover.contentViewController?.view else { return }
+        func cancelMenus(in view: NSView) {
+            (view as? NSPopUpButton)?.menu?.cancelTrackingWithoutAnimation()
+            for child in view.subviews { cancelMenus(in: child) }
+        }
+        cancelMenus(in: view)
+    }
+
     func popoverDidClose(_ notification: Notification) {
         if let outsideClickMonitor {
             NSEvent.removeMonitor(outsideClickMonitor)
