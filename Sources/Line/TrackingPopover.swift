@@ -139,6 +139,7 @@ struct TrackingPopover: View {
     private func taskPicker(store: TrackingStore) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Divider()
+                .padding(.bottom, 6)
             if let selection = model.entrySelection {
                 HStack {
                     Text(selectionDescription(selection))
