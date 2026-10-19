@@ -71,7 +71,8 @@ public final class TrackingStore {
         try commit(candidate)
     }
 
-    public func prepareEntry(from first: Date, to second: Date, reachesNow: Bool = false, snap: EntrySnap = .minute) throws -> EntrySelection {
+    public func prepareEntry(from first: Date, to second: Date, reachesNow: Bool = false, snap: EntrySnap = .minute,
+                             overwriting: Bool = false) throws -> EntrySelection {
         let instant = try checkedInstant()
         guard first.timeIntervalSince1970.isFinite, second.timeIntervalSince1970.isFinite,
               first != second else { throw TrackingError.emptyInterval }
@@ -80,6 +81,13 @@ public final class TrackingStore {
         let roundedEnd = Date(timeIntervalSince1970: (max(first, second).timeIntervalSince1970 / step).rounded() * step)
         guard min(first, second) < instant else {
             throw roundedStart == roundedEnd ? TrackingError.emptyInterval : TrackingError.futureInterval
+        }
+        if overwriting {
+            let continues = reachesNow || max(first, second) >= instant
+            let selection = EntrySelection(start: roundedStart, end: continues ? nil : min(instant, roundedEnd),
+                                           overwritesExisting: true)
+            try validate(selection, at: instant)
+            return selection
         }
         guard !entries.contains(where: { $0.start <= first && ($0.end ?? .distantFuture) > first }) else {
             throw TrackingError.overlappingEntry
@@ -98,7 +106,7 @@ public final class TrackingStore {
         let start = max(lower, min(upper ?? .distantFuture, snappedStart))
         let continues = (reachesNow || max(first, second) >= instant) && upper == nil
         let end: Date? = continues ? nil : min(upper ?? instant, min(instant, max(lower, snappedEnd)))
-        let selection = EntrySelection(start: start, end: end)
+        let selection = EntrySelection(start: start, end: end, overwritesExisting: false)
         try validate(selection, at: instant)
         return selection
     }
@@ -109,6 +117,26 @@ public final class TrackingStore {
         let instant = try checkedInstant()
         try validate(selection, at: instant)
         var candidate = snapshot
+        if selection.overwritesExisting {
+            // A surviving running tail can start after the previous checkpoint.
+            // Save its current tracked endpoint together with the replacement.
+            if let running = runningEntry, running.start < (selection.end ?? .distantFuture) {
+                candidate.checkpoint = instant
+            }
+            candidate.entries = entries.flatMap { entry -> [TimeEntry] in
+                guard entry.start < (selection.end ?? .distantFuture),
+                      (entry.end ?? .distantFuture) > selection.start else { return [entry] }
+                var fragments: [TimeEntry] = []
+                if entry.start < selection.start {
+                    fragments.append(TimeEntry(id: entry.id, taskID: entry.taskID, start: entry.start, end: selection.start))
+                }
+                if let end = selection.end, end < (entry.end ?? .distantFuture) {
+                    fragments.append(TimeEntry(id: fragments.isEmpty ? entry.id : UUID(), taskID: entry.taskID,
+                                               start: end, end: entry.end))
+                }
+                return fragments
+            }
+        }
         let task = candidate.tasks.first { $0.name.caseInsensitiveCompare(name) == .orderedSame }
             ?? TrackedTask(id: UUID(), name: name, color: TaskColor.allCases.randomElement()!)
         if !candidate.tasks.contains(where: { $0.id == task.id }) { candidate.tasks.append(task) }
@@ -124,7 +152,7 @@ public final class TrackingStore {
         guard selection.start < end else { throw TrackingError.emptyInterval }
         guard selection.start < instant, end <= instant else { throw TrackingError.futureInterval }
         let overlapEnd = selection.end ?? .distantFuture
-        guard !entries.contains(where: { $0.start < overlapEnd && ($0.end ?? .distantFuture) > selection.start }) else {
+        guard selection.overwritesExisting || !entries.contains(where: { $0.start < overlapEnd && ($0.end ?? .distantFuture) > selection.start }) else {
             throw TrackingError.overlappingEntry
         }
     }

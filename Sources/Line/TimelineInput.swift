@@ -8,7 +8,7 @@ struct TimelineInput: NSViewRepresentable {
     let endZoom: () -> Void
     let resetZoom: () -> Void
     let drawingBounds: CGRect
-    let beginDraw: (Double) -> Bool
+    let beginDraw: (Double, Bool) -> Bool
     let updateDraw: (Double) -> Void
     let endDraw: (Double, Double) -> Void
     let cancelDraw: () -> Void
@@ -38,13 +38,14 @@ final class TimelineInputView: NSView {
     var endZoom: () -> Void = {}
     var resetZoom: () -> Void = {}
     var drawingBounds: CGRect = .zero
-    var beginDraw: (Double) -> Bool = { _ in false }
+    var beginDraw: (Double, Bool) -> Bool = { _, _ in false }
     var updateDraw: (Double) -> Void = { _ in }
     var endDraw: (Double, Double) -> Void = { _, _ in }
     var cancelDraw: () -> Void = {}
     private var monitor: Any?
     private var magnificationScale: Double = 1
     private var dragOrigin: NSPoint?
+    private var dragOverwrites = false
     private var isDrawing = false
 
     override var isFlipped: Bool { true }
@@ -67,6 +68,7 @@ final class TimelineInputView: NSView {
         if let monitor { NSEvent.removeMonitor(monitor) }
         monitor = nil
         dragOrigin = nil
+        dragOverwrites = false
         isDrawing = false
     }
 
@@ -84,12 +86,13 @@ final class TimelineInputView: NSView {
         let fraction = point.x / max(bounds.width, 1)
         if event.type == .leftMouseDown {
             dragOrigin = drawingBounds.contains(point) && !event.modifierFlags.contains(.control) ? point : nil
+            dragOverwrites = event.modifierFlags.contains(.command)
             return false
         }
         if event.type == .leftMouseDragged, let origin = dragOrigin {
             if !isDrawing {
                 guard abs(point.x - origin.x) >= 3 else { return false }
-                guard beginDraw(origin.x / max(bounds.width, 1)) else { dragOrigin = nil; return false }
+                guard beginDraw(origin.x / max(bounds.width, 1), dragOverwrites) else { dragOrigin = nil; return false }
                 isDrawing = true
             }
             updateDraw(fraction)

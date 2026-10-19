@@ -10,4 +10,5 @@ public enum EntrySnap: TimeInterval, Sendable {
 public struct EntrySelection: Equatable, Sendable {
     public let start: Date
     public let end: Date?
+    public let overwritesExisting: Bool
 }

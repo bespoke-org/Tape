@@ -15,7 +15,9 @@ Click Line's menu bar icon to see the current state and timeline. The plus icon 
 
 Drag empty timeline space to select time, then type a task name or choose an existing one. Historical selections use Save; selections reaching Now use Start and include time spent choosing the task. Escape, Cancel, or closing the popover discards the draft. Reverse drags work, snapping adapts to zoom, and the dragged edge stops at neighboring entries. Views up to two hours snap by one minute, up to eight hours by five minutes, and wider views by fifteen minutes. Contact with a neighbor uses its exact timestamp; new conflicts are still rejected when saving.
 
-Tickets 1–3 supply tracking, browsing, and drawing entries. Editing entries, lock/sleep handling, automatic continuation, and launch at login are subsequent tickets and are not implemented yet. Until lock/sleep handling lands, stop tracking before leaving the Mac.
+Hold ⌘ when starting a drag to overwrite existing time, even when starting inside an entry. The gray striped selection shows the time to replace. Release, then choose a task or submit with Overwrite; through-Now selections use Overwrite & Start. Partial overlaps trim existing entries, middle overlaps split them, and fully covered entries disappear. Uncovered time and reusable tasks remain. Releasing ⌘ after starting the drag does not change its mode. Escape, Cancel, or closing the popover discards the draft.
+
+Tickets 1–3 and 9 supply tracking, browsing, drawing entries, and Command-drag overwrite. Editing entries, lock/sleep handling, automatic continuation, and launch at login are subsequent tickets and are not implemented yet. Until lock/sleep handling lands, stop tracking before leaving the Mac.
 
 ## Local data
 
@@ -38,6 +40,7 @@ swift test
 python3 scripts/smoke-test.py
 python3 scripts/smoke-test.py --timeline
 python3 scripts/smoke-test.py --creation
+python3 scripts/smoke-test.py --overwrite
 ```
 
 Tests exercise the public tracking operations using a controlled clock and temporary real files. Native menu bar behavior, focus, dismissal, rendering, and appearance/accessibility settings also need checks in the running app.
@@ -47,6 +50,8 @@ The smoke check builds a separate debug bundle under `build/smoke/`, uses tempor
 The timeline smoke check sends deterministic events through the AppKit input handler and verifies browsing, pinch anchors, two-finger double-tap reset, Now, popover stability, and persisted zoom across two fresh processes. Physical trackpad behavior and the system event-monitor delivery still require a manual check. Zoom is saved in the existing JSON store when a pinch ends, zoom is reset, or the popover closes.
 
 The creation smoke check exercises the production mouse-event handler and native task picker. It covers historical and running entries, reverse drags, task reuse, cancellation during dragging and typing, dismissal, selection boundaries and rejected future selections, and popover anchoring. Physical pointer delivery and appearance still need manual verification.
+
+The overwrite smoke check covers Command captured at mouse-down and released before dragging, cancellation, split entries, reverse replacement across multiple entries, task reuse, through-Now tracking, and stable popover positioning. It uses the same isolated data and 20-second process limit.
 
 ## Plan
 

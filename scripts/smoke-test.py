@@ -11,12 +11,13 @@ parser = argparse.ArgumentParser()
 modes = parser.add_mutually_exclusive_group()
 modes.add_argument('--creation', action='store_true', help='Verify drawing and task selection')
 modes.add_argument('--timeline', action='store_true', help='Verify timeline navigation and zoom across two launches')
+modes.add_argument('--overwrite', action='store_true', help='Verify Command-drag overwrite and cancellation')
 args = parser.parse_args()
 root = Path(__file__).resolve().parent.parent
 app = root / 'build/smoke/Line.app'
 subprocess.run([str(root / 'scripts/build-app.sh'), 'debug'], cwd=root,
                env=dict(os.environ, LINE_APP_OUTPUT=str(app)), check=True, timeout=180)
-output = root / 'build' / ('creation-smoke-results' if args.creation else 'timeline-smoke-results' if args.timeline else 'smoke-results')
+output = root / 'build' / ('overwrite-smoke-results' if args.overwrite else 'creation-smoke-results' if args.creation else 'timeline-smoke-results' if args.timeline else 'smoke-results')
 output.mkdir(parents=True, exist_ok=True)
 report = output / 'result.txt'
 
@@ -27,7 +28,7 @@ with tempfile.TemporaryDirectory(prefix='line-smoke-') as data:
             result = subprocess.run(
                 [str(app / 'Contents/MacOS/Line'), '--smoke-test', str(output)],
                 env=dict(os.environ, LINE_DATA_DIRECTORY=data, LINE_SMOKE_TIMELINE='1' if args.timeline else '0',
-                         LINE_SMOKE_CREATION='1' if args.creation else '0'),
+                         LINE_SMOKE_CREATION='1' if args.creation else '0', LINE_SMOKE_OVERWRITE='1' if args.overwrite else '0'),
                 capture_output=True, text=True, timeout=20,
             )
         except subprocess.TimeoutExpired:
@@ -46,6 +47,10 @@ with tempfile.TemporaryDirectory(prefix='line-smoke-') as data:
         if args.timeline:
             assert records['timelineSpan'] == 14_400 / (2 ** (launch + 1))
             assert records['entries'] == []
+        elif args.overwrite:
+            assert len(records['entries']) == 3
+            assert len(records['tasks']) == 3
+            assert all(entry.get('end') is not None for entry in records['entries'])
         elif args.creation:
             assert len(records['entries']) == 3
             assert len(records['tasks']) == 1

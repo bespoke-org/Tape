@@ -77,12 +77,25 @@ struct LiveTimeline: View {
                             RoundedRectangle(cornerRadius: 4)
                                 .fill(Color.gray.opacity(reduceTransparency ? 0.35 : 0.18))
                                 .overlay {
+                                    if model.isOverwriting {
+                                        Canvas { context, size in
+                                            var lines = Path()
+                                            for x in stride(from: -size.height, through: size.width, by: 8) {
+                                                lines.move(to: CGPoint(x: x, y: size.height))
+                                                lines.addLine(to: CGPoint(x: x + size.height, y: 0))
+                                            }
+                                            context.stroke(lines, with: .color(.primary.opacity(contrast == .increased ? 0.5 : 0.25)), lineWidth: 1)
+                                        }
+                                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                                    }
+                                }
+                                .overlay {
                                     RoundedRectangle(cornerRadius: 4)
-                                        .strokeBorder(Color.gray, style: StrokeStyle(lineWidth: 2, dash: [4, 3]))
+                                        .strokeBorder(Color.gray, style: StrokeStyle(lineWidth: 2, dash: model.isOverwriting ? [] : [4, 3]))
                                 }
                                 .frame(width: right - left, height: 46)
                                 .offset(x: left, y: stripTop + (stripHeight - 46) / 2)
-                                .accessibilityLabel("Selected time interval")
+                                .accessibilityLabel(model.isOverwriting ? "Selected time will replace existing entries" : "Selected time interval")
                         }
                     }
 
@@ -115,6 +128,10 @@ struct LiveTimeline: View {
                         Text(dateContext).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
                             .frame(maxWidth: model.timeline.isFollowingNow ? width / 2 - 24 : nil, alignment: .leading)
                         Spacer()
+                        if model.isOverwriting {
+                            Label("Overwrite", systemImage: "command")
+                                .font(.caption2.weight(.medium))
+                        }
                     }
                     .frame(width: width, height: 20)
 

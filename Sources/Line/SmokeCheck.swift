@@ -18,6 +18,13 @@ enum SmokeCheck {
             try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
             try require(NSApp.activationPolicy() == .accessory, "App must have no Dock icon")
             try require(button.image != nil, "Status item must have an icon")
+            if ProcessInfo.processInfo.environment["LINE_SMOKE_OVERWRITE"] == "1" {
+                try await checkOverwrite(button: button, popover: popover, model: model)
+                try Data("PASS: Command-drag overwrite, cancellation, split, multiple entries, task reuse, through-Now tracking, stable anchoring.\n".utf8)
+                    .write(to: output.appendingPathComponent("result.txt"))
+                NSApp.terminate(nil)
+                return
+            }
             if ProcessInfo.processInfo.environment["LINE_SMOKE_CREATION"] == "1" {
                 try await checkCreation(button: button, popover: popover, model: model)
                 try Data("PASS: drawing, reverse selection, task creation/reuse, Escape, dismissal, selection boundaries, through-Now tracking, stable anchoring.\n".utf8)
@@ -123,27 +130,104 @@ enum SmokeCheck {
         try await Task.sleep(for: .milliseconds(600))
     }
 
+    private static func timelineInput(in popover: NSPopover) throws -> TimelineInputView {
+        guard let input = try descendants(contentView(popover)).compactMap({ $0 as? TimelineInputView }).first else {
+            throw NSError(domain: "LineSmokeCheck", code: 9)
+        }
+        return input
+    }
+
+    private static func draw(_ from: Double, _ to: Double, in popover: NSPopover, command: Bool = false,
+                             finish: Bool = true, release: Double? = nil) throws {
+        let input = try timelineInput(in: popover)
+        let window = input.window!
+        func event(_ type: NSEvent.EventType, _ fraction: Double) -> NSEvent {
+            TimelineTestEvent(type: type, window: window,
+                              location: input.convert(NSPoint(x: input.bounds.width * fraction, y: 60), to: nil),
+                              flags: command && type == .leftMouseDown ? .command : [])
+        }
+        _ = input.handle(event(.leftMouseDown, from))
+        _ = input.handle(event(.leftMouseDragged, to))
+        if finish { _ = input.handle(event(.leftMouseUp, release ?? to)) }
+    }
+
+    private static func checkOverwrite(button: NSStatusBarButton, popover: NSPopover, model: AppModel) async throws {
+        try await settle()
+        try clickStatusItem(button)
+        try await settle()
+        let store = model.store!
+        let instant = Date.now
+        try store.createEntry(named: "Original", selection: store.prepareEntry(
+            from: model.timeline.date(at: 0.05, now: instant), to: model.timeline.date(at: 0.35, now: instant)))
+        try store.createEntry(named: "Tail", selection: store.prepareEntry(
+            from: model.timeline.date(at: 0.38, now: instant), to: model.timeline.date(at: 0.46, now: instant)))
+        let original = store.entries
+        try await settle()
+        try draw(0.15, 0.25, in: popover)
+        try require(model.entrySelection == nil, "Ordinary drawing must still reject an occupied origin")
+        try draw(0.15, 0.25, in: popover, command: true, finish: false)
+        try require(model.drawnRange != nil && store.entries == original, "Command-drag must preview over an entry without saving")
+        let input = try timelineInput(in: popover)
+        let window = input.window!
+        let escape = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [],
+                                     timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+                                     context: nil, characters: "\u{1b}", charactersIgnoringModifiers: "\u{1b}", isARepeat: false, keyCode: 53)!
+        _ = input.handle(escape)
+        try require(model.drawnRange == nil && !model.isDrawing && store.entries == original, "Escape must cancel overwrite drawing")
+        try draw(0.15, 0.25, in: popover, command: true, release: 0.15)
+        try require(model.entrySelection == nil && model.entryError == nil, "Collapsed overwrite must silently cancel")
+        try draw(0.15, 0.25, in: popover, command: true)
+        try await settle()
+        try pressAccessibleButton(named: "Cancel", in: contentView(popover))
+        try await settle()
+        try require(model.entrySelection == nil && store.entries == original, "Cancel must preserve overwritten entries")
+        try draw(0.15, 0.25, in: popover, command: true)
+        try await settle()
+        try clickStatusItem(button)
+        try await settle()
+        try clickStatusItem(button)
+        try await settle()
+        try require(model.entrySelection == nil && store.entries == original, "Closing must discard an overwrite draft")
+        try draw(0.15, 0.25, in: popover, command: true)
+        try await settle()
+        try require(accessibilityElement(named: "Overwrite", in: contentView(popover)) != nil, "Overwrite must be explicit in the task picker")
+        let split = try requireSelection(model)
+        try enterTaskName("Replacement", in: popover)
+        try await settle()
+        try require(store.entries.count == 4 && store.entries[0].end == split.start && store.entries[2].start == split.end,
+                    "Committing a middle overwrite must split the original")
+        try draw(0.44, 0.10, in: popover, command: true)
+        try await settle()
+        try pressAccessibleButton(named: "Use Replacement", in: contentView(popover))
+        try await settle()
+        try require(store.entries.count == 3 && store.tasks.count == 3, "Reverse overwrite must cross multiple entries and reuse a task")
+        try draw(0.43, 0.55, in: popover, command: true)
+        try await settle()
+        let live = try requireSelection(model)
+        try require(live.end == nil, "Overwrite through Now must retain running intent")
+        try pressAccessibleButton(named: "Use Original", in: contentView(popover))
+        try await settle()
+        try require(store.runningEntry?.start == live.start && store.runningTask?.name == "Original" && store.entries.count == 3,
+                    "Through-Now overwrite must start the chosen task and remove covered entries")
+        try requireAnchored(popover, to: button)
+        try await requireStablePosition(popover)
+    }
+
+    private static func requireSelection(_ model: AppModel) throws -> EntrySelection {
+        try require(model.entrySelection != nil, "Drawing must produce a selection")
+        return model.entrySelection!
+    }
+
     private static func checkCreation(button: NSStatusBarButton, popover: NSPopover, model: AppModel) async throws {
         try await settle()
         try clickStatusItem(button)
         try await settle()
         try requireAnchored(popover, to: button)
         func inputView() throws -> TimelineInputView {
-            guard let input = try descendants(contentView(popover)).compactMap({ $0 as? TimelineInputView }).first else {
-                throw NSError(domain: "LineSmokeCheck", code: 9)
-            }
-            return input
+            try timelineInput(in: popover)
         }
         func draw(_ from: Double, _ to: Double, finish: Bool = true, release: Double? = nil) throws {
-            let input = try inputView()
-            let window = input.window!
-            func event(_ type: NSEvent.EventType, _ fraction: Double) -> NSEvent {
-                TimelineTestEvent(type: type, window: window,
-                                  location: input.convert(NSPoint(x: input.bounds.width * fraction, y: 60), to: nil))
-            }
-            _ = input.handle(event(.leftMouseDown, from))
-            _ = input.handle(event(.leftMouseDragged, to))
-            if finish { _ = input.handle(event(.leftMouseUp, release ?? to)) }
+            try Self.draw(from, to, in: popover, finish: finish, release: release)
         }
         func escape() throws {
             let window = try contentView(popover).window!
@@ -219,7 +303,8 @@ enum SmokeCheck {
         try draw(0.45, 0.55)
         try await settle()
         let runningStart = model.entrySelection?.start
-        try require(runningStart != nil && model.entrySelection?.end == nil, "Drawing through Now must retain running intent")
+        try require(runningStart != nil && model.entrySelection?.end == nil,
+                    "Drawing through Now must retain running intent; selection=\(String(describing: model.entrySelection)), error=\(String(describing: model.entryError)), drawing=\(model.isDrawing)")
         try enterTaskName("Past work", in: popover)
         try await settle()
         try require(model.store!.runningEntry?.start == runningStart && model.store!.entries.count == 3, "Delayed task submission must start from the drawn start")

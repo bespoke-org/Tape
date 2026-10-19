@@ -190,7 +190,10 @@ struct TrackingPopover: View {
     }
 
     private func pickerAction(store: TrackingStore) -> String {
-        if let selection = model.entrySelection { return selection.end == nil ? "Start" : "Save" }
+        if let selection = model.entrySelection {
+            if selection.overwritesExisting { return selection.end == nil ? "Overwrite & Start" : "Overwrite" }
+            return selection.end == nil ? "Start" : "Save"
+        }
         return store.runningTask == nil ? "Start" : "Switch"
     }
 

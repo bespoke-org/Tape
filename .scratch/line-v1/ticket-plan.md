@@ -16,9 +16,10 @@ Each ticket delivers usable behavior through UI, tracking operations, local stor
 | 06 | Resume interrupted work with a cancellable countdown | 04, 05 | Show a non-focus-stealing menu bar countdown, include its interval on completion, support Reject/dismiss/re-lock, and verify cancellation by all implemented creation/editing actions. |
 | 07 | Finish personal installation and verify complete workflows | 06 | Optional launch at login, reproducible local build/install instructions, and verification of the packaged app, native appearance/accessibility, persistence, and combined tracking workflows. |
 
-## Deferred follow-up
+## Follow-up tickets
 
 - [08: Migrate local storage to SQLite](issues/08-migrate-local-storage-to-sqlite.md), blocked by 02. Replace whole-history JSON writes with transactional updates and visible-range queries; preserve existing data through a retry-safe migration and retain the JSON backup. Added at the user's request for later; it does not block tickets 01–07.
+- [09: Overwrite entries with Command-drag](issues/09-overwrite-entries-with-command-drag.md), blocked by 03. Draw across existing entries while holding Command, then replace the selected time atomically: trim edges, split middle overlaps, and delete fully covered entries. Preserve uncovered time and running-state rules. Added at the user's request; it does not block tickets 04–08.
 
 ## Acceptance outline
 
@@ -89,4 +90,4 @@ Each ticket delivers usable behavior through UI, tracking operations, local stor
 
 ## Approval
 
-The user approved moving the basic live timeline into the first usable tracking slice while keeping navigation and zoom as a separate follow-up. The resulting seven tickets are published individually with ready-for-agent status and explicit blockers. Ticket 01 was accepted as done by the user on 2026-10-18; remaining manual appearance/accessibility checks are recorded and deferred to ticket 07. Ticket 02 was accepted as done on 2026-10-18 after the final review. Unverified physical gesture and appearance/accessibility checks remain recorded for ticket 07. Ticket 03 was accepted as done on 2026-10-19 after the final review. Remaining hardware and appearance/accessibility checks are recorded for ticket 07. Tickets 04 and 05 are unblocked. The remaining tickets, including the deferred SQLite follow-up, have not started.
+The user approved moving the basic live timeline into the first usable tracking slice while keeping navigation and zoom as a separate follow-up. The resulting seven tickets are published individually with ready-for-agent status and explicit blockers. Ticket 01 was accepted as done by the user on 2026-10-18; remaining manual appearance/accessibility checks are recorded and deferred to ticket 07. Ticket 02 was accepted as done on 2026-10-18 after the final review. Unverified physical gesture and appearance/accessibility checks remain recorded for ticket 07. Ticket 03 was accepted as done on 2026-10-19 after the final review. Remaining hardware and appearance/accessibility checks are recorded for ticket 07. Tickets 04 and 05 are unblocked. Ticket 09 was implemented on 2026-10-19 ahead of tickets 04–08 at the user's request. Its core and packaged-app checks pass, with no findings in standards or spec review; physical gesture and appearance checks remain recorded for ticket 07. Tickets 04–08 have not started.

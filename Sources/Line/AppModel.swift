@@ -11,6 +11,7 @@ final class AppModel {
     private(set) var entrySelection: EntrySelection?
     private(set) var drawnRange: DateInterval?
     private(set) var entryError: String?
+    private(set) var isOverwriting = false
     private var drawingStart: Date?
     var isDrawing: Bool { drawingStart != nil }
     private let storeURL: URL
@@ -45,12 +46,13 @@ final class AppModel {
         timeline = TimelineViewport(span: store?.timelineSpan ?? TimelineViewport.defaultSpan)
     }
 
-    func beginDrawing(at fraction: Double) -> Bool {
+    func beginDrawing(at fraction: Double, overwriting: Bool) -> Bool {
         guard let store else { return false }
         let instant = Date.now
         let start = timeline.date(at: fraction, now: instant)
-        guard !store.entries.contains(where: { $0.start <= start && ($0.end ?? instant) > start }) else { return false }
+        guard overwriting || !store.entries.contains(where: { $0.start <= start && ($0.end ?? instant) > start }) else { return false }
         cancelEntry()
+        isOverwriting = overwriting
         timeline.pauseFollowing(at: instant)
         drawingStart = start
         return true
@@ -60,7 +62,7 @@ final class AppModel {
         guard let start = drawingStart, let store else { return }
         let instant = Date.now
         let end = timeline.date(at: min(max(fraction, 0), 1), now: instant)
-        if let selection = try? store.prepareEntry(from: start, to: end, snap: timeline.entrySnap) {
+        if let selection = try? store.prepareEntry(from: start, to: end, snap: timeline.entrySnap, overwriting: isOverwriting) {
             drawnRange = DateInterval(start: selection.start, end: selection.end ?? instant)
         } else {
             drawnRange = nil
@@ -76,10 +78,12 @@ final class AppModel {
         drawingStart = nil
         drawnRange = nil
         do {
-            entrySelection = try store.prepareEntry(from: start, to: end, reachesNow: reachesNow, snap: timeline.entrySnap)
+            entrySelection = try store.prepareEntry(from: start, to: end, reachesNow: reachesNow,
+                                                   snap: timeline.entrySnap, overwriting: isOverwriting)
         } catch TrackingError.emptyInterval {
             cancelEntry()
         } catch {
+            isOverwriting = false
             entryError = error.localizedDescription
         }
     }
@@ -99,6 +103,7 @@ final class AppModel {
     }
 
     func cancelEntry() {
+        isOverwriting = false
         drawingStart = nil
         drawnRange = nil
         entrySelection = nil
