@@ -54,6 +54,21 @@ struct LiveTimeline: View {
                                 RoundedRectangle(cornerRadius: 4)
                                     .fill(reduceTransparency ? Color(nsColor: .controlBackgroundColor) : task.color.displayColor.opacity(0.23))
                                     .overlay {
+                                        if model.editingEntryID == entry.id {
+                                            Canvas { context, size in
+                                                var stripes = Path()
+                                                for x in stride(from: -size.height, through: size.width, by: 10) {
+                                                    stripes.move(to: CGPoint(x: x, y: size.height))
+                                                    stripes.addLine(to: CGPoint(x: x + size.height, y: 0))
+                                                }
+                                                context.stroke(stripes, with: .color(task.color.displayColor.opacity(contrast == .increased ? 0.7 : 0.4)), lineWidth: 3)
+                                            }
+                                            .clipShape(RoundedRectangle(cornerRadius: 4))
+                                            .allowsHitTesting(false)
+                                            .accessibilityHidden(true)
+                                        }
+                                    }
+                                    .overlay {
                                         RoundedRectangle(cornerRadius: 4)
                                             .strokeBorder(task.color.displayColor, lineWidth: contrast == .increased || model.editingEntryID == entry.id ? 2 : 1)
                                     }
