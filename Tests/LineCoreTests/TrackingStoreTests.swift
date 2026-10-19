@@ -4,12 +4,36 @@ import LineCore
 
 @MainActor
 struct TrackingStoreTests {
+    @Test(arguments: ["cyan", "indigo"])
+    func removedShadesLoadWithoutLosingRecordedTime(legacyColor: String) throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let url = directory.appendingPathComponent("tracking.json")
+        let taskID = UUID()
+        let entryID = UUID()
+        let data = """
+        {"version":1,"tasks":[{"id":"\(taskID)","name":"Saved work","color":"\(legacyColor)"}],
+        "entries":[{"id":"\(entryID)","taskID":"\(taskID)","start":0,"end":60}]}
+        """
+        try Data(data.utf8).write(to: url)
+        let store = try TrackingStore(url: url)
+        #expect(store.tasks.count == 1)
+        #expect(store.task(id: taskID)?.color == (legacyColor == "cyan" ? .teal : .blue))
+        #expect(store.entries.count == 1 && store.entries[0].id == entryID)
+        #expect(store.entries[0].duration(at: .now) == 60)
+        // A later write must keep the replacement shade readable on reopening.
+        try store.setTaskColor(id: taskID, color: store.tasks[0].color)
+        let reopened = try TrackingStore(url: url)
+        #expect(reopened.tasks == store.tasks && reopened.entries == store.entries)
+    }
+
     @Test func switchingAwayFromZeroDurationTaskReusesItsFreedColor() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         var now = Date(timeIntervalSince1970: 1_800_000_000)
         let store = try TrackingStore(url: directory.appendingPathComponent("tracking.json"), now: { now })
-        for index in 0..<11 {
+        for index in 0..<(TaskColor.allCases.count - 1) {
             try store.startTask(named: "Saved \(index)")
             now += 60
             try store.stop()
@@ -17,19 +41,19 @@ struct TrackingStoreTests {
         try store.startTask(named: "Discarded")
         let freedColor = try #require(store.runningTask).color
         try store.startTask(named: "Replacement")
-        #expect(store.tasks.count == 12)
+        #expect(store.tasks.count == TaskColor.allCases.count)
         #expect(store.runningTask?.color == freedColor)
-        #expect(Set(store.tasks.map(\.color)).count == 12)
+        #expect(Set(store.tasks.map(\.color)).count == TaskColor.allCases.count)
     }
 
-    @Test func newTasksUseTwelveDistinctColorsBeforeRepeatingAndKeepAssignedColors() throws {
+    @Test func newTasksUseEveryColorBeforeRepeatingAndKeepAssignedColors() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         let url = directory.appendingPathComponent("tracking.json")
         let base = Date(timeIntervalSince1970: 1_800_000_000)
         var now = base + 7_200
         let store = try TrackingStore(url: url, now: { now })
-        for index in 0..<12 {
+        for index in 0..<TaskColor.allCases.count {
             if index.isMultiple(of: 2) {
                 try store.startTask(named: "Task \(index)")
                 now += 60
@@ -41,7 +65,7 @@ struct TrackingStoreTests {
         }
         let assigned = store.tasks
         let colors = Set(assigned.map(\.color))
-        #expect(assigned.count == 12 && colors.count == 12)
+        #expect(assigned.count == TaskColor.allCases.count && colors == Set(TaskColor.allCases))
         try store.startTask(named: "task 0")
         now += 60
         try store.stop()

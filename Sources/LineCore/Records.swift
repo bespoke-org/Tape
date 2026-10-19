@@ -1,7 +1,22 @@
 import Foundation
 
 public enum TaskColor: String, Codable, CaseIterable, Sendable {
-    case red, orange, brown, yellow, green, mint, teal, cyan, blue, indigo, purple, pink
+    case red, orange, brown, yellow, green, mint, teal, blue, purple, pink
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let value = try container.decode(String.self)
+        // Preserve saved tasks when loading shades removed from the palette.
+        switch value {
+        case "cyan": self = .teal
+        case "indigo": self = .blue
+        default:
+            guard let color = Self(rawValue: value) else {
+                throw DecodingError.dataCorruptedError(in: container, debugDescription: "Unknown task color: \(value)")
+            }
+            self = color
+        }
+    }
 }
 
 public struct TrackedTask: Identifiable, Codable, Equatable, Sendable {
