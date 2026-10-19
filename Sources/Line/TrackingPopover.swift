@@ -176,7 +176,6 @@ struct TrackingPopover: View {
                     .accessibilityLabel("Task name or search")
                     .padding(.horizontal, 6)
                     .padding(.vertical, 3)
-                    .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 5))
                     .overlay {
                         RoundedRectangle(cornerRadius: 5)
                             .strokeBorder(.quaternary, lineWidth: 0.5)

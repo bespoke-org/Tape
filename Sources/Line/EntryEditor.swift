@@ -52,7 +52,6 @@ struct EntryEditor: View {
                     .accessibilityLabel("Entry task name or search")
                     .padding(.horizontal, 6)
                     .padding(.vertical, 3)
-                    .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 5))
                     .overlay {
                         RoundedRectangle(cornerRadius: 5)
                             .strokeBorder(.quaternary, lineWidth: 0.5)
@@ -144,6 +143,7 @@ private struct TaskSettings: View {
     var body: some View {
         DisclosureGroup("Rename task", isExpanded: $expanded) {
             TextField("Task name", text: $name)
+                .textFieldStyle(.plain)
                 .accessibilityLabel("Reusable task name")
                 .focused($isNameFocused)
                 .onSubmit(saveName)
@@ -218,9 +218,11 @@ private struct TimestampField: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            DatePicker(title, selection: $date, displayedComponents: [.date, .hourAndMinute])
-                .datePickerStyle(.field)
-                .accessibilityLabel("Entry \(title.lowercased())")
+            HStack(spacing: 4) {
+                Text(title)
+                TransparentDatePicker(date: $date, label: "Entry \(title.lowercased())")
+                    .fixedSize()
+            }
             if !repeatedInstants.isEmpty {
                 Picker("UTC offset", selection: $date) {
                     ForEach(repeatedInstants, id: \.self) { instant in
@@ -235,5 +237,51 @@ private struct TimestampField: View {
     private func offsetLabel(_ instant: Date) -> String {
         let seconds = calendar.timeZone.secondsFromGMT(for: instant)
         return String(format: "UTC%@%02d:%02d", seconds < 0 ? "−" : "+", abs(seconds) / 3_600, abs(seconds) % 3_600 / 60)
+    }
+}
+
+/// Keep native date editing while letting the popover material show through.
+private struct TransparentDatePicker: NSViewRepresentable {
+    @Binding var date: Date
+    let label: String
+    @Environment(\.calendar) private var calendar
+    @Environment(\.timeZone) private var timeZone
+    @Environment(\.locale) private var locale
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeCoordinator() -> Coordinator { Coordinator(date: $date) }
+
+    func makeNSView(context: Context) -> NSDatePicker {
+        let picker = NSDatePicker()
+        picker.datePickerStyle = .textField
+        picker.datePickerElements = [.yearMonthDay, .hourMinute]
+        picker.isBezeled = false
+        picker.isBordered = false
+        picker.drawsBackground = false
+        picker.presentsCalendarOverlay = true
+        picker.target = context.coordinator
+        picker.action = #selector(Coordinator.dateChanged(_:))
+        return picker
+    }
+
+    func updateNSView(_ picker: NSDatePicker, context: Context) {
+        context.coordinator.date = $date
+        picker.calendar = calendar
+        picker.timeZone = timeZone
+        picker.locale = locale
+        picker.isEnabled = isEnabled
+        picker.setAccessibilityLabel(label)
+        if picker.dateValue != date { picker.dateValue = date }
+    }
+
+    @MainActor
+    final class Coordinator: NSObject {
+        var date: Binding<Date>
+
+        init(date: Binding<Date>) { self.date = date }
+
+        @objc func dateChanged(_ sender: NSDatePicker) {
+            date.wrappedValue = sender.dateValue
+        }
     }
 }
