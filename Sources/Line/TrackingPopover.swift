@@ -138,6 +138,7 @@ struct TrackingPopover: View {
 
     private func taskPicker(store: TrackingStore) -> some View {
         VStack(alignment: .leading, spacing: 10) {
+            Divider()
             if let selection = model.entrySelection {
                 HStack {
                     Text(selectionDescription(selection))
@@ -165,10 +166,6 @@ struct TrackingPopover: View {
                                     Circle().fill(task.color.displayColor).frame(width: 8, height: 8)
                                     Text(task.name).lineLimit(1)
                                     Spacer()
-                                    if model.entrySelection != nil || task.id != store.runningTask?.id {
-                                        Image(systemName: model.entrySelection?.end != nil ? "checkmark" : "play.fill")
-                                            .font(.caption2).foregroundStyle(.secondary)
-                                    }
                                 }
                                 .padding(.horizontal, 8).padding(.vertical, 7)
                                 .contentShape(Rectangle())
