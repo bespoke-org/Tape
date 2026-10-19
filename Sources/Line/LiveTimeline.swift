@@ -4,15 +4,14 @@ import LineCore
 struct LiveTimeline: View {
     let store: TrackingStore
     let now: Date
-    @Binding var viewport: TimelineViewport
-    let saveZoom: () -> Void
+    @Bindable var model: AppModel
     @Environment(\.colorSchemeContrast) private var contrast
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     private let stripTop: CGFloat = 28
     private let stripHeight: CGFloat = 64
     private let nowOverhang: CGFloat = 10
-    private var visibleRange: DateInterval { viewport.range(at: now) }
+    private var visibleRange: DateInterval { model.timeline.range(at: now) }
     private var visibleEntries: ArraySlice<TimeEntry> {
         store.entries(overlapping: visibleRange, now: now)
     }
@@ -21,7 +20,7 @@ struct LiveTimeline: View {
         VStack(alignment: .leading, spacing: 8) {
             GeometryReader { geometry in
                 let width = geometry.size.width
-                let ticks = viewport.ticks(at: now, width: width)
+                let ticks = model.timeline.ticks(at: now, width: width)
                 ZStack(alignment: .topLeading) {
                     RoundedRectangle(cornerRadius: 8)
                         .fill(reduceTransparency ? Color(nsColor: .controlBackgroundColor) : Color.primary.opacity(0.035))
@@ -71,6 +70,22 @@ struct LiveTimeline: View {
                         }
                     }
 
+                    if let selection = selectionRange {
+                        let left = max(0, position(selection.start, width: width))
+                        let right = min(width, position(selection.end, width: width))
+                        if right > left {
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(Color.accentColor.opacity(reduceTransparency ? 0.35 : 0.18))
+                                .overlay {
+                                    RoundedRectangle(cornerRadius: 4)
+                                        .strokeBorder(Color.accentColor, style: StrokeStyle(lineWidth: 2, dash: [4, 3]))
+                                }
+                                .frame(width: right - left, height: 46)
+                                .offset(x: left, y: stripTop + (stripHeight - 46) / 2)
+                                .accessibilityLabel("Selected time interval")
+                        }
+                    }
+
                     if visibleEntries.isEmpty {
                         HStack {
                             if let first = store.entries.first, first.start < visibleRange.start {
@@ -90,7 +105,7 @@ struct LiveTimeline: View {
                     if nowX >= 0 && nowX <= width {
                         Rectangle().fill(.primary).frame(width: 1.5, height: stripHeight + 2 * nowOverhang)
                             .offset(x: nowX, y: stripTop - nowOverhang)
-                        if viewport.isFollowingNow {
+                        if model.timeline.isFollowingNow {
                             Text("Now").font(.caption2.weight(.semibold))
                                 .position(x: nowX, y: 7)
                                 .accessibilityLabel("Now, \(now.formatted(date: .omitted, time: .shortened))")
@@ -98,10 +113,10 @@ struct LiveTimeline: View {
                     }
                     HStack {
                         Text(dateContext).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
-                            .frame(maxWidth: viewport.isFollowingNow ? width / 2 - 24 : nil, alignment: .leading)
+                            .frame(maxWidth: model.timeline.isFollowingNow ? width / 2 - 24 : nil, alignment: .leading)
                         Spacer()
-                        if !viewport.isFollowingNow {
-                            Button { viewport.followNow() } label: {
+                        if !model.timeline.isFollowingNow {
+                            Button { model.timeline.followNow() } label: {
                                 Label("Now", systemImage: "arrow.uturn.backward")
                             }
                             .buttonStyle(.glass).controlSize(.mini)
@@ -115,27 +130,37 @@ struct LiveTimeline: View {
             }
             .frame(height: 116)
             .background {
-                TimelineInput(scroll: { points, width in
-                    viewport.scroll(points: points, width: width, now: .now)
-                }, zoom: { factor, fraction in
-                    viewport.zoom(factor: factor, anchorFraction: fraction, now: .now)
-                }, endZoom: saveZoom, resetZoom: {
-                    if abs(viewport.span - TimelineViewport.defaultSpan) < 0.001 {
-                        viewport.followNow()
-                    } else {
-                        viewport.zoom(factor: viewport.span / TimelineViewport.defaultSpan, anchorFraction: 0.5, now: .now)
-                    }
-                    saveZoom()
-                })
-                .accessibilityHidden(true)
+                GeometryReader { geometry in
+                    TimelineInput(scroll: { points, width in
+                        model.timeline.scroll(points: points, width: width, now: .now)
+                    }, zoom: { factor, fraction in
+                        model.timeline.zoom(factor: factor, anchorFraction: fraction, now: .now)
+                    }, endZoom: model.saveTimelineScale, resetZoom: {
+                        if abs(model.timeline.span - TimelineViewport.defaultSpan) < 0.001 {
+                            model.timeline.followNow()
+                        } else {
+                            model.timeline.zoom(factor: model.timeline.span / TimelineViewport.defaultSpan, anchorFraction: 0.5, now: .now)
+                        }
+                        model.saveTimelineScale()
+                    }, drawingBounds: CGRect(x: 0, y: stripTop, width: geometry.size.width, height: stripHeight),
+                       beginDraw: model.beginDrawing, updateDraw: model.updateDrawing,
+                       endDraw: model.finishDrawing, cancelDraw: model.cancelEntry)
+                    .accessibilityHidden(true)
+                }
             }
             .accessibilityElement(children: .contain)
-            .accessibilityLabel("Timeline, \(dateContext), \(viewport.isFollowingNow ? "following now" : "browsing")")
+            .accessibilityLabel("Timeline, \(dateContext), \(model.timeline.isFollowingNow ? "following now" : "browsing")")
         }
     }
 
+    private var selectionRange: DateInterval? {
+        if let range = model.drawnRange { return range }
+        guard let selection = model.entrySelection else { return nil }
+        return DateInterval(start: selection.start, end: max(selection.start, selection.end ?? now))
+    }
+
     private func position(_ date: Date, width: CGFloat) -> CGFloat {
-        viewport.fraction(for: date, now: now) * width
+        model.timeline.fraction(for: date, now: now) * width
     }
 
     private func historyIndicator(_ symbol: String, label: String) -> some View {

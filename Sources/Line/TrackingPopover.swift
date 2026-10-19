@@ -23,7 +23,7 @@ struct TrackingPopover: View {
                 TimelineView(.periodic(from: .now, by: reduceMotion ? 5 : 1)) { context in
                     VStack(alignment: .leading, spacing: 2) {
                         runningControls(store: store)
-                        LiveTimeline(store: store, now: context.date, viewport: $model.timeline, saveZoom: model.saveTimelineScale)
+                        LiveTimeline(store: store, now: context.date, model: model)
                     }
                 }
                 if isTaskPickerShown {
@@ -39,12 +39,12 @@ struct TrackingPopover: View {
                 Button("Try Again") { model.load() }
             }
 
-            if let message = model.errorMessage {
+            if let message = model.entryError ?? model.errorMessage {
                 Label(message, systemImage: "exclamationmark.triangle")
                     .font(.callout)
                     .foregroundStyle(.red)
                     .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityLabel("Could not save or load time records. \(message)")
+                    .accessibilityLabel(message)
             }
         }
         .padding(20)
@@ -57,13 +57,29 @@ struct TrackingPopover: View {
             contentSizeDidChange(size)
         }
         .onExitCommand {
-            if isTaskPickerShown {
+            if isTaskPickerShown || model.isDrawing || model.entryError != nil {
                 closeTaskPicker()
             } else {
                 dismiss()
             }
         }
-        .onDisappear { model.saveTimelineScale() }
+        .onChange(of: model.isDrawing) { _, drawing in
+            if drawing {
+                isTaskPickerShown = false
+                isTaskFieldFocused = false
+                taskName = ""
+            }
+        }
+        .onChange(of: model.entrySelection) { _, selection in
+            if selection != nil {
+                taskName = ""
+                isTaskPickerShown = true
+            }
+        }
+        .onDisappear {
+            model.saveTimelineScale()
+            model.cancelEntry()
+        }
     }
 
     @ViewBuilder
@@ -90,10 +106,13 @@ struct TrackingPopover: View {
 
     private func pickerButton(_ title: String, systemImage: String? = nil) -> some View {
         Button {
-            if isTaskPickerShown {
+            if isTaskPickerShown && model.entrySelection == nil {
                 closeTaskPicker()
             } else {
+                model.cancelEntry()
+                taskName = ""
                 isTaskPickerShown = true
+                isTaskFieldFocused = true
             }
         } label: {
             if let systemImage {
@@ -106,6 +125,7 @@ struct TrackingPopover: View {
     }
 
     private func closeTaskPicker() {
+        model.cancelEntry()
         isTaskFieldFocused = false
         isTaskPickerShown = false
         taskName = ""
@@ -113,13 +133,21 @@ struct TrackingPopover: View {
 
     private func taskPicker(store: TrackingStore) -> some View {
         VStack(alignment: .leading, spacing: 10) {
+            if let selection = model.entrySelection {
+                HStack {
+                    Text(selectionDescription(selection))
+                        .font(.caption).foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Cancel", action: closeTaskPicker).buttonStyle(.borderless)
+                }
+            }
             HStack {
                 TextField("Name a task or search…", text: $taskName)
                     .textFieldStyle(.roundedBorder)
                     .focused($isTaskFieldFocused)
                     .onSubmit { start(trimmedName) }
                     .accessibilityLabel("Task name or search")
-                Button(store.runningTask == nil ? "Start" : "Switch") { start(trimmedName) }
+                Button(pickerAction(store: store)) { start(trimmedName) }
                     .buttonStyle(.glassProminent)
                     .disabled(trimmedName.isEmpty)
             }
@@ -132,15 +160,16 @@ struct TrackingPopover: View {
                                     Circle().fill(task.color.displayColor).frame(width: 8, height: 8)
                                     Text(task.name).lineLimit(1)
                                     Spacer()
-                                    if task.id != store.runningTask?.id {
-                                        Image(systemName: "play.fill").font(.caption2).foregroundStyle(.secondary)
+                                    if model.entrySelection != nil || task.id != store.runningTask?.id {
+                                        Image(systemName: model.entrySelection?.end != nil ? "checkmark" : "play.fill")
+                                            .font(.caption2).foregroundStyle(.secondary)
                                     }
                                 }
                                 .padding(.horizontal, 8).padding(.vertical, 7)
                                 .contentShape(Rectangle())
                             }
                             .buttonStyle(.borderless)
-                            .accessibilityLabel("\(store.runningTask == nil ? "Start" : "Switch to") \(task.name)")
+                            .accessibilityLabel("\(model.entrySelection != nil ? "Use" : store.runningTask == nil ? "Start" : "Switch to") \(task.name)")
                         }
                     }
                 }
@@ -151,7 +180,21 @@ struct TrackingPopover: View {
 
     private func start(_ name: String) {
         guard !name.isEmpty else { return }
-        if model.start(name) { closeTaskPicker() }
+        let saved = model.entrySelection != nil ? model.createSelectedEntry(named: name) : model.start(name)
+        if saved { closeTaskPicker() }
+    }
+
+    private func pickerAction(store: TrackingStore) -> String {
+        if let selection = model.entrySelection { return selection.end == nil ? "Start" : "Save" }
+        return store.runningTask == nil ? "Start" : "Switch"
+    }
+
+    private func selectionDescription(_ selection: EntrySelection) -> String {
+        let start = selection.start.formatted(date: .abbreviated, time: .shortened)
+        if let end = selection.end {
+            return "\(start) – \(end.formatted(date: .abbreviated, time: .shortened))"
+        }
+        return "\(start) – Now · starts tracking"
     }
 }
 

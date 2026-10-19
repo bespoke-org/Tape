@@ -71,6 +71,45 @@ public final class TrackingStore {
         try commit(candidate)
     }
 
+    public func prepareEntry(from first: Date, to second: Date, reachesNow: Bool = false) throws -> EntrySelection {
+        let instant = try checkedInstant()
+        guard first.timeIntervalSince1970.isFinite, second.timeIntervalSince1970.isFinite,
+              first != second else { throw TrackingError.emptyInterval }
+        guard min(first, second) < instant else { throw TrackingError.futureInterval }
+        let start = Date(timeIntervalSince1970: (min(first, second).timeIntervalSince1970 / 60).rounded() * 60)
+        let end: Date? = reachesNow || max(first, second) >= instant ? nil :
+            min(instant, Date(timeIntervalSince1970: (max(first, second).timeIntervalSince1970 / 60).rounded() * 60))
+        let selection = EntrySelection(start: start, end: end)
+        try validate(selection, at: instant)
+        return selection
+    }
+
+    public func createEntry(named rawName: String, selection: EntrySelection) throws {
+        let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { throw TrackingError.emptyTaskName }
+        let instant = try checkedInstant()
+        try validate(selection, at: instant)
+        var candidate = snapshot
+        let task = candidate.tasks.first { $0.name.caseInsensitiveCompare(name) == .orderedSame }
+            ?? TrackedTask(id: UUID(), name: name, color: TaskColor.allCases.randomElement()!)
+        if !candidate.tasks.contains(where: { $0.id == task.id }) { candidate.tasks.append(task) }
+        let entry = TimeEntry(id: UUID(), taskID: task.id, start: selection.start, end: selection.end)
+        let index = candidate.entries.firstIndex { $0.start >= entry.start } ?? candidate.entries.endIndex
+        candidate.entries.insert(entry, at: index)
+        if selection.end == nil { candidate.checkpoint = instant }
+        try commit(candidate)
+    }
+
+    private func validate(_ selection: EntrySelection, at instant: Date) throws {
+        let end = selection.end ?? instant
+        guard selection.start < instant, end <= instant else { throw TrackingError.futureInterval }
+        guard selection.start < end else { throw TrackingError.emptyInterval }
+        let overlapEnd = selection.end ?? .distantFuture
+        guard !entries.contains(where: { $0.start < overlapEnd && ($0.end ?? .distantFuture) > selection.start }) else {
+            throw TrackingError.overlappingEntry
+        }
+    }
+
     public func stop() throws {
         guard runningEntry != nil else { return }
         var candidate = snapshot

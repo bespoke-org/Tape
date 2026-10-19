@@ -18,6 +18,13 @@ enum SmokeCheck {
             try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
             try require(NSApp.activationPolicy() == .accessory, "App must have no Dock icon")
             try require(button.image != nil, "Status item must have an icon")
+            if ProcessInfo.processInfo.environment["LINE_SMOKE_CREATION"] == "1" {
+                try await checkCreation(button: button, popover: popover, model: model)
+                try Data("PASS: drawing, reverse selection, task creation/reuse, Escape, dismissal, overlap rejection, through-Now tracking, stable anchoring.\n".utf8)
+                    .write(to: output.appendingPathComponent("result.txt"))
+                NSApp.terminate(nil)
+                return
+            }
             if ProcessInfo.processInfo.environment["LINE_SMOKE_TIMELINE"] == "1" {
                 try await checkTimeline(button: button, popover: popover, model: model)
                 try Data("PASS: horizontal/Shift scroll, scoped input, pinch anchors, Now, saved zoom across reopen, stable popover.\n".utf8)
@@ -114,6 +121,94 @@ enum SmokeCheck {
 
     private static func settle() async throws {
         try await Task.sleep(for: .milliseconds(600))
+    }
+
+    private static func checkCreation(button: NSStatusBarButton, popover: NSPopover, model: AppModel) async throws {
+        try await settle()
+        try clickStatusItem(button)
+        try await settle()
+        try requireAnchored(popover, to: button)
+        func inputView() throws -> TimelineInputView {
+            guard let input = try descendants(contentView(popover)).compactMap({ $0 as? TimelineInputView }).first else {
+                throw NSError(domain: "LineSmokeCheck", code: 9)
+            }
+            return input
+        }
+        func draw(_ from: Double, _ to: Double, finish: Bool = true) throws {
+            let input = try inputView()
+            let window = input.window!
+            func event(_ type: NSEvent.EventType, _ fraction: Double) -> NSEvent {
+                TimelineTestEvent(type: type, window: window,
+                                  location: input.convert(NSPoint(x: input.bounds.width * fraction, y: 60), to: nil))
+            }
+            _ = input.handle(event(.leftMouseDown, from))
+            _ = input.handle(event(.leftMouseDragged, to))
+            if finish { _ = input.handle(event(.leftMouseUp, to)) }
+        }
+        func escape() throws {
+            let window = try contentView(popover).window!
+            let event = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [],
+                                        timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+                                        context: nil, characters: "\u{1b}", charactersIgnoringModifiers: "\u{1b}", isARepeat: false, keyCode: 53)!
+            if !(try inputView()).handle(event) { window.sendEvent(event) }
+        }
+        try draw(0.1, 0.2)
+        try await settle()
+        try require(model.entrySelection?.end != nil, "Historical drag must open a completed-entry draft")
+        let firstSelection = model.entrySelection!
+        try require(model.store!.entries.isEmpty && model.store!.tasks.isEmpty, "Drawing must not save a task or entry")
+        try requireAnchored(popover, to: button)
+        let fields = try descendants(contentView(popover)).compactMap { $0 as? NSTextField }
+        try require(fields.contains(where: { $0.isEditable && $0.currentEditor() != nil }), "Drawing must focus the task picker")
+        try enterTaskName("Past work", in: popover)
+        try await settle()
+        try require(model.store!.entries.count == 1 && model.store!.runningEntry == nil, "Historical task submission must save a completed entry")
+        try require(model.store!.entries[0].start == firstSelection.start && model.store!.entries[0].end == firstSelection.end, "Saved timestamps must match the selection")
+        try requirePickerHidden(popover)
+        try draw(0.25, 0.28)
+        try await settle()
+        try enterTaskName("Discard me", in: popover, submit: false)
+        try escape()
+        try await settle()
+        try require(model.entrySelection == nil && model.store!.tasks.count == 1, "Escape must discard the draft and typed task")
+        try requirePickerHidden(popover)
+        try draw(0.25, 0.28, finish: false)
+        try require(model.isDrawing, "Mouse drag must show a selection preview")
+        try escape()
+        try require(!model.isDrawing && model.drawnRange == nil, "Escape during drawing must cancel the preview")
+        try draw(0.4, 0.3)
+        try await settle()
+        try pressAccessibleButton(named: "Use Past work", in: contentView(popover))
+        try await settle()
+        try require(model.store!.entries.count == 2 && model.store!.tasks.count == 1, "Reverse drag must reuse the selected task")
+        try draw(0.05, 0.25)
+        try await settle()
+        try require(model.entrySelection == nil && model.entryError != nil && model.store!.entries.count == 2, "Overlapping drag must be explained without mutations")
+        try requirePickerHidden(popover)
+        try escape()
+        try draw(0.15, 0.25)
+        try require(model.entrySelection == nil && !model.isDrawing, "Dragging from an existing entry must not create another entry")
+        try draw(0.7, 0.8)
+        try require(model.entryError != nil && model.entrySelection == nil, "Wholly future drawing must be rejected")
+        try escape()
+        try draw(0.25, 0.28)
+        try await settle()
+        try clickStatusItem(button)
+        try await settle()
+        try clickStatusItem(button)
+        try await settle()
+        try require(model.entrySelection == nil && model.store!.entries.count == 2, "Closing must discard the draft")
+        try requirePickerHidden(popover)
+        try draw(0.45, 0.55)
+        try await settle()
+        let runningStart = model.entrySelection?.start
+        try require(runningStart != nil && model.entrySelection?.end == nil, "Drawing through Now must retain running intent")
+        try enterTaskName("Past work", in: popover)
+        try await settle()
+        try require(model.store!.runningEntry?.start == runningStart && model.store!.entries.count == 3, "Delayed task submission must start from the drawn start")
+        try require(model.store!.runningEntry!.duration(at: .now) > 600, "Running entry must include historical and picker time")
+        try requireAnchored(popover, to: button)
+        try await requireStablePosition(popover)
     }
 
     private static func checkTimeline(button: NSStatusBarButton, popover: NSPopover, model: AppModel) async throws {

@@ -31,6 +31,10 @@ public struct TimelineViewport {
         browsingCenter = nil
     }
 
+    public mutating func pauseFollowing(at now: Date) {
+        browsingCenter = browsingCenter ?? now
+    }
+
     public func date(at fraction: Double, now: Date) -> Date {
         range(at: now).start.addingTimeInterval(fraction * span)
     }
