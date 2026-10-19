@@ -12,7 +12,7 @@
 
 ## Interface
 
-Clicking an entry opens its settings inline below the timeline divider, in the same position as the task picker. Use native task and timestamp controls with Save, Cancel, and confirmed Delete. Keep global task name/color changes in a separate expandable section.
+Clicking an entry opens its settings inline below the timeline divider, in the same position as the task picker. Use native task and timestamp controls that save valid changes automatically, keeping the editor open. Omit Save/Cancel buttons and retain confirmed Delete. Names save when editing finishes; color changes save immediately. Keep global task name/color changes in a separate expandable section.
 
 ## Acceptance criteria
 

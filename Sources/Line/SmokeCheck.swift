@@ -20,7 +20,7 @@ enum SmokeCheck {
             try require(button.image != nil, "Status item must have an icon")
             if ProcessInfo.processInfo.environment["LINE_SMOKE_EDITING"] == "1" {
                 try await checkEditing(button: button, popover: popover, model: model)
-                try Data("PASS: inline entry editor, native timestamp controls, Save/Escape, deletion confirmation/cancellation, running deletion, edge resizing, and stable anchoring.\n".utf8)
+                try Data("PASS: inline entry editor, native timestamp autosave, Escape, deletion confirmation/cancellation, running deletion, edge resizing, and stable anchoring.\n".utf8)
                     .write(to: output.appendingPathComponent("result.txt"))
                 NSApp.terminate(nil)
                 return
@@ -81,7 +81,7 @@ enum SmokeCheck {
             try requirePickerHidden(popover)
             try requireAnchored(popover, to: button)
             try await openPicker(named: "Switch task", in: popover)
-            try pressAccessibleButton(named: "Switch to Build Line", in: contentView(popover))
+            try pressAccessibleControl(named: "Switch to Build Line", in: contentView(popover))
             try await settle()
             try require(model.store?.runningTask?.name == "Build Line", "Choosing an existing task must switch tracking")
             try requirePickerHidden(popover)
@@ -118,7 +118,7 @@ enum SmokeCheck {
 
             // Native Stop is a SwiftUI button. Its public accessibility action stays within this process.
             let content = try contentView(popover)
-            try pressAccessibleButton(named: "Stop", in: content)
+            try pressAccessibleControl(named: "Stop", in: content)
             try await settle()
             try require(model.store?.runningTask == nil, "Stop button must end tracking")
             try await requireStablePosition(popover)
@@ -180,7 +180,7 @@ enum SmokeCheck {
         }
         func changeStart(to date: Date) throws {
             let pickers = descendants(try contentView(popover)).compactMap { $0 as? NSDatePicker }
-            guard let picker = pickers.min(by: { $0.dateValue < $1.dateValue }) else {
+            guard let picker = pickers.first(where: { $0.accessibilityLabel() == "Entry start" }) else {
                 throw NSError(domain: "LineSmokeCheck", code: 11, userInfo: [NSLocalizedDescriptionKey: "Native timestamp editor is missing"])
             }
             try require(picker.acceptsFirstResponder, "Timestamp editor must accept keyboard focus")
@@ -197,7 +197,7 @@ enum SmokeCheck {
             if let button = descendants(content).compactMap({ $0 as? NSButton }).first(where: { $0.title == title && $0.isEnabled }) {
                 button.performClick(nil)
             } else {
-                try pressAccessibleButton(named: title, in: content)
+                try pressAccessibleControl(named: title, in: content)
             }
         }
 
@@ -223,19 +223,35 @@ enum SmokeCheck {
         try await settle()
         try require(model.editingEntryID == original.id, "Clicking an entry must reveal its inline settings")
         try requireAnchored(popover, to: button)
-        try changeStart(to: base - 3_480)
-        try pressAccessibleButton(named: "Save entry", in: contentView(popover))
+        try pressAccessibleControl(named: "Rename and recolor task", in: contentView(popover), role: .disclosureTriangle)
         try await settle()
-        try require(store.entries[0].start == base - 3_480, "Saving native timestamp controls must correct the entry")
-        try require(model.editingEntryID == nil, "Save must collapse the editor")
+        guard let nameField = descendants(try contentView(popover)).compactMap({ $0 as? NSTextField }).first(where: { $0.placeholderString == "Task name" }) else {
+            throw NSError(domain: "LineSmokeCheck", code: 13, userInfo: [NSLocalizedDescriptionKey: "Task name field is missing"])
+        }
+        _ = nameField.window?.makeFirstResponder(nameField)
+        try await settle()
+        try enterTaskName("Renamed", in: popover, submit: false)
+        _ = nameField.window?.makeFirstResponder(nil)
+        try await settle()
+        try require(store.task(id: original.taskID)?.name == "Renamed", "Leaving the name field must save the task without a button")
+        try require(accessibilityElement(named: "Save task", in: contentView(popover)) == nil, "Task settings must not have a Save button")
+        try changeStart(to: base - 3_480)
+        try await settle()
+        try require(store.entries[0].start == base - 3_480, "Changing native timestamp controls must immediately save the entry")
+        try require(model.editingEntryID == original.id, "Automatic saving must keep the editor open")
+        try require(accessibilityElement(named: "Save entry", in: contentView(popover)) == nil &&
+                    accessibilityElement(named: "Cancel", in: contentView(popover)) == nil, "The editor must not have Save or Cancel actions")
         try requireAnchored(popover, to: button)
 
         try clickEntry(base - 3_300)
         try await settle()
         try changeStart(to: base - 2_940)
-        try pressAccessibleButton(named: "Save entry", in: contentView(popover))
         try await settle()
         try require(model.entryError != nil && store.entries[0].start == base - 3_480, "An invalid edit must stay open and preserve saved time")
+        try changeStart(to: base - 3_480)
+        try await settle()
+        try require(model.entryError == nil && store.entries[0].start == base - 3_480,
+                    "Restoring the saved timestamp must clear validation without changing data")
         let window = try contentView(popover).window!
         let escape = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [],
                                       timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
@@ -245,16 +261,16 @@ enum SmokeCheck {
         let input = try timelineInput(in: popover)
         if !input.handle(escape) { window.sendEvent(escape) }
         try await settle()
-        try require(model.editingEntryID == nil && model.entryError == nil && store.entries[0].start == base - 3_480, "Escape must discard the edit")
+        try require(model.editingEntryID == nil && model.entryError == nil && store.entries[0].start == base - 3_480, "Escape must close the editor and retain previously saved edits")
         try clickEntry(base - 3_300)
         try await settle()
-        try pressAccessibleButton(named: "Delete entry", in: contentView(popover))
+        try pressAccessibleControl(named: "Delete entry", in: contentView(popover))
         try await settle()
         try require(store.entries.count == 3 && store.runningEntry?.id == running.id, "Asking to delete must preserve records and tracking")
         try confirm("Cancel")
         try await settle()
         try require(store.entries.count == 3 && model.editingEntryID == original.id, "Cancel must retain the entry and editor")
-        try pressAccessibleButton(named: "Delete entry", in: contentView(popover))
+        try pressAccessibleControl(named: "Delete entry", in: contentView(popover))
         try await settle()
         try confirm("Delete")
         try await settle()
@@ -271,12 +287,11 @@ enum SmokeCheck {
         try await settle()
         try require(model.editingEntryID == running.id, "Running entries must be editable")
         try changeStart(to: base - 540)
-        try pressAccessibleButton(named: "Save entry", in: contentView(popover))
         try await settle()
         try require(store.runningEntry?.start == base - 540, "Correcting a running start must keep tracking")
         try clickEntry(base - 300)
         try await settle()
-        try pressAccessibleButton(named: "Delete entry", in: contentView(popover))
+        try pressAccessibleControl(named: "Delete entry", in: contentView(popover))
         try await settle()
         try confirm("Delete")
         try await settle()
@@ -326,7 +341,7 @@ enum SmokeCheck {
         try require(model.entrySelection == nil && store.entries == original, "Closing must discard an overwrite draft")
         try draw(0.15, 0.25, in: popover, command: true)
         try await settle()
-        try pressAccessibleButton(named: "Use Original", in: contentView(popover))
+        try pressAccessibleControl(named: "Use Original", in: contentView(popover))
         try await settle()
         try require(store.entries == original, "Overwriting inside the same task must keep one continuous original entry")
         try draw(0.15, 0.25, in: popover, command: true)
@@ -339,14 +354,14 @@ enum SmokeCheck {
                     "Committing a middle overwrite must split the original")
         try draw(0.44, 0.10, in: popover, command: true)
         try await settle()
-        try pressAccessibleButton(named: "Use Replacement", in: contentView(popover))
+        try pressAccessibleControl(named: "Use Replacement", in: contentView(popover))
         try await settle()
         try require(store.entries.count == 3 && store.tasks.count == 3, "Reverse overwrite must cross multiple entries and reuse a task")
         try draw(0.43, 0.55, in: popover, command: true)
         try await settle()
         let live = try requireSelection(model)
         try require(live.end == nil, "Overwrite through Now must retain running intent")
-        try pressAccessibleButton(named: "Use Original", in: contentView(popover))
+        try pressAccessibleControl(named: "Use Original", in: contentView(popover))
         try await settle()
         try require(store.runningEntry?.start == live.start && store.runningTask?.name == "Original" && store.entries.count == 3,
                     "Through-Now overwrite must start the chosen task and remove covered entries")
@@ -355,7 +370,7 @@ enum SmokeCheck {
         try await openPicker(named: "Switch task", in: popover)
         try require(accessibilityElement(named: "Switch to Tail", in: contentView(popover)) == nil,
                     "Deleted tasks must disappear from picker suggestions")
-        try pressAccessibleButton(named: "Switch task", in: contentView(popover))
+        try pressAccessibleControl(named: "Switch task", in: contentView(popover))
         try await settle()
         try requireAnchored(popover, to: button)
         try await requireStablePosition(popover)
@@ -424,7 +439,7 @@ enum SmokeCheck {
         try require(!model.isDrawing && model.drawnRange == nil, "Escape during drawing must cancel the preview")
         try draw(0.4, 0.3)
         try await settle()
-        try pressAccessibleButton(named: "Use Past work", in: contentView(popover))
+        try pressAccessibleControl(named: "Use Past work", in: contentView(popover))
         try await settle()
         try require(model.store!.entries.count == 2 && model.store!.tasks.count == 1, "Reverse drag must reuse the selected task")
         try draw(0.05, 0.25, finish: false)
@@ -544,7 +559,7 @@ enum SmokeCheck {
     }
 
     private static func openPicker(named title: String, in popover: NSPopover) async throws {
-        try pressAccessibleButton(named: title, in: contentView(popover))
+        try pressAccessibleControl(named: title, in: contentView(popover))
         try await settle()
         let fields = descendants(try contentView(popover)).compactMap { $0 as? NSTextField }
         try require(fields.contains(where: { $0.isEditable && $0.currentEditor() != nil }), "Revealing the picker must focus its search field")
@@ -609,19 +624,19 @@ enum SmokeCheck {
         [view] + view.subviews.flatMap(descendants)
     }
 
-    private static func pressAccessibleButton(named name: String, in root: NSView) throws {
+    private static func pressAccessibleControl(named name: String, in root: NSView, role: NSAccessibility.Role = .button) throws {
         guard let object = accessibilityElement(named: name, in: root),
-              attribute("accessibilityRole", of: object) as? String == NSAccessibility.Role.button.rawValue else {
-            throw NSError(domain: "LineSmokeCheck", code: 6, userInfo: [NSLocalizedDescriptionKey: "Accessible \(name) button is missing"])
+              attribute("accessibilityRole", of: object) as? String == role.rawValue else {
+            throw NSError(domain: "LineSmokeCheck", code: 6, userInfo: [NSLocalizedDescriptionKey: "Accessible \(name) control is missing"])
         }
         let selector = NSSelectorFromString("accessibilityPerformPress")
         guard object.responds(to: selector), let implementation = object.method(for: selector) else {
-            throw NSError(domain: "LineSmokeCheck", code: 7, userInfo: [NSLocalizedDescriptionKey: "Accessible \(name) button has no press action"])
+            throw NSError(domain: "LineSmokeCheck", code: 7, userInfo: [NSLocalizedDescriptionKey: "Accessible \(name) control has no press action"])
         }
         // SwiftUI nodes implement public accessibility methods without declaring the full protocol.
         typealias Press = @convention(c) (AnyObject, Selector) -> Bool
         let pressed = unsafeBitCast(implementation, to: Press.self)(object, selector)
-        try require(pressed, "Accessible \(name) button must be operable")
+        try require(pressed, "Accessible \(name) control must be operable")
     }
 
     private static func accessibilityElement(named name: String, in element: Any) -> NSObject? {

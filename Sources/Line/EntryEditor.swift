@@ -53,15 +53,11 @@ struct EntryEditor: View {
                 .help("Delete entry")
                 .accessibilityLabel("Delete entry")
                 Spacer()
-                Button("Cancel", action: model.cancelEntry)
-                Button("Save") {
-                    _ = model.saveEntry(id: entry.id, taskID: taskID, start: start, end: entry.end == nil ? nil : end)
-                }
-                .buttonStyle(.glassProminent)
-                .keyboardShortcut(.return, modifiers: .command)
-                .accessibilityLabel("Save entry")
             }
         }
+        .onChange(of: taskID) { saveChanges() }
+        .onChange(of: start) { saveChanges() }
+        .onChange(of: end) { saveChanges() }
         .onChange(of: entry.end) { _, value in
             if let value { end = value }
         }
@@ -73,20 +69,28 @@ struct EntryEditor: View {
                     "This will remove the recorded time. This cannot be undone.")
         }
     }
+
+    private func saveChanges() {
+        let editedEnd = entry.end == nil ? nil : end
+        guard taskID != entry.taskID || start != entry.start || editedEnd != entry.end else {
+            model.clearEntryError()
+            return
+        }
+        _ = model.saveEntry(id: entry.id, taskID: taskID, start: start, end: editedEnd)
+    }
 }
 
 private struct TaskSettings: View {
     let model: AppModel
     let task: TrackedTask
     @State private var name: String
-    @State private var color: TaskColor
+    @FocusState private var isNameFocused: Bool
     @State private var expanded = false
 
     init(model: AppModel, task: TrackedTask) {
         self.model = model
         self.task = task
         _name = State(initialValue: task.name)
-        _color = State(initialValue: task.color)
     }
 
     var body: some View {
@@ -94,7 +98,15 @@ private struct TaskSettings: View {
             HStack {
                 TextField("Task name", text: $name)
                     .accessibilityLabel("Reusable task name")
-                Picker("Color", selection: $color) {
+                    .focused($isNameFocused)
+                    .onSubmit(saveName)
+                    .onChange(of: isNameFocused) { _, focused in
+                        if !focused { saveName() }
+                    }
+                Picker("Color", selection: Binding(get: { task.color }, set: {
+                    guard let current = model.store?.task(id: task.id) else { return }
+                    _ = model.saveTask(id: task.id, name: current.name, color: $0)
+                })) {
                     ForEach(TaskColor.allCases, id: \.self) { color in
                         Label {
                             Text(color.rawValue.capitalized)
@@ -105,15 +117,19 @@ private struct TaskSettings: View {
                 }
                 .frame(width: 145)
                 .accessibilityLabel("Task color")
-                Button("Save task") {
-                    if model.saveTask(id: task.id, name: name, color: color) { expanded = false }
-                }
-                .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
-                          (name == task.name && color == task.color))
-                .help("Apply this name and color to every entry for this task")
             }
             .padding(.top, 6)
         }
+        .onDisappear(perform: saveName)
+    }
+
+    private func saveName() {
+        guard let current = model.store?.task(id: task.id) else { return }
+        guard name != current.name else {
+            model.clearEntryError()
+            return
+        }
+        _ = model.saveTask(id: task.id, name: name, color: current.color)
     }
 }
 
