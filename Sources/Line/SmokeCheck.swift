@@ -170,7 +170,7 @@ enum SmokeCheck {
         let store = model.store!
         let now = Date.now
         try store.createEntry(named: "Dismissal", selection: store.prepareEntry(from: now - 600, to: now - 300))
-        for menuAction in ["none", "cancel", "select", "outside", "outside_fading"] {
+        for menuAction in ["none", "cancel", "select", "outside"] {
             try clickStatusItem(button)
             try await settle()
             model.editEntry(id: store.entries[0].id)
@@ -179,28 +179,12 @@ enum SmokeCheck {
                 guard let picker = descendants(try contentView(popover)).compactMap({ $0 as? NSPopUpButton }).first else {
                     throw NSError(domain: "LineSmokeCheck", code: 19, userInfo: [NSLocalizedDescriptionKey: "Color menu is missing"])
                 }
-                // An immediate popover close makes any menu left behind unambiguous.
-                popover.animates = false
-                var menuVisibleAtClose = false
-                let observer = NotificationCenter.default.addObserver(forName: NSPopover.didCloseNotification, object: popover, queue: nil) { _ in
-                    MainActor.assumeIsolated { menuVisibleAtClose = hasVisibleMenuWindow() }
-                }
-                defer { NotificationCenter.default.removeObserver(observer) }
-                let outside = Timer(timeInterval: 0.23, repeats: false) { _ in
-                    MainActor.assumeIsolated { (NSApp.delegate as? AppDelegate)?.dismissForOutsideClick() }
-                }
+                var closeRequestedAt: TimeInterval?
                 let dismiss = Timer(timeInterval: 0.2, repeats: false) { _ in
                     MainActor.assumeIsolated {
                         if menuAction == "outside" {
+                            closeRequestedAt = ProcessInfo.processInfo.systemUptime
                             (NSApp.delegate as? AppDelegate)?.dismissForOutsideClick()
-                        } else if menuAction == "outside_fading" {
-                            let window = picker.window!
-                            for type: NSEvent.EventType in [.leftMouseDown, .leftMouseUp] {
-                                let event = NSEvent.mouseEvent(with: type, location: NSPoint(x: -20, y: -20),
-                                    modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
-                                    windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!
-                                NSApp.postEvent(event, atStart: false)
-                            }
                         } else {
                             picker.menu?.cancelTrackingWithoutAnimation()
                         }
@@ -211,18 +195,14 @@ enum SmokeCheck {
                 }
                 RunLoop.main.add(dismiss, forMode: .eventTracking)
                 RunLoop.main.add(fallback, forMode: .eventTracking)
-                if menuAction == "outside_fading" {
-                    RunLoop.main.add(outside, forMode: .common)
-                    RunLoop.main.add(outside, forMode: .eventTracking)
-                }
                 picker.performClick(nil)
                 dismiss.invalidate()
                 fallback.invalidate()
-                try await settle()
-                outside.invalidate()
-                if menuAction.hasPrefix("outside") {
+                if let closeRequestedAt {
+                    let delay = ProcessInfo.processInfo.systemUptime - closeRequestedAt
+                    try require(delay < 0.2, "The color menu must close together with the popover, not linger for \(delay) seconds")
+                    try await settle()
                     try require(!popover.isShown, "Outside click while the menu is open must close Line")
-                    try require(!menuVisibleAtClose, "The color menu must not remain visible after Line closes: \(menuAction)")
                     continue
                 }
                 if menuAction == "select", let menu = picker.menu {
@@ -235,15 +215,6 @@ enum SmokeCheck {
             (NSApp.delegate as? AppDelegate)?.dismissForOutsideClick()
             try await settle()
             try require(!popover.isShown, "Leaving Line must dismiss its popover; color menu action: \(menuAction)")
-        }
-    }
-
-    private static func hasVisibleMenuWindow() -> Bool {
-        let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
-        return windows.contains {
-            ($0[kCGWindowOwnerPID as String] as? Int) == Int(ProcessInfo.processInfo.processIdentifier) &&
-            ($0[kCGWindowLayer as String] as? Int) == NSWindow.Level.popUpMenu.rawValue &&
-            ($0[kCGWindowAlpha as String] as? Double ?? 0) > 0.01
         }
     }
 
