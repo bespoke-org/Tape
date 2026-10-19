@@ -111,7 +111,7 @@ private struct TaskSettings: View {
                         Label {
                             Text(color.rawValue.capitalized)
                         } icon: {
-                            Image(systemName: "circle.fill").foregroundStyle(color.displayColor)
+                            colorSwatch(color)
                         }.tag(color)
                     }
                 }
@@ -130,6 +130,18 @@ private struct TaskSettings: View {
             return
         }
         _ = model.saveTask(id: task.id, name: name, color: current.color)
+    }
+
+    private func colorSwatch(_ color: TaskColor) -> Image {
+        let fill = NSColor(color.displayColor)
+        // Native menus tint template symbols, discarding SwiftUI foreground styles.
+        let image = NSImage(size: NSSize(width: 12, height: 12), flipped: false) { rect in
+            fill.setFill()
+            NSBezierPath(ovalIn: rect.insetBy(dx: 1, dy: 1)).fill()
+            return true
+        }
+        image.isTemplate = false
+        return Image(nsImage: image).renderingMode(.original)
     }
 }
 

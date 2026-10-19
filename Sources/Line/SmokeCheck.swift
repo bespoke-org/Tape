@@ -225,6 +225,20 @@ enum SmokeCheck {
         try requireAnchored(popover, to: button)
         try pressAccessibleControl(named: "Rename and recolor task", in: contentView(popover), role: .disclosureTriangle)
         try await settle()
+        guard let colorPicker = descendants(try contentView(popover)).compactMap({ $0 as? NSPopUpButton }).first(where: { $0.accessibilityLabel() == "Task color" }),
+              let colorItems = colorPicker.menu?.items else {
+            throw NSError(domain: "LineSmokeCheck", code: 14, userInfo: [NSLocalizedDescriptionKey: "Native color menu is missing"])
+        }
+        try require(colorItems.count == TaskColor.allCases.count, "The color menu must show every task color")
+        for item in colorItems {
+            guard let image = item.image, !image.isTemplate, let data = image.tiffRepresentation,
+                  let bitmap = NSBitmapImageRep(data: data),
+                  let pixel = bitmap.colorAt(x: bitmap.pixelsWide / 2, y: bitmap.pixelsHigh / 2)?.usingColorSpace(.deviceRGB) else {
+                throw NSError(domain: "LineSmokeCheck", code: 15, userInfo: [NSLocalizedDescriptionKey: "Color swatch must retain full color: \(item.title)"])
+            }
+            let channels = [pixel.redComponent, pixel.greenComponent, pixel.blueComponent]
+            try require(channels.max()! - channels.min()! > 0.1, "Color swatch must not be monochrome: \(item.title)")
+        }
         guard let nameField = descendants(try contentView(popover)).compactMap({ $0 as? NSTextField }).first(where: { $0.placeholderString == "Task name" }) else {
             throw NSError(domain: "LineSmokeCheck", code: 13, userInfo: [NSLocalizedDescriptionKey: "Task name field is missing"])
         }

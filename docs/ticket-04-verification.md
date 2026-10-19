@@ -19,7 +19,7 @@ Timestamp edits use absolute instants. During a repeated local hour, an addition
 ## Automated checks
 
 - `swift test`: 43 tests passed in five suites. Eight editing tests cover reassignment, identity, rename/recolor uniqueness, deletion/orphan pruning, minute resizing, exact boundaries, invalid/stale edits, running recovery, write failures, reopening, midnight, and repeated-hour absolute timestamps.
-- `python3 scripts/smoke-test.py --editing`: passed. Exercises native date autosave, rename-on-blur without a Save button, rejected-edit preservation, Escape, native deletion confirmation and cancellation, running corrections/deletion, short-entry clicks, shared boundaries, adjacent-entry resizing, and stable popover anchoring.
+- `python3 scripts/smoke-test.py --editing`: passed. Exercises native date autosave, rename-on-blur without a Save button, full-color native menu swatches, rejected-edit preservation, Escape, native deletion confirmation and cancellation, running corrections/deletion, short-entry clicks, shared boundaries, adjacent-entry resizing, and stable popover anchoring.
 - Existing base, `--timeline`, `--creation`, and `--overwrite` packaged smoke checks all passed.
 - Each smoke process uses isolated temporary data and a 20-second limit. Native controls are driven within the app; pointer and Escape inputs exercise the same handler as the local event monitor.
 
@@ -34,3 +34,5 @@ No remaining blockers. Review identified minimum-width click targets and coincid
 ## Still manual
 
 Physical mouse/trackpad and keyboard delivery, VoiceOver navigation, the complete light/dark and accessibility appearance matrix, and the repeated-hour UTC-offset control need hands-on verification. Synthetic event delivery and native control actions do not establish these. The user should try the inline layout before accepting the ticket.
+
+Color-menu regression: the original SF Symbol images arrived in the native menu as monochrome templates. Non-template swatch images preserve the task colors. The packaged editing check inspects every native menu image and its center pixel; it failed on the original blue swatch and passes with full-color images.
