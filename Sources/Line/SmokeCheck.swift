@@ -18,6 +18,13 @@ enum SmokeCheck {
             try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
             try require(NSApp.activationPolicy() == .accessory, "App must have no Dock icon")
             try require(button.image != nil, "Status item must have an icon")
+            if ProcessInfo.processInfo.environment["LINE_SMOKE_EDITING"] == "1" {
+                try await checkEditing(button: button, popover: popover, model: model)
+                try Data("PASS: inline entry editor, native timestamp controls, Save/Escape, deletion confirmation/cancellation, running deletion, edge resizing, and stable anchoring.\n".utf8)
+                    .write(to: output.appendingPathComponent("result.txt"))
+                NSApp.terminate(nil)
+                return
+            }
             if ProcessInfo.processInfo.environment["LINE_SMOKE_OVERWRITE"] == "1" {
                 try await checkOverwrite(button: button, popover: popover, model: model)
                 try Data("PASS: Command-drag overwrite, cancellation, split, multiple entries, task reuse, through-Now tracking, stable anchoring.\n".utf8)
@@ -149,6 +156,133 @@ enum SmokeCheck {
         _ = input.handle(event(.leftMouseDown, from))
         _ = input.handle(event(.leftMouseDragged, to))
         if finish { _ = input.handle(event(.leftMouseUp, release ?? to)) }
+    }
+
+    private static func checkEditing(button: NSStatusBarButton, popover: NSPopover, model: AppModel) async throws {
+        let store = model.store!
+        let base = Date(timeIntervalSince1970: floor(Date.now.timeIntervalSince1970 / 60) * 60)
+        try store.createEntry(named: "Edit", selection: store.prepareEntry(from: base - 3_600, to: base - 3_000))
+        try store.createEntry(named: "Keep", selection: store.prepareEntry(from: base - 1_800, to: base - 1_200))
+        try store.createEntry(named: "Keep", selection: store.prepareEntry(from: base - 600, to: .now, reachesNow: true))
+        let original = store.entries[0]
+        let completed = store.entries[1]
+        let running = store.runningEntry!
+        try await settle()
+        try clickStatusItem(button)
+        try await settle()
+
+        func clickEntry(_ date: Date) throws {
+            let input = try timelineInput(in: popover)
+            let fraction = model.timeline.fraction(for: date, now: .now)
+            let point = input.convert(NSPoint(x: input.bounds.width * fraction, y: 60), to: nil)
+            _ = input.handle(TimelineTestEvent(type: .leftMouseDown, window: input.window!, location: point))
+            _ = input.handle(TimelineTestEvent(type: .leftMouseUp, window: input.window!, location: point))
+        }
+        func changeStart(to date: Date) throws {
+            let pickers = descendants(try contentView(popover)).compactMap { $0 as? NSDatePicker }
+            guard let picker = pickers.min(by: { $0.dateValue < $1.dateValue }) else {
+                throw NSError(domain: "LineSmokeCheck", code: 11, userInfo: [NSLocalizedDescriptionKey: "Native timestamp editor is missing"])
+            }
+            try require(picker.acceptsFirstResponder, "Timestamp editor must accept keyboard focus")
+            picker.dateValue = date
+            _ = picker.sendAction(picker.action, to: picker.target)
+        }
+        func confirm(_ title: String) throws {
+            let host = try contentView(popover).window!
+            let panel = host.attachedSheet ?? NSApp.modalWindow ??
+                NSApp.windows.first { $0.isVisible && $0 !== host && $0.contentView.map { accessibilityElement(named: title, in: $0) != nil } == true }
+            guard let panel, let content = panel.contentView else {
+                throw NSError(domain: "LineSmokeCheck", code: 12, userInfo: [NSLocalizedDescriptionKey: "Native deletion confirmation is missing"])
+            }
+            if let button = descendants(content).compactMap({ $0 as? NSButton }).first(where: { $0.title == title && $0.isEnabled }) {
+                button.performClick(nil)
+            } else {
+                try pressAccessibleButton(named: title, in: content)
+            }
+        }
+
+        model.timeline.pauseFollowing(at: .now)
+        try store.updateEntry(id: original.id, taskID: original.taskID, start: original.start, end: original.start + 1)
+        try await settle()
+        let width = try timelineInput(in: popover).bounds.width
+        try clickEntry(original.start + model.timeline.span / width)
+        try require(model.editingEntryID == original.id, "The entire two-point block of a short entry must be clickable")
+        model.cancelEntry()
+        try store.updateEntry(id: original.id, taskID: original.taskID, start: original.start, end: completed.start)
+        try clickEntry(completed.start)
+        try require(model.editingEntryID == completed.id, "A shared boundary must select the later entry")
+        model.cancelEntry()
+        let sharedBoundary = model.timeline.fraction(for: completed.start, now: .now)
+        try draw(sharedBoundary + 1 / width, model.timeline.fraction(for: completed.start + 120, now: .now), in: popover)
+        try require(store.entries[1].start == completed.start + 120 && store.entries[0].end == completed.start,
+                    "Dragging inside the later entry must resize its start at a shared boundary")
+        try store.updateEntry(id: completed.id, taskID: completed.taskID, start: completed.start, end: completed.end)
+        try store.updateEntry(id: original.id, taskID: original.taskID, start: original.start, end: original.end)
+
+        try clickEntry(base - 3_300)
+        try await settle()
+        try require(model.editingEntryID == original.id, "Clicking an entry must reveal its inline settings")
+        try requireAnchored(popover, to: button)
+        try changeStart(to: base - 3_480)
+        try pressAccessibleButton(named: "Save entry", in: contentView(popover))
+        try await settle()
+        try require(store.entries[0].start == base - 3_480, "Saving native timestamp controls must correct the entry")
+        try require(model.editingEntryID == nil, "Save must collapse the editor")
+        try requireAnchored(popover, to: button)
+
+        try clickEntry(base - 3_300)
+        try await settle()
+        try changeStart(to: base - 2_940)
+        try pressAccessibleButton(named: "Save entry", in: contentView(popover))
+        try await settle()
+        try require(model.entryError != nil && store.entries[0].start == base - 3_480, "An invalid edit must stay open and preserve saved time")
+        let window = try contentView(popover).window!
+        let escape = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [],
+                                      timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+                                      context: nil, characters: "\u{1b}", charactersIgnoringModifiers: "\u{1b}",
+                                      isARepeat: false, keyCode: 53)!
+        // sendEvent bypasses local monitors; exercise the production monitor handler explicitly.
+        let input = try timelineInput(in: popover)
+        if !input.handle(escape) { window.sendEvent(escape) }
+        try await settle()
+        try require(model.editingEntryID == nil && model.entryError == nil && store.entries[0].start == base - 3_480, "Escape must discard the edit")
+        try clickEntry(base - 3_300)
+        try await settle()
+        try pressAccessibleButton(named: "Delete entry", in: contentView(popover))
+        try await settle()
+        try require(store.entries.count == 3 && store.runningEntry?.id == running.id, "Asking to delete must preserve records and tracking")
+        try confirm("Cancel")
+        try await settle()
+        try require(store.entries.count == 3 && model.editingEntryID == original.id, "Cancel must retain the entry and editor")
+        try pressAccessibleButton(named: "Delete entry", in: contentView(popover))
+        try await settle()
+        try confirm("Delete")
+        try await settle()
+        try require(store.entries.count == 2 && store.task(id: original.taskID) == nil, "Confirmed deletion must prune the unused task")
+
+        let from = model.timeline.fraction(for: completed.start, now: .now)
+        let to = model.timeline.fraction(for: base - 1_920, now: .now)
+        try draw(from, to, in: popover)
+        try await settle()
+        try require(store.entries[0].start == base - 1_920, "Dragging a completed edge must resize it")
+        try require(store.runningEntry?.id == running.id, "Resizing history must leave tracking alone")
+
+        try clickEntry(base - 300)
+        try await settle()
+        try require(model.editingEntryID == running.id, "Running entries must be editable")
+        try changeStart(to: base - 540)
+        try pressAccessibleButton(named: "Save entry", in: contentView(popover))
+        try await settle()
+        try require(store.runningEntry?.start == base - 540, "Correcting a running start must keep tracking")
+        try clickEntry(base - 300)
+        try await settle()
+        try pressAccessibleButton(named: "Delete entry", in: contentView(popover))
+        try await settle()
+        try confirm("Delete")
+        try await settle()
+        try require(store.runningEntry == nil && store.entries.count == 1, "Deleting the running entry must stop tracking")
+        try requireAnchored(popover, to: button)
+        try await requireStablePosition(popover)
     }
 
     private static func checkOverwrite(button: NSStatusBarButton, popover: NSPopover, model: AppModel) async throws {

@@ -175,12 +175,65 @@ public final class TrackingStore {
         return (unused.isEmpty ? TaskColor.allCases : unused).randomElement()!
     }
 
-    private func validate(_ selection: EntrySelection, at instant: Date) throws {
+    public func prepareResize(id: UUID, edge: EntryEdge, to date: Date) throws -> EntrySelection {
+        guard let index = entries.firstIndex(where: { $0.id == id }) else { throw TrackingError.missingEntry }
+        let entry = entries[index]
+        guard let end = entry.end else { throw TrackingError.trackingStateChanged }
+        guard date.timeIntervalSince1970.isFinite else { throw TrackingError.emptyInterval }
+        let instant = try checkedInstant()
+        let snapped = Date(timeIntervalSince1970: (date.timeIntervalSince1970 / 60).rounded() * 60)
+        let lower = index > 0 ? entries[index - 1].end ?? .distantPast : .distantPast
+        let upper = index + 1 < entries.count ? entries[index + 1].start : instant
+        let startBoundary = date <= lower ? lower : max(lower, snapped)
+        let endBoundary = date >= upper ? upper : min(upper, snapped)
+        let selection = EntrySelection(start: edge == .start ? startBoundary : entry.start,
+                                       end: edge == .end ? endBoundary : end, overwritesExisting: false)
+        try validate(selection, at: instant, excluding: id)
+        return selection
+    }
+
+    public func deleteEntry(id: UUID) throws {
+        guard let entry = entries.first(where: { $0.id == id }) else { throw TrackingError.missingEntry }
+        var candidate = snapshot
+        candidate.entries.removeAll { $0.id == id }
+        if entry.end == nil { candidate.checkpoint = nil }
+        try commit(candidate)
+    }
+
+    public func updateTask(id: UUID, name rawName: String, color: TaskColor) throws {
+        let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { throw TrackingError.emptyTaskName }
+        guard let index = tasks.firstIndex(where: { $0.id == id }) else { throw TrackingError.missingTask }
+        guard !tasks.contains(where: { $0.id != id && $0.name.caseInsensitiveCompare(name) == .orderedSame }) else {
+            throw TrackingError.duplicateTaskName
+        }
+        var candidate = snapshot
+        candidate.tasks[index] = TrackedTask(id: id, name: name, color: color)
+        try commit(candidate)
+    }
+
+    public func updateEntry(id: UUID, taskID: UUID, start: Date, end: Date?) throws {
+        guard let original = entries.first(where: { $0.id == id }) else { throw TrackingError.missingEntry }
+        guard task(id: taskID) != nil else { throw TrackingError.missingTask }
+        guard (original.end == nil) == (end == nil) else { throw TrackingError.trackingStateChanged }
+        let instant = try checkedInstant()
+        try validate(EntrySelection(start: start, end: end, overwritesExisting: false), at: instant, excluding: id)
+        var candidate = snapshot
+        candidate.entries.removeAll { $0.id == id }
+        let entry = TimeEntry(id: id, taskID: taskID, start: start, end: end)
+        let index = candidate.entries.firstIndex { $0.start > start } ?? candidate.entries.endIndex
+        candidate.entries.insert(entry, at: index)
+        if end == nil { candidate.checkpoint = instant }
+        try commit(candidate)
+    }
+
+    private func validate(_ selection: EntrySelection, at instant: Date, excluding id: UUID? = nil) throws {
         let end = selection.end ?? instant
-        guard selection.start < end else { throw TrackingError.emptyInterval }
+        guard selection.start.timeIntervalSince1970.isFinite, end.timeIntervalSince1970.isFinite,
+              selection.start < end else { throw TrackingError.emptyInterval }
         guard selection.start < instant, end <= instant else { throw TrackingError.futureInterval }
         let overlapEnd = selection.end ?? .distantFuture
-        guard selection.overwritesExisting || !entries.contains(where: { $0.start < overlapEnd && ($0.end ?? .distantFuture) > selection.start }) else {
+        guard selection.overwritesExisting || !entries.contains(where: { $0.id != id && $0.start < overlapEnd && ($0.end ?? .distantFuture) > selection.start }) else {
             throw TrackingError.overlappingEntry
         }
     }

@@ -101,7 +101,7 @@ The app should look and behave like a native macOS 26 utility, using system cont
 
 ### Corrections and deletion
 
-- Clicking an entry opens editing for its task and timestamps. Completed entries also support resizing either edge. Changing an entry's task reassigns that entry; renaming a task changes the reusable task everywhere.
+- Clicking an entry opens an inline editor below the timeline divider, in the same position as the task picker, for its task and timestamps. Save applies entry corrections; Escape, Cancel, or popover dismissal discards unsaved corrections. A separate expandable section saves reusable task name/color changes across all linked entries. Completed entries also support resizing either edge. Changing an entry's task reassigns that entry; renaming a task changes the reusable task everywhere.
 - A running entry can change task or start while remaining running. Its live endpoint is not a fixed resize handle; stop it before assigning a fixed end.
 - All corrections obey overlap and timestamp invariants. Provide a native confirmation for an explicit entry-deletion action. Cancelling confirmation preserves the entry and running state; confirming deletion of a running entry also stops tracking. Command-drag overwrite commits through its preview and task submission, including any fully covered entries it removes.
 - Initiating an explicit start, entry-creation flow, or entry-editing flow cancels pending continuation before a delayed callback can resume the old task. Do not reinstate the countdown if the user later abandons that action. Opening the main popover, scrolling, or clicking elsewhere alone is not an edit and does not reject continuation.

@@ -1,5 +1,9 @@
 import Foundation
 
+public enum EntryEdge: Sendable {
+    case start, end
+}
+
 public enum EntrySnap: TimeInterval, Sendable {
     case minute = 60
     case fiveMinutes = 300

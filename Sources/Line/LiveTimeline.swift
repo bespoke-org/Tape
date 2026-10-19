@@ -46,23 +46,27 @@ struct LiveTimeline: View {
 
                     ForEach(visibleEntries) { entry in
                         if let task = store.task(id: entry.taskID) {
-                            let left = max(0, position(entry.start, width: width))
-                            let right = min(width, position(entry.end ?? now, width: width))
+                            let preview = model.resizingEntryID == entry.id ? model.drawnRange : nil
+                            let left = max(0, position(preview?.start ?? entry.start, width: width))
+                            let right = min(width, position(preview?.end ?? entry.end ?? now, width: width))
                             let entryWidth = max(2, right - left)
-                            RoundedRectangle(cornerRadius: 4)
-                                .fill(reduceTransparency ? Color(nsColor: .controlBackgroundColor) : task.color.displayColor.opacity(0.23))
-                                .overlay {
-                                    RoundedRectangle(cornerRadius: 4)
-                                        .strokeBorder(task.color.displayColor, lineWidth: contrast == .increased ? 2 : 1)
-                                }
-                                .overlay(alignment: .leading) {
-                                    if entryWidth > 42 {
-                                        Text(task.name).font(.caption.weight(.medium)).lineLimit(1)
-                                            .foregroundStyle(.primary)
-                                            .padding(.horizontal, 6)
+                            Button { model.editEntry(id: entry.id) } label: {
+                                RoundedRectangle(cornerRadius: 4)
+                                    .fill(reduceTransparency ? Color(nsColor: .controlBackgroundColor) : task.color.displayColor.opacity(0.23))
+                                    .overlay {
+                                        RoundedRectangle(cornerRadius: 4)
+                                            .strokeBorder(task.color.displayColor, lineWidth: contrast == .increased || model.editingEntryID == entry.id ? 2 : 1)
                                     }
-                                }
-                                .frame(width: entryWidth, height: 46)
+                                    .overlay(alignment: .leading) {
+                                        if entryWidth > 42 {
+                                            Text(task.name).font(.caption.weight(.medium)).lineLimit(1)
+                                                .foregroundStyle(.primary)
+                                                .padding(.horizontal, 6)
+                                        }
+                                    }
+                                    .frame(width: entryWidth, height: 46)
+                            }
+                                .buttonStyle(.plain)
                                 .offset(x: left, y: stripTop + (stripHeight - 46) / 2)
                                 .help(entryDescription(entry, task: task))
                                 .accessibilityElement(children: .ignore)
@@ -150,7 +154,13 @@ struct LiveTimeline: View {
                         model.saveTimelineScale()
                     }, drawingBounds: CGRect(x: 0, y: stripTop, width: geometry.size.width, height: stripHeight),
                        beginDraw: model.beginDrawing, updateDraw: model.updateDrawing,
-                       endDraw: model.finishDrawing, cancelDraw: model.cancelEntry)
+                       endDraw: model.finishDrawing, cancelDraw: model.cancelEntry,
+                       selectEntry: model.selectEntry, beginResize: model.beginResizing,
+                       updateResize: model.updateResizing, endResize: model.finishResizing, cancelEdit: {
+                        guard model.editingEntryID != nil else { return false }
+                        model.cancelEntry()
+                        return true
+                    })
                     .accessibilityHidden(true)
                 }
             }

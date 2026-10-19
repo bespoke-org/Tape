@@ -12,6 +12,11 @@ struct TimelineInput: NSViewRepresentable {
     let updateDraw: (Double) -> Void
     let endDraw: (Double, Double) -> Void
     let cancelDraw: () -> Void
+    let selectEntry: (Double, Double) -> Void
+    let beginResize: (Double, Double) -> Bool
+    let updateResize: (Double) -> Void
+    let endResize: (Double) -> Void
+    let cancelEdit: () -> Bool
 
     func makeNSView(context: Context) -> TimelineInputView { TimelineInputView() }
 
@@ -25,6 +30,11 @@ struct TimelineInput: NSViewRepresentable {
         view.updateDraw = updateDraw
         view.endDraw = endDraw
         view.cancelDraw = cancelDraw
+        view.selectEntry = selectEntry
+        view.beginResize = beginResize
+        view.updateResize = updateResize
+        view.endResize = endResize
+        view.cancelEdit = cancelEdit
     }
 
     static func dismantleNSView(_ view: TimelineInputView, coordinator: ()) {
@@ -42,15 +52,21 @@ final class TimelineInputView: NSView {
     var updateDraw: (Double) -> Void = { _ in }
     var endDraw: (Double, Double) -> Void = { _, _ in }
     var cancelDraw: () -> Void = {}
+    var selectEntry: (Double, Double) -> Void = { _, _ in }
+    var beginResize: (Double, Double) -> Bool = { _, _ in false }
+    var updateResize: (Double) -> Void = { _ in }
+    var endResize: (Double) -> Void = { _ in }
+    var cancelEdit: () -> Bool = { false }
     private var monitor: Any?
     private var magnificationScale: Double = 1
     private var dragOrigin: NSPoint?
     private var dragOverwrites = false
     private var isDrawing = false
+    private var isResizing = false
 
     override var isFlipped: Bool { true }
 
-    // Leave buttons, entry tooltips, and future drawing gestures to the SwiftUI content.
+    // Leave hit testing to SwiftUI; the monitor handles timeline gestures.
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
     override func viewDidMoveToWindow() {
@@ -70,15 +86,18 @@ final class TimelineInputView: NSView {
         dragOrigin = nil
         dragOverwrites = false
         isDrawing = false
+        isResizing = false
     }
 
     @discardableResult
     func handle(_ event: NSEvent) -> Bool {
         guard let window, event.window === window else { return false }
         if event.type == .keyDown {
-            guard event.keyCode == 53, isDrawing else { return false }
+            guard event.keyCode == 53, window.attachedSheet == nil, NSApp.modalWindow == nil else { return false }
+            guard isDrawing || isResizing else { return cancelEdit() }
             dragOrigin = nil
             isDrawing = false
+            isResizing = false
             cancelDraw()
             return true
         }
@@ -87,19 +106,34 @@ final class TimelineInputView: NSView {
         if event.type == .leftMouseDown {
             dragOrigin = drawingBounds.contains(point) && !event.modifierFlags.contains(.control) ? point : nil
             dragOverwrites = event.modifierFlags.contains(.command)
-            return false
+            // Own the full pointer sequence so entry buttons cannot activate after a drag.
+            return dragOrigin != nil
         }
         if event.type == .leftMouseDragged, let origin = dragOrigin {
-            if !isDrawing {
+            if !isDrawing && !isResizing {
                 guard abs(point.x - origin.x) >= 3 else { return false }
-                guard beginDraw(origin.x / max(bounds.width, 1), dragOverwrites) else { dragOrigin = nil; return false }
-                isDrawing = true
+                let start = origin.x / max(bounds.width, 1)
+                isResizing = !dragOverwrites && beginResize(start, 5 / max(bounds.width, 1))
+                if !isResizing {
+                    guard beginDraw(start, dragOverwrites) else { dragOrigin = nil; return false }
+                    isDrawing = true
+                }
             }
-            updateDraw(fraction)
+            if isResizing { updateResize(fraction) } else { updateDraw(fraction) }
             return true
         }
         if event.type == .leftMouseUp {
+            let origin = dragOrigin
             dragOrigin = nil
+            if isResizing {
+                isResizing = false
+                endResize(fraction)
+                return true
+            }
+            if !isDrawing, let origin, abs(point.x - origin.x) < 3, drawingBounds.contains(point), !dragOverwrites {
+                selectEntry(fraction, 2 / max(bounds.width, 1))
+                return true
+            }
             guard isDrawing else { return false }
             isDrawing = false
             endDraw(fraction, 3 / max(bounds.width, 1))
@@ -107,7 +141,7 @@ final class TimelineInputView: NSView {
         }
         guard bounds.contains(point) else { return false }
         // Keep the time-to-position mapping fixed for the duration of a drawing gesture.
-        if isDrawing { return true }
+        if isDrawing || isResizing { return true }
         switch event.type {
         case .smartMagnify:
             magnificationScale = 1

@@ -29,7 +29,10 @@ struct TrackingPopover: View {
                         LiveTimeline(store: store, now: context.date, model: model)
                     }
                 }
-                if isTaskPickerShown {
+                if let id = model.editingEntryID, let entry = store.entries.first(where: { $0.id == id }) {
+                    EntryEditor(model: model, store: store, entry: entry)
+                        .id(id)
+                } else if isTaskPickerShown {
                     taskPicker(store: store)
                         .task {
                             await Task.yield()
@@ -62,7 +65,7 @@ struct TrackingPopover: View {
             contentSizeDidChange(size)
         }
         .onExitCommand {
-            if isTaskPickerShown || model.isDrawing || model.entryError != nil {
+            if isTaskPickerShown || model.editingEntryID != nil || model.resizingEntryID != nil || model.isDrawing || model.entryError != nil {
                 closeTaskPicker()
             } else {
                 dismiss()
@@ -73,6 +76,18 @@ struct TrackingPopover: View {
                 isTaskPickerShown = false
                 isTaskFieldFocused = false
                 taskName = ""
+            }
+        }
+        .onChange(of: model.editingEntryID) { _, id in
+            if id != nil {
+                isTaskPickerShown = false
+                isTaskFieldFocused = false
+            }
+        }
+        .onChange(of: model.resizingEntryID) { _, id in
+            if id != nil {
+                isTaskPickerShown = false
+                isTaskFieldFocused = false
             }
         }
         .onChange(of: model.entrySelection) { _, selection in
