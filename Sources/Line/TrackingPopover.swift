@@ -158,14 +158,6 @@ struct TrackingPopover: View {
 
     private func taskPicker(store: TrackingStore) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            if let selection = model.entrySelection, !selection.overwritesExisting {
-                HStack {
-                    Text(selectionDescription(selection))
-                        .font(.caption).foregroundStyle(.secondary)
-                    Spacer()
-                    Button("Cancel", action: closeTaskPicker).buttonStyle(.borderless)
-                }
-            }
             HStack {
                 TextField("Name a new task", text: $taskName)
                     .textFieldStyle(.plain)
@@ -219,14 +211,6 @@ struct TrackingPopover: View {
             return selection.end == nil ? "Start" : "Save"
         }
         return store.runningTask == nil ? "Start" : "Switch"
-    }
-
-    private func selectionDescription(_ selection: EntrySelection) -> String {
-        let start = selection.start.formatted(date: .abbreviated, time: .shortened)
-        if let end = selection.end {
-            return "\(start) – \(end.formatted(date: .abbreviated, time: .shortened))"
-        }
-        return "\(start) – Now · starts tracking"
     }
 }
 
