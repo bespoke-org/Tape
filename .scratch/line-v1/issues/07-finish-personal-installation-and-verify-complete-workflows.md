@@ -22,4 +22,4 @@ Native macOS appearance, Liquid Glass use, and accessibility follow the spec and
 
 ## Carried verification
 
-Tickets 01 and 02 are accepted as done. Complete their remaining manual checks during final verification, including physical timeline scroll/pinch/double-tap delivery and the full appearance/accessibility matrix. See [ticket 01 verification](../../../docs/ticket-01-verification.md) and [ticket 02 verification](../../../docs/ticket-02-verification.md).
+Tickets 01, 02, and 03 are accepted as done. Complete their remaining manual checks during final verification, including physical timeline drawing/scroll/pinch/double-tap delivery and the full appearance/accessibility matrix. See [ticket 01 verification](../../../docs/ticket-01-verification.md), [ticket 02 verification](../../../docs/ticket-02-verification.md), and [ticket 03 verification](../../../docs/ticket-03-verification.md).

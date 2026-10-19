@@ -6,6 +6,11 @@ public struct TimelineViewport {
     public private(set) var span: TimeInterval
     private var browsingCenter: Date?
     public var isFollowingNow: Bool { browsingCenter == nil }
+    public var entrySnap: EntrySnap {
+        if span <= 2 * 3_600 { return .minute }
+        if span <= 8 * 3_600 { return .fiveMinutes }
+        return .quarterHour
+    }
 
     public init(span: TimeInterval = defaultSpan) {
         self.span = Self.usableSpan(span)

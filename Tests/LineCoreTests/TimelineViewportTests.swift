@@ -3,6 +3,14 @@ import Testing
 import LineCore
 
 struct TimelineViewportTests {
+    @Test func drawingSnapAdaptsToTheVisibleTimeSpan() {
+        #expect(TimelineViewport(span: 3_600).entrySnap == .minute)
+        #expect(TimelineViewport(span: 7_200).entrySnap == .minute)
+        #expect(TimelineViewport().entrySnap == .fiveMinutes)
+        #expect(TimelineViewport(span: 28_800).entrySnap == .fiveMinutes)
+        #expect(TimelineViewport(span: 28_801).entrySnap == .quarterHour)
+    }
+
     @Test func multiDayTicksKeepHoursAndIdentifyMidnight() throws {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0)!

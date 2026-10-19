@@ -75,10 +75,10 @@ struct LiveTimeline: View {
                         let right = min(width, position(selection.end, width: width))
                         if right > left {
                             RoundedRectangle(cornerRadius: 4)
-                                .fill(Color.accentColor.opacity(reduceTransparency ? 0.35 : 0.18))
+                                .fill(Color.gray.opacity(reduceTransparency ? 0.35 : 0.18))
                                 .overlay {
                                     RoundedRectangle(cornerRadius: 4)
-                                        .strokeBorder(Color.accentColor, style: StrokeStyle(lineWidth: 2, dash: [4, 3]))
+                                        .strokeBorder(Color.gray, style: StrokeStyle(lineWidth: 2, dash: [4, 3]))
                                 }
                                 .frame(width: right - left, height: 46)
                                 .offset(x: left, y: stripTop + (stripHeight - 46) / 2)
@@ -115,13 +115,6 @@ struct LiveTimeline: View {
                         Text(dateContext).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
                             .frame(maxWidth: model.timeline.isFollowingNow ? width / 2 - 24 : nil, alignment: .leading)
                         Spacer()
-                        if !model.timeline.isFollowingNow {
-                            Button { model.timeline.followNow() } label: {
-                                Label("Now", systemImage: "arrow.uturn.backward")
-                            }
-                            .buttonStyle(.glass).controlSize(.mini)
-                            .accessibilityLabel("Return to Now")
-                        }
                     }
                     .frame(width: width, height: 20)
 

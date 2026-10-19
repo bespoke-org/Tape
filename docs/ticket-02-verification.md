@@ -6,7 +6,7 @@ Accepted as done on 2026-10-18 after the user’s refinements and final review. 
 
 ## Behavior
 
-Horizontal scrolling and Shift+wheel freeze the viewed time and browse in either direction. The date or visible date range always appears in the existing space above the strip. A Now button appears while browsing. The marker always represents actual now and disappears outside the visible range. Reopening follows now at the saved scale.
+Horizontal scrolling and Shift+wheel freeze the viewed time and browse in either direction. The date or visible date range always appears in the existing space above the strip. Return to Now uses the two-finger double-tap gesture; there is no separate button. The marker always represents actual now and disappears outside the visible range. Reopening follows now at the saved scale.
 
 Pinch scales around the pointer while browsing and around now while following. A two-finger double-tap resets to four hours without changing the viewed center or following/browsing state. At the default scale, another double-tap returns to Now. Scale is saved on gesture completion, reset, or popover closure. Five minutes to ninety days are internal rendering bounds, with no added zoom controls. Calendar-based ticks adapt between minutes, hours, days, and months; local day boundaries account for daylight-saving changes.
 
@@ -18,7 +18,7 @@ The native input view monitors only scroll/magnify events in its own window and 
 
 - `swift test`: 14 tests pass. Added coverage includes frozen browsing versus following, pointer-anchored zoom, finite scale bounds, adaptive/DST-aware ticks, multi-day labels, interval-query boundaries, and zoom persistence from an older JSON store without changing crash-recovery timestamps.
 - `python3 scripts/smoke-test.py`: existing task controls, checkpoint persistence, picker, anchoring, and jitter checks pass.
-- `python3 scripts/smoke-test.py --timeline`: synthetic events exercise the production AppKit handler for horizontal/Shift scroll, ignored vertical/outside events, cumulative pinch, zoom anchors, two-finger double-tap reset followed by return to Now, gesture bounds and saved scale, and persistence across launches. The native Now button and reopening restore following. Two fresh app processes verify saved zoom. Each process has a 20-second timeout and isolated data.
+- `python3 scripts/smoke-test.py --timeline`: synthetic events exercise the production AppKit handler for horizontal/Shift scroll, ignored vertical/outside events, cumulative pinch, zoom anchors, two-finger double-tap reset followed by return to Now, gesture bounds and saved scale, and persistence across launches. Double-tapping at the default scale and reopening restore following. Two fresh app processes verify saved zoom. Each process has a 20-second timeout and isolated data.
 
 Standards and spec reviews found repeated date labels at subdaily intervals in wider views. Labels now show dates at midnight and times between them, with a regression test for a 48-hour view. The follow-up review confirmed the fix; no actionable findings remain.
 

@@ -71,14 +71,33 @@ public final class TrackingStore {
         try commit(candidate)
     }
 
-    public func prepareEntry(from first: Date, to second: Date, reachesNow: Bool = false) throws -> EntrySelection {
+    public func prepareEntry(from first: Date, to second: Date, reachesNow: Bool = false, snap: EntrySnap = .minute) throws -> EntrySelection {
         let instant = try checkedInstant()
         guard first.timeIntervalSince1970.isFinite, second.timeIntervalSince1970.isFinite,
               first != second else { throw TrackingError.emptyInterval }
-        guard min(first, second) < instant else { throw TrackingError.futureInterval }
-        let start = Date(timeIntervalSince1970: (min(first, second).timeIntervalSince1970 / 60).rounded() * 60)
-        let end: Date? = reachesNow || max(first, second) >= instant ? nil :
-            min(instant, Date(timeIntervalSince1970: (max(first, second).timeIntervalSince1970 / 60).rounded() * 60))
+        let step = snap.rawValue
+        let roundedStart = Date(timeIntervalSince1970: (min(first, second).timeIntervalSince1970 / step).rounded() * step)
+        let roundedEnd = Date(timeIntervalSince1970: (max(first, second).timeIntervalSince1970 / step).rounded() * step)
+        guard min(first, second) < instant else {
+            throw roundedStart == roundedEnd ? TrackingError.emptyInterval : TrackingError.futureInterval
+        }
+        guard !entries.contains(where: { $0.start <= first && ($0.end ?? .distantFuture) > first }) else {
+            throw TrackingError.overlappingEntry
+        }
+        // Keep the selection in the empty gap containing the drag's starting point.
+        // Exact entry boundaries take precedence over the snapping grid.
+        let lower = entries.last(where: { ($0.end ?? .distantFuture) <= first })?.end ?? .distantPast
+        let upper = entries.first(where: { $0.start > first })?.start
+        let snappedStart = min(first, second) <= lower ? lower : roundedStart
+        let snappedEnd: Date
+        if let upper, max(first, second) >= upper {
+            snappedEnd = upper
+        } else {
+            snappedEnd = roundedEnd
+        }
+        let start = max(lower, min(upper ?? .distantFuture, snappedStart))
+        let continues = (reachesNow || max(first, second) >= instant) && upper == nil
+        let end: Date? = continues ? nil : min(upper ?? instant, min(instant, max(lower, snappedEnd)))
         let selection = EntrySelection(start: start, end: end)
         try validate(selection, at: instant)
         return selection
@@ -102,8 +121,8 @@ public final class TrackingStore {
 
     private func validate(_ selection: EntrySelection, at instant: Date) throws {
         let end = selection.end ?? instant
-        guard selection.start < instant, end <= instant else { throw TrackingError.futureInterval }
         guard selection.start < end else { throw TrackingError.emptyInterval }
+        guard selection.start < instant, end <= instant else { throw TrackingError.futureInterval }
         let overlapEnd = selection.end ?? .distantFuture
         guard !entries.contains(where: { $0.start < overlapEnd && ($0.end ?? .distantFuture) > selection.start }) else {
             throw TrackingError.overlappingEntry

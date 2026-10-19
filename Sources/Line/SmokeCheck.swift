@@ -20,7 +20,7 @@ enum SmokeCheck {
             try require(button.image != nil, "Status item must have an icon")
             if ProcessInfo.processInfo.environment["LINE_SMOKE_CREATION"] == "1" {
                 try await checkCreation(button: button, popover: popover, model: model)
-                try Data("PASS: drawing, reverse selection, task creation/reuse, Escape, dismissal, overlap rejection, through-Now tracking, stable anchoring.\n".utf8)
+                try Data("PASS: drawing, reverse selection, task creation/reuse, Escape, dismissal, selection boundaries, through-Now tracking, stable anchoring.\n".utf8)
                     .write(to: output.appendingPathComponent("result.txt"))
                 NSApp.terminate(nil)
                 return
@@ -134,7 +134,7 @@ enum SmokeCheck {
             }
             return input
         }
-        func draw(_ from: Double, _ to: Double, finish: Bool = true) throws {
+        func draw(_ from: Double, _ to: Double, finish: Bool = true, release: Double? = nil) throws {
             let input = try inputView()
             let window = input.window!
             func event(_ type: NSEvent.EventType, _ fraction: Double) -> NSEvent {
@@ -143,7 +143,7 @@ enum SmokeCheck {
             }
             _ = input.handle(event(.leftMouseDown, from))
             _ = input.handle(event(.leftMouseDragged, to))
-            if finish { _ = input.handle(event(.leftMouseUp, to)) }
+            if finish { _ = input.handle(event(.leftMouseUp, release ?? to)) }
         }
         func escape() throws {
             let window = try contentView(popover).window!
@@ -156,6 +156,9 @@ enum SmokeCheck {
         try await settle()
         try require(model.entrySelection?.end != nil, "Historical drag must open a completed-entry draft")
         let firstSelection = model.entrySelection!
+        try require(firstSelection.start.timeIntervalSince1970.truncatingRemainder(dividingBy: 300) == 0 &&
+                    firstSelection.end!.timeIntervalSince1970.truncatingRemainder(dividingBy: 300) == 0,
+                    "The default four-hour view must snap to five-minute boundaries")
         try require(model.store!.entries.isEmpty && model.store!.tasks.isEmpty, "Drawing must not save a task or entry")
         try requireAnchored(popover, to: button)
         let fields = try descendants(contentView(popover)).compactMap { $0 as? NSTextField }
@@ -164,6 +167,17 @@ enum SmokeCheck {
         try await settle()
         try require(model.store!.entries.count == 1 && model.store!.runningEntry == nil, "Historical task submission must save a completed entry")
         try require(model.store!.entries[0].start == firstSelection.start && model.store!.entries[0].end == firstSelection.end, "Saved timestamps must match the selection")
+        try requirePickerHidden(popover)
+        try draw(0.25, 0.28, release: 0.25)
+        try require(model.entrySelection == nil && model.entryError == nil && !model.isDrawing,
+                    "Dragging back to the origin must cancel silently")
+        let snapDate = Date(timeIntervalSince1970: (model.timeline.date(at: 0.25, now: .now).timeIntervalSince1970 / 300).rounded() * 300)
+        let snapFraction = model.timeline.fraction(for: snapDate, now: .now)
+        try draw(snapFraction, 0.28, release: snapFraction + 0.001)
+        try await settle()
+        try require(model.entrySelection == nil && model.entryError == nil && model.drawnRange == nil,
+                    "A selection that snaps to zero must cancel silently")
+        try require(model.store!.entries.count == 1 && model.store!.tasks.count == 1, "Collapsed selections must not save records")
         try requirePickerHidden(popover)
         try draw(0.25, 0.28)
         try await settle()
@@ -181,10 +195,13 @@ enum SmokeCheck {
         try pressAccessibleButton(named: "Use Past work", in: contentView(popover))
         try await settle()
         try require(model.store!.entries.count == 2 && model.store!.tasks.count == 1, "Reverse drag must reuse the selected task")
+        try draw(0.05, 0.25, finish: false)
+        try require(model.drawnRange?.end == firstSelection.start, "Drag preview must stop at the next entry")
+        try escape()
         try draw(0.05, 0.25)
         try await settle()
-        try require(model.entrySelection == nil && model.entryError != nil && model.store!.entries.count == 2, "Overlapping drag must be explained without mutations")
-        try requirePickerHidden(popover)
+        try require(model.entrySelection?.end == firstSelection.start && model.entryError == nil && model.store!.entries.count == 2,
+                    "Releasing at a neighboring entry must open the picker for the available interval")
         try escape()
         try draw(0.15, 0.25)
         try require(model.entrySelection == nil && !model.isDrawing, "Dragging from an existing entry must not create another entry")
@@ -206,7 +223,7 @@ enum SmokeCheck {
         try enterTaskName("Past work", in: popover)
         try await settle()
         try require(model.store!.runningEntry?.start == runningStart && model.store!.entries.count == 3, "Delayed task submission must start from the drawn start")
-        try require(model.store!.runningEntry!.duration(at: .now) > 600, "Running entry must include historical and picker time")
+        try require(model.store!.runningEntry!.duration(at: .now) > 540, "Running entry must include historical and picker time")
         try requireAnchored(popover, to: button)
         try await requireStablePosition(popover)
     }
@@ -263,10 +280,6 @@ enum SmokeCheck {
         try await settle()
         try requireAnchored(popover, to: button)
         try await requireStablePosition(popover)
-        try pressAccessibleButton(named: "Return to Now", in: contentView(popover))
-        try await settle()
-        try require(model.timeline.isFollowingNow, "Now must resume following")
-        _ = input.handle(horizontal)
         try clickStatusItem(button)
         try await settle()
         try clickStatusItem(button)

@@ -57,21 +57,28 @@ final class AppModel {
     }
 
     func updateDrawing(to fraction: Double) {
-        guard let start = drawingStart else { return }
-        let end = timeline.date(at: min(max(fraction, 0), 1), now: .now)
-        drawnRange = DateInterval(start: min(start, end), end: max(start, end))
+        guard let start = drawingStart, let store else { return }
+        let instant = Date.now
+        let end = timeline.date(at: min(max(fraction, 0), 1), now: instant)
+        if let selection = try? store.prepareEntry(from: start, to: end, snap: timeline.entrySnap) {
+            drawnRange = DateInterval(start: selection.start, end: selection.end ?? instant)
+        } else {
+            drawnRange = nil
+        }
     }
 
     func finishDrawing(at fraction: Double, tolerance: Double) {
         guard let start = drawingStart, let store else { return }
         let instant = Date.now
         let end = timeline.date(at: min(max(fraction, 0), 1), now: instant)
-        // Make the thin Now marker hittable without changing minute snapping elsewhere.
+        // Make the thin Now marker hittable without changing snapping elsewhere.
         let reachesNow = abs(max(start, end).timeIntervalSince(instant)) <= timeline.span * tolerance
         drawingStart = nil
         drawnRange = nil
         do {
-            entrySelection = try store.prepareEntry(from: start, to: end, reachesNow: reachesNow)
+            entrySelection = try store.prepareEntry(from: start, to: end, reachesNow: reachesNow, snap: timeline.entrySnap)
+        } catch TrackingError.emptyInterval {
+            cancelEntry()
         } catch {
             entryError = error.localizedDescription
         }

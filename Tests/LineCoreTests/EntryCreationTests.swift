@@ -4,6 +4,57 @@ import LineCore
 
 @MainActor
 struct EntryCreationTests {
+    @Test func drawingUsesChosenSnapWithoutRoundingNeighborBoundariesOrLiveTime() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let base = Date(timeIntervalSince1970: 1_800_000_000)
+        var now = base.addingTimeInterval(3_600.25)
+        let store = try TrackingStore(url: directory.appendingPathComponent("tracking.json"), now: { now })
+        let five = try store.prepareEntry(from: base.addingTimeInterval(161), to: base.addingTimeInterval(1_379), snap: .fiveMinutes)
+        #expect(five.start == base.addingTimeInterval(300))
+        #expect(five.end == base.addingTimeInterval(1_500))
+        let fifteen = try store.prepareEntry(from: base.addingTimeInterval(1_379), to: base.addingTimeInterval(161), snap: .quarterHour)
+        #expect(fifteen.start == base)
+        #expect(fifteen.end == base.addingTimeInterval(1_800))
+        try store.startTask(named: "Existing")
+        let bounded = try store.prepareEntry(from: base.addingTimeInterval(2_000), to: now.addingTimeInterval(60), snap: .quarterHour)
+        #expect(bounded.end == base.addingTimeInterval(3_600.25))
+        now += 12.5
+        try store.stop()
+        #expect(store.entries[0].duration(at: now) == 12.5)
+        now = base.addingTimeInterval(5_000.25)
+        let running = try store.prepareEntry(from: base.addingTimeInterval(4_600), to: now, snap: .quarterHour)
+        #expect(running.start == base.addingTimeInterval(4_500))
+        #expect(running.end == nil)
+    }
+
+    @Test func drawingStopsAtTheNearestEntryInEitherDirection() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let base = Date(timeIntervalSince1970: 1_800_000_000)
+        var now = base.addingTimeInterval(600.25)
+        let store = try TrackingStore(url: directory.appendingPathComponent("tracking.json"), now: { now })
+        try store.startTask(named: "Existing")
+        let beforeRunning = try store.prepareEntry(from: base, to: now.addingTimeInterval(60), reachesNow: true)
+        #expect(beforeRunning.end == base.addingTimeInterval(600.25))
+        #expect(store.runningTask?.name == "Existing")
+        now = base.addingTimeInterval(900.75)
+        try store.stop()
+        now = base.addingTimeInterval(3_600)
+        let forward = try store.prepareEntry(from: base.addingTimeInterval(300), to: now, reachesNow: true)
+        #expect(forward.start == base.addingTimeInterval(300))
+        #expect(forward.end == base.addingTimeInterval(600.25))
+        let backward = try store.prepareEntry(from: base.addingTimeInterval(1_200), to: base)
+        #expect(backward.start == base.addingTimeInterval(900.75))
+        #expect(backward.end == base.addingTimeInterval(1_200))
+        try store.createEntry(named: "Before", selection: forward)
+        try store.createEntry(named: "After", selection: backward)
+        #expect(store.entries.count == 3)
+        #expect(store.entries[0].end == store.entries[1].start)
+        #expect(store.entries[1].end == store.entries[2].start)
+        #expect(store.runningEntry == nil)
+    }
+
     @Test func invalidSelectionsPreserveRecordsWhileAdjacentIntervalsAreAllowed() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -14,10 +65,20 @@ struct EntryCreationTests {
         let stale = try store.prepareEntry(from: base.addingTimeInterval(900), to: base.addingTimeInterval(1_500))
         try store.createEntry(named: "Read", selection: first)
         #expect(throws: TrackingError.overlappingEntry) { try store.createEntry(named: "Stale", selection: stale) }
-        #expect(throws: TrackingError.overlappingEntry) { try store.prepareEntry(from: base, to: base.addingTimeInterval(900)) }
-        #expect(throws: TrackingError.futureInterval) { try store.prepareEntry(from: now.addingTimeInterval(1), to: now.addingTimeInterval(5)) }
+        #expect(throws: TrackingError.overlappingEntry) { try store.prepareEntry(from: base.addingTimeInterval(650), to: base.addingTimeInterval(900)) }
+        #expect(throws: TrackingError.emptyInterval) { try store.prepareEntry(from: now.addingTimeInterval(1), to: now.addingTimeInterval(5)) }
+        #expect(throws: TrackingError.emptyInterval) {
+            try store.prepareEntry(from: now.addingTimeInterval(61), to: now.addingTimeInterval(65), snap: .fiveMinutes)
+        }
+        #expect(throws: TrackingError.futureInterval) {
+            try store.prepareEntry(from: now.addingTimeInterval(1), to: now.addingTimeInterval(601), snap: .fiveMinutes)
+        }
         #expect(throws: TrackingError.emptyInterval) { try store.prepareEntry(from: base, to: base) }
         #expect(throws: TrackingError.emptyInterval) { try store.prepareEntry(from: base.addingTimeInterval(1), to: base.addingTimeInterval(2)) }
+        let nearNow = try TrackingStore(url: directory.appendingPathComponent("near-now.json"), now: { base.addingTimeInterval(180.25) })
+        #expect(throws: TrackingError.emptyInterval) {
+            try nearNow.prepareEntry(from: base.addingTimeInterval(175), to: base.addingTimeInterval(180), snap: .fiveMinutes)
+        }
         #expect(throws: TrackingError.emptyTaskName) { try store.createEntry(named: " \n ", selection: stale) }
         #expect(store.entries.count == 1 && store.tasks.count == 1)
         let adjacent = try store.prepareEntry(from: base, to: base.addingTimeInterval(600))

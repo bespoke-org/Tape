@@ -36,7 +36,7 @@ Each ticket delivers usable behavior through UI, tracking operations, local stor
 
 - Extend the existing live timeline with continuous navigation into history and the future. Scrolling pauses following and allows the now marker to leave the view.
 - Adapt date context and tick density to the chosen scale and visible range. Render only the visible range so browsing does not require loading or drawing an unbounded history.
-- Now and popover reopening restore following. Horizontal scroll/Shift+wheel browse; pinch changes scale; no zoom buttons. Retain the scale across launches.
+- Two-finger double-tap at the default scale and popover reopening restore following. Horizontal scroll/Shift+wheel browse; pinch changes scale; no zoom buttons. Retain the scale across launches.
 - Verify time-to-position behavior across dates and zoom levels; manually test actual trackpad scrolling/pinch, appearance settings, and Reduce Motion.
 
 ### 03: Draw historical entries or start tracking from the past
@@ -89,4 +89,4 @@ Each ticket delivers usable behavior through UI, tracking operations, local stor
 
 ## Approval
 
-The user approved moving the basic live timeline into the first usable tracking slice while keeping navigation and zoom as a separate follow-up. The resulting seven tickets are published individually with ready-for-agent status and explicit blockers. Ticket 01 was accepted as done by the user on 2026-10-18; remaining manual appearance/accessibility checks are recorded and deferred to ticket 07. Ticket 02 was accepted as done on 2026-10-18 after the final review. Unverified physical gesture and appearance/accessibility checks remain recorded for ticket 07. Ticket 03 is implemented and awaits user acceptance and manual gesture/appearance checks. Ticket 05 is unblocked. The remaining tickets, including the deferred SQLite follow-up, have not started.
+The user approved moving the basic live timeline into the first usable tracking slice while keeping navigation and zoom as a separate follow-up. The resulting seven tickets are published individually with ready-for-agent status and explicit blockers. Ticket 01 was accepted as done by the user on 2026-10-18; remaining manual appearance/accessibility checks are recorded and deferred to ticket 07. Ticket 02 was accepted as done on 2026-10-18 after the final review. Unverified physical gesture and appearance/accessibility checks remain recorded for ticket 07. Ticket 03 was accepted as done on 2026-10-19 after the final review. Remaining hardware and appearance/accessibility checks are recorded for ticket 07. Tickets 04 and 05 are unblocked. The remaining tickets, including the deferred SQLite follow-up, have not started.
