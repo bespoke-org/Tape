@@ -91,7 +91,7 @@ struct LiveTimeline: View {
                                 }
                                 .overlay {
                                     RoundedRectangle(cornerRadius: 4)
-                                        .strokeBorder(Color.gray, style: StrokeStyle(lineWidth: 2, dash: model.isOverwriting ? [] : [4, 3]))
+                                        .strokeBorder(Color.gray, lineWidth: 2)
                                 }
                                 .frame(width: right - left, height: 46)
                                 .offset(x: left, y: stripTop + (stripHeight - 46) / 2)
