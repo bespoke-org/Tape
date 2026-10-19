@@ -1,7 +1,7 @@
 import Foundation
 
 public enum TaskColor: String, Codable, CaseIterable, Sendable {
-    case blue, teal, green, orange, pink, purple, indigo, red, yellow, mint, cyan, brown
+    case red, orange, brown, yellow, green, mint, teal, cyan, blue, indigo, purple, pink
 }
 
 public struct TrackedTask: Identifiable, Codable, Equatable, Sendable {
