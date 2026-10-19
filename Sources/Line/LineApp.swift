@@ -141,6 +141,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     }
 
     func popoverWillClose(_ notification: Notification) {
+        cancelPopoverMenus()
+    }
+
+    private func cancelPopoverMenus() {
         guard let view = popover.contentViewController?.view else { return }
         func cancelMenus(in view: NSView) {
             (view as? NSPopUpButton)?.menu?.cancelTrackingWithoutAnimation()
@@ -160,8 +164,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
     func dismissForOutsideClick() {
         // A nested menu can leave AppKit's transient dismissal inactive after it closes.
-        if popover.behavior == .transient {
-            popover.close()
+        guard popover.behavior == .transient, popover.isShown,
+              let controller = popover.contentViewController else { return }
+        cancelPopoverMenus()
+        // Let the native menu's tracking loop unwind before hiding its parent window.
+        DispatchQueue.main.async { [weak self, weak controller] in
+            guard let self, let controller, self.popover.contentViewController === controller else { return }
+            self.popover.close()
         }
     }
 
