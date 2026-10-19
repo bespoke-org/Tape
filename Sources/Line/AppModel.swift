@@ -96,8 +96,8 @@ final class AppModel {
         return deleted
     }
 
-    func canResize(at fraction: Double, tolerance: Double) -> Bool {
-        resizeTarget(at: fraction, tolerance: tolerance, now: .now) != nil
+    func resizeEdge(at fraction: Double, tolerance: Double) -> EntryEdge? {
+        resizeTarget(at: fraction, tolerance: tolerance, now: .now)?.1
     }
 
     private func resizeTarget(at fraction: Double, tolerance: Double, now instant: Date) -> (UUID, EntryEdge, Double)? {
@@ -122,14 +122,14 @@ final class AppModel {
         })
     }
 
-    func beginResizing(at fraction: Double, tolerance: Double) -> Bool {
+    func beginResizing(at fraction: Double, tolerance: Double) -> EntryEdge? {
         let instant = Date.now
-        guard let nearest = resizeTarget(at: fraction, tolerance: tolerance, now: instant) else { return false }
+        guard let nearest = resizeTarget(at: fraction, tolerance: tolerance, now: instant) else { return nil }
         cancelEntry()
         timeline.pauseFollowing(at: instant)
         resizingEntryID = nearest.0
         resizingEdge = nearest.1
-        return true
+        return nearest.1
     }
 
     func updateResizing(to fraction: Double) {

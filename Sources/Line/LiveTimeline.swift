@@ -155,7 +155,7 @@ struct LiveTimeline: View {
                     }, drawingBounds: CGRect(x: 0, y: stripTop, width: geometry.size.width, height: stripHeight),
                        beginDraw: model.beginDrawing, updateDraw: model.updateDrawing,
                        endDraw: model.finishDrawing, cancelDraw: model.cancelEntry,
-                       selectEntry: model.selectEntry, canResize: model.canResize, beginResize: model.beginResizing,
+                       selectEntry: model.selectEntry, resizeEdge: model.resizeEdge, beginResize: model.beginResizing,
                        updateResize: model.updateResizing, endResize: model.finishResizing, cancelEdit: {
                         guard model.editingEntryID != nil else { return false }
                         model.cancelEntry()

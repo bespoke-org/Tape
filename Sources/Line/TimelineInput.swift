@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import LineCore
 
 /// Native timeline gestures, confined to the timeline and its window.
 struct TimelineInput: NSViewRepresentable {
@@ -13,8 +14,8 @@ struct TimelineInput: NSViewRepresentable {
     let endDraw: (Double, Double) -> Void
     let cancelDraw: () -> Void
     let selectEntry: (Double, Double) -> Void
-    let canResize: (Double, Double) -> Bool
-    let beginResize: (Double, Double) -> Bool
+    let resizeEdge: (Double, Double) -> EntryEdge?
+    let beginResize: (Double, Double) -> EntryEdge?
     let updateResize: (Double) -> Void
     let endResize: (Double) -> Void
     let cancelEdit: () -> Bool
@@ -32,7 +33,7 @@ struct TimelineInput: NSViewRepresentable {
         view.endDraw = endDraw
         view.cancelDraw = cancelDraw
         view.selectEntry = selectEntry
-        view.canResize = canResize
+        view.resizeEdge = resizeEdge
         view.beginResize = beginResize
         view.updateResize = updateResize
         view.endResize = endResize
@@ -56,8 +57,8 @@ final class TimelineInputView: NSView {
     var endDraw: (Double, Double) -> Void = { _, _ in }
     var cancelDraw: () -> Void = {}
     var selectEntry: (Double, Double) -> Void = { _, _ in }
-    var canResize: (Double, Double) -> Bool = { _, _ in false }
-    var beginResize: (Double, Double) -> Bool = { _, _ in false }
+    var resizeEdge: (Double, Double) -> EntryEdge? = { _, _ in nil }
+    var beginResize: (Double, Double) -> EntryEdge? = { _, _ in nil }
     var updateResize: (Double) -> Void = { _ in }
     var endResize: (Double) -> Void = { _ in }
     var cancelEdit: () -> Bool = { false }
@@ -69,7 +70,8 @@ final class TimelineInputView: NSView {
     private var dragOrigin: NSPoint?
     private var dragOverwrites = false
     private var isDrawing = false
-    private var isResizing = false
+    private var draggingEdge: EntryEdge?
+    private var isResizing: Bool { draggingEdge != nil }
 
     override var isFlipped: Bool { true }
 
@@ -106,10 +108,10 @@ final class TimelineInputView: NSView {
     }
 
     private func updateCursor(at point: NSPoint, modifiers: NSEvent.ModifierFlags) {
-        let resizing = isResizing || (!isDrawing && !modifiers.contains(.command) && !modifiers.contains(.control) &&
-            drawingBounds.contains(point) && canResize(point.x / max(bounds.width, 1), resizeTolerance / max(bounds.width, 1)))
-        if resizing {
-            NSCursor.columnResize.set()
+        let canHover = !isDrawing && !modifiers.contains(.command) && !modifiers.contains(.control) && drawingBounds.contains(point)
+        let edge = draggingEdge ?? (canHover ? resizeEdge(point.x / max(bounds.width, 1), resizeTolerance / max(bounds.width, 1)) : nil)
+        if let edge {
+            EntryResizeCursor.cursor(for: edge).set()
             showsResizeCursor = true
         } else {
             clearResizeCursor()
@@ -139,7 +141,7 @@ final class TimelineInputView: NSView {
         dragOrigin = nil
         dragOverwrites = false
         isDrawing = false
-        isResizing = false
+        draggingEdge = nil
     }
 
     @discardableResult
@@ -154,7 +156,7 @@ final class TimelineInputView: NSView {
             guard isDrawing || isResizing else { return cancelEdit() }
             dragOrigin = nil
             isDrawing = false
-            isResizing = false
+            draggingEdge = nil
             cancelDraw()
             refreshCursor()
             return true
@@ -171,7 +173,7 @@ final class TimelineInputView: NSView {
             if !isDrawing && !isResizing {
                 guard abs(point.x - origin.x) >= 3 else { return false }
                 let start = origin.x / max(bounds.width, 1)
-                isResizing = !dragOverwrites && beginResize(start, resizeTolerance / max(bounds.width, 1))
+                draggingEdge = dragOverwrites ? nil : beginResize(start, resizeTolerance / max(bounds.width, 1))
                 if !isResizing {
                     guard beginDraw(start, dragOverwrites) else { dragOrigin = nil; return false }
                     isDrawing = true
@@ -186,7 +188,7 @@ final class TimelineInputView: NSView {
             let origin = dragOrigin
             dragOrigin = nil
             if isResizing {
-                isResizing = false
+                draggingEdge = nil
                 endResize(fraction)
                 return true
             }

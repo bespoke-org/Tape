@@ -210,11 +210,11 @@ enum SmokeCheck {
         }
         let beforeHover = store.entries
         hover(original.start)
-        try require(NSCursor.current == NSCursor.columnResize, "Completed entry starts must show the resize cursor")
+        try require(NSCursor.current == EntryResizeCursor.start, "Completed entry starts must show the start-edge bracket")
         hover(original.start + 300)
         try require(NSCursor.current == NSCursor.arrow, "Entry interiors must clear the resize cursor")
         hover(original.end!)
-        try require(NSCursor.current == NSCursor.columnResize, "Completed entry ends must show the resize cursor")
+        try require(NSCursor.current == EntryResizeCursor.end, "Completed entry ends must show the end-edge bracket")
         hover(original.end!, flags: .command)
         try require(NSCursor.current == NSCursor.arrow, "Command overwrite must not advertise resizing")
         hover(original.start)
@@ -236,7 +236,17 @@ enum SmokeCheck {
         try require(model.editingEntryID == completed.id, "A shared boundary must select the later entry")
         model.cancelEntry()
         let sharedBoundary = model.timeline.fraction(for: completed.start, now: .now)
-        try draw(sharedBoundary + 1 / width, model.timeline.fraction(for: completed.start + 120, now: .now), in: popover)
+        hover(completed.start - model.timeline.span / width)
+        try require(NSCursor.current == EntryResizeCursor.end, "Left of a shared boundary must target the earlier entry's end")
+        hover(completed.start + model.timeline.span / width)
+        try require(NSCursor.current == EntryResizeCursor.start, "Right of a shared boundary must target the later entry's start")
+        let resizeTo = model.timeline.fraction(for: completed.start + 120, now: .now)
+        try draw(sharedBoundary + 1 / width, resizeTo, in: popover, finish: false)
+        hover(original.start)
+        try require(NSCursor.current == EntryResizeCursor.start && model.resizingEntryID == completed.id,
+                    "The chosen bracket must stay attached to its entry during dragging")
+        let releasePoint = hoverInput.convert(NSPoint(x: hoverInput.bounds.width * resizeTo, y: 60), to: nil)
+        _ = hoverInput.handle(TimelineTestEvent(type: .leftMouseUp, window: hoverInput.window!, location: releasePoint))
         try require(store.entries[1].start == completed.start + 120 && store.entries[0].end == completed.start,
                     "Dragging inside the later entry must resize its start at a shared boundary")
         try store.updateEntry(id: completed.id, taskID: completed.taskID, start: completed.start, end: completed.end)
