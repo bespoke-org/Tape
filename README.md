@@ -1,4 +1,4 @@
-# Line
+# DayTape
 
 A personal macOS menu bar time tracker, built with Swift, SwiftUI, and AppKit. Requires macOS 26 and Xcode 26 or newer.
 
@@ -6,12 +6,12 @@ A personal macOS menu bar time tracker, built with Swift, SwiftUI, and AppKit. R
 
 ```sh
 ./scripts/build-app.sh
-open build/Line.app
+open build/DayTape.app
 ```
 
 The script builds a release executable and creates an ad-hoc-signed app bundle. For a debug build, use `./scripts/build-app.sh debug`. Open `Package.swift` in Xcode to work on the Swift package; launch the bundled app to verify its menu bar and no-Dock behavior.
 
-Click Line's menu bar icon to see the current state and timeline. The play icon when idle, or the switch arrows while tracking, reveals and focuses the task picker. The square stop icon ends tracking. These actions use plain icons with tooltips. Enter a name and press Return or Start, or choose an existing task from the list. Choosing a task or pressing Escape hides the picker. Switching tasks ends the previous entry at the new entry's start. Stop ends tracking; closing the popover leaves it running. The timeline starts with a four-hour view and follows now. Scroll horizontally, or use Shift+mouse-wheel, to browse history and future space. Pinch to zoom; while browsing, zoom stays anchored under the pointer. Double-tap with two fingers to reset to four hours while keeping the viewed time centered. At the default scale, another double-tap returns to Now. Reopening follows now at the saved zoom level. There is no separate Now button. Right-click the menu bar icon, including a trackpad secondary click or Control-click, for the native menu containing Quit Line.
+Click DayTape's menu bar icon to see the current state and timeline. The play icon when idle, or the switch arrows while tracking, reveals and focuses the task picker. The square stop icon ends tracking. These actions use plain icons with tooltips. Enter a name and press Return or Start, or choose an existing task from the list. Choosing a task or pressing Escape hides the picker. Switching tasks ends the previous entry at the new entry's start. Stop ends tracking; closing the popover leaves it running. The timeline starts with a four-hour view and follows now. Scroll horizontally, or use Shift+mouse-wheel, to browse history and future space. Pinch to zoom; while browsing, zoom stays anchored under the pointer. Double-tap with two fingers to reset to four hours while keeping the viewed time centered. At the default scale, another double-tap returns to Now. Reopening follows now at the saved zoom level. There is no separate Now button. Right-click the menu bar icon, including a trackpad secondary click or Control-click, for the native menu containing Quit DayTape.
 
 Drag empty timeline space to select time, then type a task name or choose an existing one. Historical selections use Save; selections reaching Now use Start and include time spent choosing the task. Escape or closing the popover discards the draft. Reverse drags work, snapping adapts to zoom, and the dragged edge stops at neighboring entries. Views up to two hours snap by one minute, up to eight hours by five minutes, and wider views by fifteen minutes. Contact with a neighbor uses its exact timestamp; new conflicts are still rejected when saving.
 
@@ -21,23 +21,29 @@ Click an entry to open its settings below the timeline. Click empty timeline spa
 
 Tickets 1–6 and 9 supply tracking, browsing, drawing, corrections, lock/sleep handling, continuation, and Command-drag overwrite. Lock or system sleep stops and saves the running entry. Lid closure counts when it causes system sleep, while an awake Mac with an external display keeps tracking. Ordinary inactivity, dimming, and display-off alone keep tracking.
 
-After an awake, unlocked return, a small Liquid Glass panel below the menu bar offers a nine-second countdown with OK and Reject without taking keyboard focus. If the break from interruption to return was under five minutes, acceptance reopens the same entry and counts the short break as tracked time. A break of five minutes or more starts a new entry at return. The countdown time is included in either case. Reject discards that interval. Clicking elsewhere or using other apps keeps the notice visible and the countdown running. Clicking OK or opening Line accepts continuation immediately. The main popover never shows the countdown. Other activity leaves the nine-second countdown running. Hovering over the notice freezes its remaining countdown; moving away resumes it. OK and Reject still work immediately while paused. Explicit tracking/editing actions, Stop, and Quit cancel any still-pending continuation; opening Line has already accepted it. Another lock/sleep discards the countdown and offers a fresh one on return. Relaunch always starts idle. See [ticket 06 verification](docs/ticket-06-verification.md) for automated checks and pending physical checks.
+After an awake, unlocked return, a small Liquid Glass panel below the menu bar offers a nine-second countdown with OK and Reject without taking keyboard focus. If the break from interruption to return was under five minutes, acceptance reopens the same entry and counts the short break as tracked time. A break of five minutes or more starts a new entry at return. The countdown time is included in either case. Reject discards that interval. Clicking elsewhere or using other apps keeps the notice visible and the countdown running. Clicking OK or opening DayTape accepts continuation immediately. The main popover never shows the countdown. Other activity leaves the nine-second countdown running. Hovering over the notice freezes its remaining countdown; moving away resumes it. OK and Reject still work immediately while paused. Explicit tracking/editing actions, Stop, and Quit cancel any still-pending continuation; opening DayTape has already accepted it. Another lock/sleep discards the countdown and offers a fresh one on return. Relaunch always starts idle. See [ticket 06 verification](docs/ticket-06-verification.md) for automated checks and pending physical checks.
 
 New tasks use a nine-color palette, choosing an unused color when available before repeating colors. Saved mint/cyan shades load as teal and indigo as blue; other assigned colors stay unchanged.
 
 ## Local data
 
+DayTape was originally named Line. It retains the original `app.line.timetracker` bundle identifier and data directory so existing history and preferences continue to work. Internal Swift target names and `LINE_` development overrides remain compatible.
+
 Records are stored in `~/Library/Application Support/Line/tracking.json`, independently of the source checkout and app bundle. Accepted changes are saved atomically. A five-second checkpoint timer limits recovery to the last saved point after an unexpected exit; quitting normally saves the exact stop time. Relaunch always starts idle. Very short, zero-duration entries are discarded on recovery or stop.
 
-If a save fails, Line shows an error and keeps the previous valid records; a quit that cannot save is cancelled. Unknown store versions or unreadable data are not overwritten. Back up the data file with Line quit before moving or changing it.
+If a save fails, DayTape shows an error and keeps the previous valid records; a quit that cannot save is cancelled. Unknown store versions or unreadable data are not overwritten. Back up the data file with DayTape quit before moving or changing it.
 
 For an isolated development session, launch the executable with a separate data directory:
 
 ```sh
-LINE_DATA_DIRECTORY="$(mktemp -d)" build/Line.app/Contents/MacOS/Line
+LINE_DATA_DIRECTORY="$(mktemp -d)" build/DayTape.app/Contents/MacOS/DayTape
 ```
 
-Use only one Line process per data directory.
+Use only one DayTape process per data directory.
+
+## App icon
+
+The paper icon source is `Resources/DayTapeIcon.png`. Run `./scripts/build-icon.sh` after editing it to regenerate `Resources/DayTape.icns`; the app build includes that icon automatically. Original concept sheets are preserved in `design/icon-exploration/`.
 
 ## Validation
 

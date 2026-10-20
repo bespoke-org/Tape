@@ -1,6 +1,6 @@
 # 04: Correct entries and maintain reusable tasks
 
-**Spec:** [Line v1](../spec.md)
+**Spec:** [DayTape v1](../spec.md)
 
 **What to build:** Edit tasks and timestamps, resize entries, recolor tasks, and confirm deletion; keep running-entry behavior and validation consistent.
 

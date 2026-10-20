@@ -1,6 +1,6 @@
 # 03: Draw historical entries or start tracking from the past
 
-**Spec:** [Line v1](../spec.md)
+**Spec:** [DayTape v1](../spec.md)
 
 **What to build:** Drag empty space, type/select a task, save historical time or keep running when drawing through now; support cancellation and reject overlaps without modifying existing entries.
 

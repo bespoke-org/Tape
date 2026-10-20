@@ -1,6 +1,6 @@
 # 01: Track tasks on a live timeline
 
-**Spec:** [Line v1](../spec.md)
+**Spec:** [DayTape v1](../spec.md)
 
 **What to build:** A runnable native menu bar app; create/search tasks, start/stop/switch, and watch entries grow on a four-hour timeline following now; preserve data and stop safely on quit or recovery.
 

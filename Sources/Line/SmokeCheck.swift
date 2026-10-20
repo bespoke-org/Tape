@@ -20,7 +20,7 @@ enum SmokeCheck {
             try require(button.image != nil, "Status item must have an icon")
             if ProcessInfo.processInfo.environment["LINE_SMOKE_CONTINUATION"] == "1" {
                 try await checkContinuation(button: button, popover: popover, model: model)
-                try Data("PASS: continuation panel preserves focus, hover pauses the nine-second countdown, OK resumes immediately, Reject and explicit actions cancel, outside clicks preserve the notice and opening Line accepts continuation, and short-break continuation reopens the original entry.\n".utf8)
+                try Data("PASS: continuation panel preserves focus, hover pauses the nine-second countdown, OK resumes immediately, Reject and explicit actions cancel, outside clicks preserve the notice and opening DayTape accepts continuation, and short-break continuation reopens the original entry.\n".utf8)
                     .write(to: output.appendingPathComponent("result.txt"))
                 NSApp.terminate(nil)
                 return
@@ -83,9 +83,9 @@ enum SmokeCheck {
             try requirePickerHidden(popover)
             try await openPicker(named: "Start task", in: popover)
             try requireAnchored(popover, to: button)
-            try enterTaskName("Build Line", in: popover)
+            try enterTaskName("Build DayTape", in: popover)
             try await settle()
-            try require(model.store?.runningTask?.name == "Build Line", "Submitting the native text field must start tracking")
+            try require(model.store?.runningTask?.name == "Build DayTape", "Submitting the native text field must start tracking")
             try requirePickerHidden(popover)
             try requireAnchored(popover, to: button)
             let firstStart = model.store?.runningEntry?.start
@@ -103,9 +103,9 @@ enum SmokeCheck {
             try requirePickerHidden(popover)
             try requireAnchored(popover, to: button)
             try await openPicker(named: "Switch task", in: popover)
-            try pressAccessibleControl(named: "Switch to Build Line", in: contentView(popover))
+            try pressAccessibleControl(named: "Switch to Build DayTape", in: contentView(popover))
             try await settle()
-            try require(model.store?.runningTask?.name == "Build Line", "Choosing an existing task must switch tracking")
+            try require(model.store?.runningTask?.name == "Build DayTape", "Choosing an existing task must switch tracking")
             try requirePickerHidden(popover)
             try requireAnchored(popover, to: button)
             try await requireStablePosition(popover)
@@ -130,7 +130,7 @@ enum SmokeCheck {
             try await settle()
             try require(!popover.isShown, "Status item must close its popover")
             try require(popover.contentViewController == nil, "Closing must remove the rendering schedule")
-            try require(model.store?.runningTask?.name == "Build Line", "Closing must not stop tracking")
+            try require(model.store?.runningTask?.name == "Build DayTape", "Closing must not stop tracking")
             try clickStatusItem(button)
             try await settle()
             try require(popover.isShown, "Popover must reopen")
@@ -203,12 +203,12 @@ enum SmokeCheck {
                     menu.performActionForItem(at: 1)
                 }
                 try await settle()
-                try require(popover.isShown, "Closing only the color menu must keep Line open")
+                try require(popover.isShown, "Closing only the color menu must keep DayTape open")
             }
             // Exercise the production callback registered for clicks in other apps.
             (NSApp.delegate as? AppDelegate)?.dismissForOutsideClick()
             try await settle()
-            try require(!popover.isShown, "Leaving Line must dismiss its popover; color menu action: \(menuAction)")
+            try require(!popover.isShown, "Leaving DayTape must dismiss its popover; color menu action: \(menuAction)")
         }
     }
 
@@ -556,7 +556,7 @@ enum SmokeCheck {
         try require(accessibilityElement(named: "OK", in: noticeContent) != nil, "OK must have an accessibility title")
         let hoverAreas = descendants(noticeContent).flatMap(\.trackingAreas).filter { ($0.owner as? ContinuationPanel) === notice }
         try require(hoverAreas.contains { $0.options.contains([.activeAlways, .mouseEnteredAndExited, .inVisibleRect]) },
-                    "The full notice must track hover even while Line is inactive")
+                    "The full notice must track hover even while DayTape is inactive")
         notice.mouseEntered(with: TimelineTestEvent(type: .mouseEntered, window: notice, location: .zero))
         let frozenSeconds = model.interruptions!.remainingSeconds
         try await Task.sleep(for: .milliseconds(1_200))
@@ -584,12 +584,12 @@ enum SmokeCheck {
         try clickStatusItem(button)
         try await settle()
         try require(store.runningEntry?.id == openedEntry.id && model.interruptions?.pendingContinuation == nil,
-                    "Opening Line must immediately accept continuation")
+                    "Opening DayTape must immediately accept continuation")
         try require(accessibilityElement(named: "Reject continuation", in: contentView(popover)) == nil,
                     "The main popover must never contain a continuation dialog")
         try clickStatusItem(button)
         try await settle()
-        try require(model.stop(), "Stop work accepted by opening Line")
+        try require(model.stop(), "Stop work accepted by opening DayTape")
 
         let pending = try await offer()
         let timerEntry = store.entries.last!
@@ -613,7 +613,7 @@ enum SmokeCheck {
                 try clickStatusItem(button)
                 try await settle()
                 try pressAccessibleControl(named: "Switch task", in: contentView(popover))
-                try require(model.stop(), "Stop work already accepted when opening Line")
+                try require(model.stop(), "Stop work already accepted when opening DayTape")
             case "edit":
                 model.editEntry(id: historical.id)
                 model.cancelEntry()

@@ -1,6 +1,6 @@
 # 05: Stop tracking on screen lock and sleep
 
-**Spec:** [Line v1](../spec.md)
+**Spec:** [DayTape v1](../spec.md)
 
 **What to build:** Detect actual lock/sleep, save the interruption endpoint, distinguish usable return from wake-while-locked, and ignore ordinary inactivity/display-off.
 

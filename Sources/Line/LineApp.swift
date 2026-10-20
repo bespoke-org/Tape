@@ -3,7 +3,7 @@ import SwiftUI
 import LineCore
 
 @main
-enum LineApp {
+enum DayTapeApp {
     @MainActor
     static func main() {
         let app = NSApplication.shared
@@ -18,7 +18,7 @@ enum LineApp {
     private static func makeMainMenu() -> NSMenu {
         let menu = NSMenu()
         let application = NSMenu()
-        application.addItem(withTitle: "Quit Line", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        application.addItem(withTitle: "Quit DayTape", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         let applicationItem = NSMenuItem()
         applicationItem.submenu = application
         menu.addItem(applicationItem)
@@ -52,6 +52,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             directory = URL(fileURLWithPath: override, isDirectory: true)
         } else {
             directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+                // Keep the original data directory across the DayTape rename.
                 .appendingPathComponent("Line", isDirectory: true)
         }
         model = AppModel(storeURL: directory.appendingPathComponent("tracking.json"))
@@ -160,7 +161,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         continuationPanel?.dismiss()
         popover.close()
         let menu = NSMenu()
-        let quit = NSMenuItem(title: "Quit Line", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        let quit = NSMenuItem(title: "Quit DayTape", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         quit.target = NSApplication.shared
         menu.addItem(quit)
 
@@ -184,7 +185,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         popover.contentViewController = controller
         // AppKit anchors using the initial size. A later shrink otherwise leaves a gap below the icon.
         popover.contentSize = controller.view.fittingSize
-        // Only this user-initiated path activates Line. Continuation uses a non-activating panel.
+        // Only this user-initiated path activates DayTape. Continuation uses a non-activating panel.
         NSApplication.shared.activate(ignoringOtherApps: true)
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         popover.contentViewController?.view.window?.makeKey()
@@ -225,9 +226,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
     private func updateStatus() {
         let running = model.store?.runningTask
-        let symbol = model.errorMessage != nil ? "exclamationmark.circle" :
-            (running == nil ? "timeline.selection" : "record.circle")
-        let glyph = NSImage(systemSymbolName: symbol, accessibilityDescription: "Line")
+        let glyph = model.errorMessage != nil
+            ? NSImage(systemSymbolName: "exclamationmark.circle", accessibilityDescription: "DayTape")
+            : Self.playheadIcon(isTracking: running != nil)
         // AppKit anchors status-item popovers to the image. Keep its canvas constant across states.
         let image = glyph.map { glyph in
             NSImage(size: NSSize(width: 18, height: 18), flipped: false) { rect in
@@ -240,10 +241,47 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         }
         image?.isTemplate = true
         statusItem.button?.image = image
-        let description = model.errorMessage.map { "Line: \($0)" }
-            ?? running.map { "Line: tracking \($0.name)" } ?? "Line: not tracking"
+        let description = model.errorMessage.map { "DayTape: \($0)" }
+            ?? running.map { "DayTape: tracking \($0.name)" } ?? "DayTape: not tracking"
         statusItem.button?.toolTip = description
         statusItem.button?.setAccessibilityLabel(description)
+    }
+
+    private static func playheadIcon(isTracking: Bool) -> NSImage {
+        NSImage(size: NSSize(width: 18, height: 18), flipped: true) { _ in
+            NSGraphicsContext.saveGraphicsState()
+            defer { NSGraphicsContext.restoreGraphicsState() }
+            let transform = NSAffineTransform()
+            transform.scale(by: 0.75)
+            transform.concat()
+            NSColor.black.set()
+
+            if isTracking {
+                NSBezierPath(roundedRect: NSRect(x: 2, y: 10, width: 12, height: 7),
+                             xRadius: 2, yRadius: 2).fill()
+            }
+            let strip = NSBezierPath(roundedRect: NSRect(x: 2, y: 10, width: 20, height: 7),
+                                     xRadius: 2, yRadius: 2)
+            strip.lineWidth = 1.7
+            strip.stroke()
+
+            let flag = NSBezierPath()
+            flag.move(to: NSPoint(x: 11, y: 2))
+            flag.line(to: NSPoint(x: 17, y: 2))
+            flag.line(to: NSPoint(x: 17, y: 6))
+            flag.line(to: NSPoint(x: 14, y: 9))
+            flag.line(to: NSPoint(x: 11, y: 6))
+            flag.close()
+            flag.fill()
+
+            let stem = NSBezierPath()
+            stem.move(to: NSPoint(x: 14, y: 8))
+            stem.line(to: NSPoint(x: 14, y: 22))
+            stem.lineWidth = 1.7
+            stem.lineCapStyle = .round
+            stem.stroke()
+            return true
+        }
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {

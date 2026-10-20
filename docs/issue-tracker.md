@@ -1,9 +1,9 @@
 # Local issue tracker
 
-Line uses Markdown files in this repository as its issue tracker. No external service is configured.
+DayTape uses Markdown files in this repository as its issue tracker. No external service is configured.
 
 - Feature plans live under `.scratch/<feature-slug>/`.
-- The Line v1 spec is `.scratch/line-v1/spec.md`.
+- The DayTape v1 spec is `.scratch/line-v1/spec.md`.
 - Proposed ticket breakdowns are stored as `ticket-plan.md` beside the spec. A proposal is not an approved ticket set.
 - After approval, publish one ticket per file under `.scratch/<feature-slug>/issues/<NN>-<slug>.md`, numbered in dependency order. Each ticket links to its spec and lists its blockers, status, and acceptance criteria.
 - Use the canonical triage labels unchanged: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, and `wontfix`.

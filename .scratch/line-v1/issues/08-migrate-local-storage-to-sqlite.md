@@ -1,6 +1,6 @@
 # 08: Migrate local storage to SQLite
 
-**Spec:** [Line v1 — local durability and lifecycle](../spec.md#local-durability-and-lifecycle)
+**Spec:** [DayTape v1 — local durability and lifecycle](../spec.md#local-durability-and-lifecycle)
 
 **What to build:** Replace the JSON store with SQLite so checkpoints update only the running entry and timeline browsing queries the visible time range instead of loading all history.
 
@@ -14,7 +14,7 @@
 
 ## Acceptance criteria
 
-- [ ] Use a versioned SQLite database in Line's application-data directory, keeping persistence behind the existing tracking operations. Choose the Swift SQLite integration at implementation time.
+- [ ] Use a versioned SQLite database in DayTape's application-data directory, keeping persistence behind the existing tracking operations. Choose the Swift SQLite integration at implementation time.
 - [ ] Migrate existing JSON data without changing task/entry IDs, names, colors, timestamps, links, or any preferences and recovery state present at migration time. Retain the original JSON as a backup.
 - [ ] Make migration safe to retry after interruption or failure: avoid duplicate imports, preserve the original data, and activate the database only after a successful migration. Report failures clearly.
 - [ ] Preserve atomic start/stop/switch operations, overlap rules, five-second checkpoints, clean-quit behavior, and recovery through the last saved point. Preserve any lifecycle behavior implemented by then.

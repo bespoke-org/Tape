@@ -5,12 +5,14 @@ struct LiveTimeline: View {
     let store: TrackingStore
     let now: Date
     @Bindable var model: AppModel
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.colorSchemeContrast) private var contrast
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     private let stripTop: CGFloat = 28
     private let stripHeight: CGFloat = 64
     private let nowOverhang: CGFloat = 10
+    private var playheadColor: Color { colorScheme == .dark ? .white : .black }
     private var visibleRange: DateInterval { model.timeline.range(at: now) }
     private var visibleEntries: ArraySlice<TimeEntry> {
         store.entries(overlapping: visibleRange, now: now)
@@ -116,8 +118,23 @@ struct LiveTimeline: View {
 
                     let nowX = position(now, width: width)
                     if nowX >= 0 && nowX <= width {
-                        Rectangle().fill(.primary).frame(width: 1.5, height: stripHeight + 2 * nowOverhang)
-                            .offset(x: nowX, y: stripTop - nowOverhang)
+                        Rectangle().fill(playheadColor).frame(width: 1.5, height: stripHeight + 2 * nowOverhang)
+                            .offset(x: nowX - 0.75, y: stripTop - nowOverhang)
+                            .allowsHitTesting(false)
+                            .accessibilityHidden(true)
+                        Path { path in
+                            path.move(to: CGPoint(x: 0, y: 0))
+                            path.addLine(to: CGPoint(x: 12, y: 0))
+                            path.addLine(to: CGPoint(x: 12, y: 4))
+                            path.addLine(to: CGPoint(x: 6, y: 10))
+                            path.addLine(to: CGPoint(x: 0, y: 4))
+                            path.closeSubpath()
+                        }
+                        .fill(playheadColor)
+                        .frame(width: 12, height: 10)
+                        .offset(x: nowX - 6, y: stripTop - nowOverhang)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
                         if model.timeline.isFollowingNow {
                             Text("Now").font(.caption2.weight(.semibold))
                                 .position(x: nowX, y: 7)

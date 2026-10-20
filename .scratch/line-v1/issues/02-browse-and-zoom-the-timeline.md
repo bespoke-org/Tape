@@ -1,6 +1,6 @@
 # 02: Browse and zoom the timeline
 
-**Spec:** [Line v1](../spec.md)
+**Spec:** [DayTape v1](../spec.md)
 
 **What to build:** Scroll into history/future, return to now, pinch to zoom, adapt date/time ticks to scale, and retain scale across reopen/relaunch.
 

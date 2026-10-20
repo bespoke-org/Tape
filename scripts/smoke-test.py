@@ -19,7 +19,7 @@ modes.add_argument('--editing', action='store_true', help='Verify inline entry c
 args = parser.parse_args()
 run_timeout = 50 if args.continuation else 40 if args.editing else 20
 root = Path(__file__).resolve().parent.parent
-app = root / 'build/smoke/Line.app'
+app = root / 'build/smoke/DayTape.app'
 subprocess.run([str(root / 'scripts/build-app.sh'), 'debug'], cwd=root,
                env=dict(os.environ, LINE_APP_OUTPUT=str(app)), check=True, timeout=180)
 output = root / 'build' / ('continuation-smoke-results' if args.continuation else 'system-activity-smoke-results' if args.system_activity else 'dismissal-smoke-results' if args.dismissal else 'editing-smoke-results' if args.editing else 'overwrite-smoke-results' if args.overwrite else 'creation-smoke-results' if args.creation else 'timeline-smoke-results' if args.timeline else 'smoke-results')
@@ -31,7 +31,7 @@ with tempfile.TemporaryDirectory(prefix='line-smoke-') as data:
         report.unlink(missing_ok=True)
         try:
             result = subprocess.run(
-                [str(app / 'Contents/MacOS/Line'), '--smoke-test', str(output)],
+                [str(app / 'Contents/MacOS/DayTape'), '--smoke-test', str(output)],
                 env=dict(os.environ, LINE_DATA_DIRECTORY=data, LINE_SMOKE_CONTINUATION='1' if args.continuation else '0', LINE_SMOKE_SYSTEM_ACTIVITY='1' if args.system_activity else '0', LINE_SMOKE_DISMISSAL='1' if args.dismissal else '0', LINE_SMOKE_TIMELINE='1' if args.timeline else '0',
                          LINE_SMOKE_EDITING='1' if args.editing else '0', LINE_SMOKE_CREATION='1' if args.creation else '0', LINE_SMOKE_OVERWRITE='1' if args.overwrite else '0'),
                 capture_output=True, text=True, timeout=run_timeout,

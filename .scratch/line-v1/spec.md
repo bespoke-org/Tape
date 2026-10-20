@@ -1,4 +1,4 @@
-# Line v1: personal menu bar time tracking
+# DayTape v1: personal menu bar time tracking
 
 **Status:** ready-for-agent
 
@@ -10,7 +10,7 @@ I want to record what I am working on without managing a full desktop app. I nee
 
 ## Solution
 
-Line lives in the macOS menu bar with no Dock icon. Its popover shows a horizontal timeline and compact tracking controls. Time moves beneath a centered now marker when following the present. Scrolling browses history and the future; pinching adjusts the scale. Drawing on empty timeline space records time, and drawing up to now starts ongoing tracking.
+DayTape lives in the macOS menu bar with no Dock icon. Its popover shows a horizontal timeline and compact tracking controls. Time moves beneath a centered now marker when following the present. Scrolling browses history and the future; pinching adjusts the scale. Drawing on empty timeline space records time, and drawing up to now starts ongoing tracking.
 
 Tasks are reusable names with colors. Each task can have many time entries, but only one task runs at a time and entries never overlap. Lock or sleep stops tracking. A usable return presents a nine-second countdown anchored to the menu bar; unless rejected, it resumes the previous task and includes those nine seconds. Everything is stored locally.
 
@@ -18,7 +18,7 @@ The app should look and behave like a native macOS 26 utility, using system cont
 
 ## User Stories
 
-1. As the user, I want to launch Line as a menu bar app without a Dock icon, so that it stays available without occupying my workspace.
+1. As the user, I want to launch DayTape as a menu bar app without a Dock icon, so that it stays available without occupying my workspace.
 2. As the user, I want the menu bar icon to indicate whether tracking is running, so that I can check its state at a glance.
 3. As the user, I want clicking the icon to open a popover and clicking outside to dismiss it, so that it behaves like a familiar Mac utility.
 4. As the user, I want tracking to continue while the popover is closed, so that I can work in other apps.
@@ -28,7 +28,7 @@ The app should look and behave like a native macOS 26 utility, using system cont
 8. As the user, I want to recolor a task across all its entries, so that I can keep my records consistent.
 9. As the user, I want duplicate task names to be prevented regardless of capitalization or surrounding spaces, so that I do not accidentally split one activity into multiple tasks.
 10. As the user, I want to start, stop, and switch tasks, so that I can track what I am doing as it changes.
-11. As the user, I want to see the running task and its growing timeline entry, so that I know what Line is recording.
+11. As the user, I want to see the running task and its growing timeline entry, so that I know what DayTape is recording.
 12. As the user, I want to view recorded entries on a continuous horizontal timeline, so that I can understand where my time went.
 13. As the user, I want the timeline to follow the present beneath a centered now marker, so that the display stays current.
 14. As the user, I want to scroll backward and forward without the view snapping back, so that I can browse time freely.
@@ -45,17 +45,17 @@ The app should look and behave like a native macOS 26 utility, using system cont
 25. As the user, I want deletion to require confirmation and deletion of a running entry to stop tracking, so that accidental actions do not silently remove my work.
 26. As the user, I want screen lock and system sleep to stop tracking immediately, so that my absence is not counted as work.
 27. As the user, I want ordinary inactivity and display dimming or display-off alone to leave tracking running, so that reading and thinking still count.
-28. As the user, I want returning from lock or sleep to show a nine-second automatic-continuation countdown without stealing focus, so that I can resume work without interacting with Line.
+28. As the user, I want returning from lock or sleep to show a nine-second automatic-continuation countdown without stealing focus, so that I can resume work without interacting with DayTape.
 29. As the user, I want Reject to cancel continuation and exclude the countdown interval, so that breaks do not become recorded work.
-30. As the user, I want the continuation notice to remain visible while I use other apps, and opening Line to accept it immediately without showing a countdown inside the main window.
+30. As the user, I want the continuation notice to remain visible while I use other apps, and opening DayTape to accept it immediately without showing a countdown inside the main window.
 31. As the user, I want an uninterrupted countdown to resume the previous task from the time I returned, so that those nine seconds are included.
 32. As the user, I want another lock or sleep during the countdown to cancel it and offer a fresh countdown next time, so that repeated interruptions are handled predictably.
 33. As the user, I want explicit tracking or entry-editing actions to cancel pending continuation, so that an old task cannot restart over my action.
-34. As the user, I want quitting to stop tracking and relaunching to start idle, so that Line does not count time while it is not running.
+34. As the user, I want quitting to stop tracking and relaunching to start idle, so that DayTape does not count time while it is not running.
 35. As the user, I want unexpected-exit recovery to preserve only the last saved tracking point, so that downtime is not silently counted as work.
 36. As the user, I want all tasks, entries, and preferences stored on this Mac, so that the app works without an account or network connection.
-37. As the user, I want an optional launch-at-login setting that starts off, so that I control whether Line starts with my session.
-38. As the user, I want native controls, Liquid Glass, keyboard behavior, and accessible labels, so that Line feels at home on macOS.
+37. As the user, I want an optional launch-at-login setting that starts off, so that I control whether DayTape starts with my session.
+38. As the user, I want native controls, Liquid Glass, keyboard behavior, and accessible labels, so that DayTape feels at home on macOS.
 39. As the user, I want light/dark appearance and contrast, transparency, and motion preferences respected, so that the interface remains comfortable and legible.
 40. As the user, I want a locally runnable app with reproducible build instructions, so that I can use and maintain it on my own Mac.
 
@@ -65,7 +65,7 @@ The app should look and behave like a native macOS 26 utility, using system cont
 
 - Build in Swift for macOS 26.0 or later, using SwiftUI and AppKit where needed for menu bar integration, focus behavior, and system lifecycle events. The verified development machine runs macOS 26.6.2 on Apple Silicon, with Xcode 26.5 and Swift 6.3.2.
 - Use a native status item/popover integration that supports both deliberate user interaction and automatic, non-focus-stealing continuation presentation. Verify these behaviors with a runnable app early; do not assume an ordinary interactive popover automatically meets the focus requirement.
-- Keep the menu bar icon compact; task names belong inside the popover; omit the elapsed-time display for now. Left-click opens the timeline with Start/task selection, Stop and task switching. Return to Now uses two-finger double-tap, without a dedicated button. Secondary click (including trackpad secondary click and Control-click) opens a native actions menu containing only Quit Line for now. The popover has no three-dot menu or Quit action. Add access to preferences when the later settings features are implemented.
+- Keep the menu bar icon compact; task names belong inside the popover; omit the elapsed-time display for now. Left-click opens the timeline with Start/task selection, Stop and task switching. Return to Now uses two-finger double-tap, without a dedicated button. Secondary click (including trackpad secondary click and Control-click) opens a native actions menu containing only Quit DayTape for now. The popover has no three-dot menu or Quit action. Add access to preferences when the later settings features are implemented.
 - Keep tracking operations separate from view rendering and system-event delivery. Route mutations through a single application-level boundary so overlap validation, persistence, and cancellation rules apply consistently to every interaction.
 - The default popover shows the current state and timeline, with task selection hidden behind Start task or Switch task. Show these header actions as plain icons: play for Start task, opposing arrows for Switch task, and a square for Stop. Keep tooltips and accessible labels, with no visible text or button backgrounds. Revealing the inline picker focuses its search field. Successful task selection or Escape collapses the picker; Escape with no picker open dismisses the popover. Reopening starts with the picker hidden. Keep the layout compact without titles or subtitles. Keep the picker and entry editor below the timeline without dividers. Task suggestions show only their color dot and name, without trailing action icons. Always show the date or visible date range above the timeline, including while following now.
 - Separate timeline coordinate/gesture calculations from tracking timestamps. Rendering cadence must not determine elapsed time or create persistent writes for every animation frame. Avoid continuous timeline rendering while its popover is closed.
@@ -111,7 +111,7 @@ The app should look and behave like a native macOS 26 utility, using system cont
 - Screen lock or system sleep ends a running entry at the interruption boundary and remembers its task for possible continuation. Lid closure counts when it causes system sleep; an awake Mac with an external display keeps tracking. Ordinary inactivity and display-off alone do not stop tracking.
 - Treat locked and sleeping conditions independently. A return is usable only when awake and unlocked. Duplicate notifications, sleep followed by lock, and wake while still locked must not produce duplicate entries or multiple countdowns.
 - If a task was interrupted, a usable return starts one nine-second pending continuation and immediately presents a non-activating panel anchored below the menu bar without stealing focus. Highlight the menu bar icon while this notice is visible and clear the highlight when it closes. Show the task name, a decreasing countdown, OK to accept immediately, and Reject. An idle app does not invent a task to resume.
-- Clicking outside the panel or using other apps keeps it visible and the countdown running. Clicking OK or opening Line accepts continuation immediately. The main popover never shows a continuation dialog. Other activity leaves the countdown active. On acceptance or countdown completion, reopen the interrupted entry if the gap from its stopped end to usable return is nonnegative and under five minutes. Include that short break in tracked time. Only reopen that same entry if it is still the latest entry for the interrupted task, with no intervening entries. Otherwise start a new entry at usable return. Include elapsed countdown time in both cases. Use elapsed time, not animation frames, to decide completion.
+- Clicking outside the panel or using other apps keeps it visible and the countdown running. Clicking OK or opening DayTape accepts continuation immediately. The main popover never shows a continuation dialog. Other activity leaves the countdown active. On acceptance or countdown completion, reopen the interrupted entry if the gap from its stopped end to usable return is nonnegative and under five minutes. Include that short break in tracked time. Only reopen that same entry if it is still the latest entry for the interrupted task, with no intervening entries. Otherwise start a new entry at usable return. Include elapsed countdown time in both cases. Use elapsed time, not animation frames, to decide completion.
 - Hovering anywhere over the notice pauses the countdown, preserving its exact remaining time. Leaving resumes it; OK and Reject remain available while paused. Keep the original return instant, including hover time when continuation is accepted. A new lock/sleep clears the pause with the pending countdown.
 - Reject clears pending continuation without creating an entry. Another interruption cancels the pending countdown without saving it and retains the original entry and task for a fresh offer on the next usable return. Evaluate the five-minute gap from the original stopped end to that latest return.
 - An explicit tracking/editing action cancels pending continuation. Stop or Quit also prevents its later completion. Serialize return events, user actions, and countdown completion so at most one continuation can commit; recheck validity before committing.
@@ -123,7 +123,7 @@ The app should look and behave like a native macOS 26 utility, using system cont
 - Persist accepted mutations immediately and checkpoint a running entry periodically. Use five seconds as the initial checkpoint interval and verify that recovery does not include time after the last successfully saved checkpoint. Successful checkpoints must remain consistent with task/entry mutations.
 - On deliberate quit, end and save the running entry, clear pending continuation, then exit. Normal relaunch starts idle. Launch at login also starts idle.
 - After an unexpected exit, close any formerly running entry at its last saved tracking point and leave tracking stopped. Do not substitute relaunch time as its end or start a continuation countdown. Drop a recovered zero-duration provisional record if needed to preserve valid intervals.
-- A pending continuation is not recorded work until accepted by OK, opening Line, or countdown completion. An unexpected exit during the countdown must not commit it later.
+- A pending continuation is not recorded work until accepted by OK, opening DayTape, or countdown completion. An unexpected exit during the countdown must not commit it later.
 - Surface storage failures without falsely reporting successful saves; preserve the previous valid stored data. Reopening the store must retain task identity, entry links, and the saved zoom preference.
 - Provide launch at login using supported macOS facilities, initially off, and report the actual registration state. Keep the app self-contained with no separately installed background service.
 
