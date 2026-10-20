@@ -48,7 +48,8 @@ struct TrackingInterruptionTests {
         try interruptions.handle(.willSleep)
         try interruptions.handle(.didWake)
         #expect(interruptions.interruptedTask != nil)
-        // A later idle interruption must not resume a task left over from the last break.
+        interruptions.cancelContinuation()
+        // Rejecting a continuation must not leave a candidate for a later idle interruption.
         try interruptions.handle(.locked)
         #expect(interruptions.interruptedTask == nil)
         try interruptions.handle(.unlocked)

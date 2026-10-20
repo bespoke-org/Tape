@@ -8,14 +8,14 @@
 
 **Status:** ready-for-agent
 
-**Execution:** not started
+**Execution:** implemented; awaiting hands-on acceptance
 
 ## Acceptance criteria
 
 - [ ] After a usable return, immediately present a ten-second countdown and Reject from the menu bar without stealing keyboard focus.
-- [ ] Countdown completion creates exactly one running entry starting at usable return. Reject creates none; outside clicks and ordinary Mac use do not cancel.
-- [ ] Another lock/sleep cancels the provisional interval and offers a fresh countdown on the next usable return. Duplicate return signals do not reset or multiply countdowns.
-- [ ] Starting a task, beginning entry creation/editing, Stop, or Quit prevents pending continuation from committing. Verify this against the actual creation/editing flows delivered by 04 and its blockers.
+- [x] Countdown completion creates exactly one running entry starting at usable return. Reject creates none; outside clicks and ordinary Mac use do not cancel.
+- [x] Another lock/sleep cancels the provisional interval and offers a fresh countdown on the next usable return. Duplicate return signals do not reset or multiply countdowns.
+- [x] Starting a task, beginning entry creation/editing, Stop, or Quit prevents pending continuation from committing. Verify this against the actual creation/editing flows delivered by 04 and its blockers.
 - [ ] Test completion/action races and restart during a countdown with controlled time; manually verify focus, anchoring, dismissal, and real system-event behavior.
 
 Native macOS appearance, Liquid Glass use, and accessibility follow the spec and apply to every UI change in this ticket.
@@ -23,3 +23,10 @@ Native macOS appearance, Liquid Glass use, and accessibility follow the spec and
 ## Implementation note from ticket 05
 
 Both blockers are done. Current availability reflects received lock/sleep events rather than an independent OS-state query. Before implementing automatic continuation, account for an initially unknown or missed lock state; do not treat the initial availability value as proof the Mac is unlocked. See [ticket 05 verification](../../../docs/ticket-05-verification.md).
+
+
+## Implementation and verification
+
+Implemented on 2026-10-20. A non-activating AppKit panel uses native Liquid Glass, labels, and a Reject button. The main popover also exposes the pending countdown. Return and completion both check console, login, and lock state; countdown expiry uses monotonic uptime. Provisional time stays in memory until completion, and failed completion does not retry silently.
+
+Core tests and isolated packaged-app checks cover countdown completion, cancellation, re-lock, restart, conflicts, storage failures, and the implemented editing flows. Review found one stale save-error issue, which was fixed. See [ticket 06 verification](../../../docs/ticket-06-verification.md) for evidence and remaining physical checks. The ticket is not marked done until hands-on acceptance.

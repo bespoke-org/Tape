@@ -42,6 +42,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private var checkpointTimer: Timer?
     private var outsideClickMonitor: Any?
     private var systemActivityMonitor: SystemActivityMonitor?
+    private(set) var continuationPanel: ContinuationPanel?
+    private var continuationTimer: Timer?
+    private var presentedContinuationID: UUID?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let directory: URL
@@ -52,7 +55,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
                 .appendingPathComponent("Line", isDirectory: true)
         }
         model = AppModel(storeURL: directory.appendingPathComponent("tracking.json"))
-        model.onChange = { [weak self] in self?.updateStatus() }
+        model.onChange = { [weak self] in
+            self?.updateStatus()
+            self?.syncContinuation()
+        }
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         statusItem.button?.target = self
@@ -90,9 +96,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         case .locked, .willSleep:
             model.cancelEntry()
             popover.close()
+            continuationPanel?.dismiss()
         case .unlocked, .didWake:
             break
         }
+    }
+
+    private func syncContinuation() {
+        guard let interruptions = model.interruptions else { return }
+        if interruptions.needsContinuationPolling, continuationTimer == nil {
+            let timer = Timer(timeInterval: 0.25, repeats: true) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    self?.model.pollContinuation()
+                    if let seconds = self?.model.interruptions?.remainingSeconds {
+                        self?.continuationPanel?.updateCountdown(seconds: seconds)
+                    }
+                }
+            }
+            RunLoop.main.add(timer, forMode: .common)
+            continuationTimer = timer
+        } else if !interruptions.needsContinuationPolling {
+            continuationTimer?.invalidate()
+            continuationTimer = nil
+        }
+        guard let pending = interruptions.pendingContinuation else {
+            continuationPanel?.dismiss()
+            continuationPanel = nil
+            presentedContinuationID = nil
+            return
+        }
+        guard pending.id != presentedContinuationID, let button = statusItem.button else { return }
+        presentedContinuationID = pending.id
+        continuationPanel?.dismiss()
+        guard !popover.isShown else { return }
+        let panel = ContinuationPanel(task: pending.task, remainingSeconds: interruptions.remainingSeconds) { [weak self] in
+            self?.model.rejectContinuation()
+        }
+        continuationPanel = panel
+        panel.show(below: button)
     }
 
     @objc private func handleStatusItemClick() {
@@ -109,6 +150,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     }
 
     private func showActionsMenu() {
+        continuationPanel?.dismiss()
         popover.close()
         let menu = NSMenu()
         let quit = NSMenuItem(title: "Quit Line", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
@@ -123,6 +165,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
     private func showPopover() {
         guard let button = statusItem.button else { return }
+        continuationPanel?.dismiss()
         model.preparePopover()
         popover.animates = !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         let controller = NSHostingController(rootView: TrackingPopover(model: model, dismiss: { [weak self] in
@@ -133,7 +176,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         popover.contentViewController = controller
         // AppKit anchors using the initial size. A later shrink otherwise leaves a gap below the icon.
         popover.contentSize = controller.view.fittingSize
-        // This path is user-initiated. Automatic continuation gets its own non-activating path later.
+        // Only this user-initiated path activates Line. Continuation uses a non-activating panel.
         NSApplication.shared.activate(ignoringOtherApps: true)
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         popover.contentViewController?.view.window?.makeKey()
@@ -201,6 +244,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             return .terminateCancel
         }
         checkpointTimer?.invalidate()
+        continuationTimer?.invalidate()
+        continuationPanel?.dismiss()
         return .terminateNow
     }
 }

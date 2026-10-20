@@ -8,6 +8,7 @@ final class AppModel {
     private(set) var store: TrackingStore?
     private(set) var interruptions: TrackingInterruption?
     private(set) var errorMessage: String?
+    private var interruptionError: String?
     var timeline = TimelineViewport()
     private(set) var entrySelection: EntrySelection?
     private(set) var drawnRange: DateInterval?
@@ -34,11 +35,13 @@ final class AppModel {
     }
 
     func start(_ name: String) -> Bool {
-        perform { try store?.startTask(named: name) }
+        rejectContinuation()
+        return perform { try store?.startTask(named: name) }
     }
 
     func stop() -> Bool {
-        perform { try store?.stop() }
+        rejectContinuation()
+        return perform { try store?.stop() }
     }
 
     func checkpoint() {
@@ -51,10 +54,33 @@ final class AppModel {
         // Update physical state even if a previous stop still needs its save retried.
         do {
             try interruptions.handle(event)
+            try interruptions.pollContinuation(sessionIsUsable: SystemActivityMonitor.sessionIsUsable())
             errorMessage = nil
+            interruptionError = nil
         } catch {
             errorMessage = error.localizedDescription
+            interruptionError = errorMessage
         }
+        onChange?()
+    }
+
+    func pollContinuation() {
+        guard let interruptions, interruptions.interruptedTask != nil else { return }
+        let previous = interruptions.pendingContinuation?.id
+        let previousError = errorMessage
+        do {
+            try interruptions.pollContinuation(sessionIsUsable: SystemActivityMonitor.sessionIsUsable())
+            if let interruptionError, errorMessage == interruptionError { errorMessage = nil }
+            interruptionError = nil
+        } catch {
+            errorMessage = error.localizedDescription
+            interruptionError = errorMessage
+        }
+        if previous != interruptions.pendingContinuation?.id || previousError != errorMessage { onChange?() }
+    }
+
+    func rejectContinuation() {
+        interruptions?.cancelContinuation()
         onChange?()
     }
 
@@ -65,6 +91,7 @@ final class AppModel {
 
     func editEntry(id: UUID) {
         guard store?.entries.contains(where: { $0.id == id }) == true else { return }
+        rejectContinuation()
         cancelEntry()
         editingEntryID = id
     }
@@ -132,6 +159,7 @@ final class AppModel {
     func beginResizing(at fraction: Double, tolerance: Double) -> EntryEdge? {
         let instant = Date.now
         guard let nearest = resizeTarget(at: fraction, tolerance: tolerance, now: instant) else { return nil }
+        rejectContinuation()
         cancelEntry()
         timeline.pauseFollowing(at: instant)
         resizingEntryID = nearest.0
@@ -172,6 +200,7 @@ final class AppModel {
         let instant = Date.now
         let start = timeline.date(at: fraction, now: instant)
         guard overwriting || !store.entries.contains(where: { $0.start <= start && ($0.end ?? instant) > start }) else { return false }
+        rejectContinuation()
         cancelEntry()
         isOverwriting = overwriting
         timeline.pauseFollowing(at: instant)
@@ -211,6 +240,7 @@ final class AppModel {
 
     func createSelectedEntry(named name: String) -> Bool {
         guard let selection = entrySelection, let store else { return false }
+        rejectContinuation()
         do {
             try interruptions?.retryStop()
             try store.createEntry(named: name, selection: selection)
@@ -241,6 +271,7 @@ final class AppModel {
     }
 
     private func performEntryEdit(_ operation: () throws -> Void) -> Bool {
+        rejectContinuation()
         do {
             try interruptions?.retryStop()
             try operation()

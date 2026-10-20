@@ -18,6 +18,13 @@ enum SmokeCheck {
             try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
             try require(NSApp.activationPolicy() == .accessory, "App must have no Dock icon")
             try require(button.image != nil, "Status item must have an icon")
+            if ProcessInfo.processInfo.environment["LINE_SMOKE_CONTINUATION"] == "1" {
+                try await checkContinuation(button: button, popover: popover, model: model)
+                try Data("PASS: continuation panel preserves focus, Reject and explicit actions cancel, dismissal/browsing preserve the countdown, and timer completion resumes from return.\n".utf8)
+                    .write(to: output.appendingPathComponent("result.txt"))
+                NSApp.terminate(nil)
+                return
+            }
             if ProcessInfo.processInfo.environment["LINE_SMOKE_SYSTEM_ACTIVITY"] == "1" {
                 try await checkSystemActivity(button: button, popover: popover, model: model)
                 try Data("PASS: lock/sleep notifications stop and save once, ignore display sleep, preserve return ordering, close drafts, and leave tracking stopped.\n".utf8)
@@ -477,6 +484,108 @@ enum SmokeCheck {
         try await requireStablePosition(popover)
     }
 
+    private static func checkContinuation(button: NSStatusBarButton, popover: NSPopover, model: AppModel) async throws {
+        let delegate = NSApp.delegate as! AppDelegate
+        let store = model.store!
+        func offer() async throws -> PendingContinuation {
+            try require(model.start("Continuation check"), "Start interrupted work")
+            try await settle()
+            delegate.handleSystemEvent(.locked)
+            try await settle()
+            delegate.handleSystemEvent(.unlocked)
+            try await settle()
+            guard let pending = model.interruptions?.pendingContinuation else {
+                throw NSError(domain: "LineSmokeCheck", code: 30, userInfo: [NSLocalizedDescriptionKey: "An unlocked return must offer continuation"])
+            }
+            return pending
+        }
+        let frontmost = NSWorkspace.shared.frontmostApplication?.processIdentifier
+        _ = try await offer()
+        guard let panel = delegate.continuationPanel, let content = panel.contentView else {
+            throw NSError(domain: "LineSmokeCheck", code: 31, userInfo: [NSLocalizedDescriptionKey: "Continuation panel missing"])
+        }
+        try require(panel.isVisible && !panel.canBecomeKey && !panel.isKeyWindow && !panel.isMainWindow,
+                    "Automatic continuation must show without becoming key or main")
+        try require(NSWorkspace.shared.frontmostApplication?.processIdentifier == frontmost,
+                    "Automatic presentation must preserve the frontmost application")
+        let anchor = button.window!.convertToScreen(button.convert(button.bounds, to: nil))
+        try require(abs(panel.frame.maxY - (anchor.minY - 8)) < 1, "Continuation must anchor just below the menu bar")
+        guard let reject = descendants(content).compactMap({ $0 as? NSButton }).first(where: { $0.title == "Reject" }) else {
+            throw NSError(domain: "LineSmokeCheck", code: 32, userInfo: [NSLocalizedDescriptionKey: "Native Reject button missing"])
+        }
+        try require(reject.isEnabled && reject.acceptsFirstMouse(for: nil), "Reject must accept the first click without activation")
+        try require(accessibilityElement(named: "Reject", in: content) != nil, "Reject must have an accessibility title")
+        reject.performClick(nil)
+        try await settle()
+        try require(model.interruptions?.pendingContinuation == nil && !panel.isVisible && store.runningEntry == nil,
+                    "Reject must close the panel without recording the provisional interval")
+        try require(NSWorkspace.shared.frontmostApplication?.processIdentifier == frontmost,
+                    "Reject must preserve the frontmost application")
+
+        let pending = try await offer()
+        delegate.continuationPanel?.dismiss() // The outside-click handler only dismisses this panel.
+        model.pollContinuation()
+        try require(model.interruptions?.pendingContinuation?.id == pending.id && delegate.continuationPanel?.isVisible == false,
+                    "Dismissal must preserve the countdown without reopening the panel")
+        try clickStatusItem(button)
+        try await settle()
+        try require(model.interruptions?.pendingContinuation?.id == pending.id, "Opening the main popover must not reject")
+        try require(accessibilityElement(named: "Reject continuation", in: contentView(popover)) != nil,
+                    "The main popover must also expose Reject")
+        model.timeline.scroll(points: 15, width: 580, now: .now)
+        model.saveTimelineScale()
+        try clickStatusItem(button)
+        try await settle()
+        try require(model.interruptions?.pendingContinuation?.id == pending.id, "Browsing and closing must not reject")
+        // Exercise the real timer with a bounded wait, without changing its production duration.
+        let deadline = ContinuousClock.now + .seconds(12)
+        while store.runningEntry == nil && ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        try require(store.runningEntry?.start == pending.returnedAt && store.runningTask?.id == pending.task.id,
+                    "The timer must continue the same task from the return instant")
+        try require(model.stop(), "Stop automatically continued work")
+
+        let old = Date.now - 3_600
+        try store.createEntry(named: "History", selection: store.prepareEntry(from: old, to: old + 600))
+        let historical = store.entries[0]
+        for action in ["picker", "edit", "resize", "draw", "overwrite", "start", "stop", "color", "reassign", "delete", "quit"] {
+            _ = try await offer()
+            switch action {
+            case "picker":
+                try clickStatusItem(button)
+                try await settle()
+                try pressAccessibleControl(named: "Start task", in: contentView(popover))
+            case "edit":
+                model.editEntry(id: historical.id)
+                model.cancelEntry()
+            case "resize":
+                let fraction = model.timeline.fraction(for: historical.start, now: .now)
+                try require(model.beginResizing(at: fraction, tolerance: 5 / 580) != nil, "Begin resizing")
+                model.cancelEntry()
+            case "draw", "overwrite":
+                try require(model.beginDrawing(at: 0.1, overwriting: action == "overwrite"), "Begin drawing")
+                model.cancelEntry()
+            case "start":
+                try require(model.start("Manual work"), "Manual start")
+                try require(model.stop(), "Stop manual work")
+            case "stop":
+                try require(model.stop(), "Explicit Stop")
+            case "color":
+                try require(model.saveTaskColor(id: historical.taskID, color: .purple), "Recolor")
+            case "reassign":
+                try require(model.reassignEntry(id: historical.id, taskName: "Reassigned"), "Reassign")
+            case "delete":
+                try require(model.deleteEntry(id: historical.id), "Delete")
+            default:
+                try require(delegate.applicationShouldTerminate(NSApp) == .terminateNow, "Quit must cancel continuation")
+            }
+            model.pollContinuation()
+            try require(model.interruptions?.pendingContinuation == nil && model.interruptions?.interruptedTask == nil,
+                        "\(action) must cancel continuation even if the action is subsequently abandoned")
+        }
+    }
+
     private static func checkSystemActivity(button: NSStatusBarButton, popover: NSPopover, model: AppModel) async throws {
         // Inject private centers, never post fake system events to other apps or the release build.
         let workspace = NotificationCenter()
@@ -521,6 +630,7 @@ enum SmokeCheck {
         try require(model.interruptions?.isAvailable == false, "Unlock before wake is not a usable return")
         workspace.post(name: NSWorkspace.didWakeNotification, object: nil)
         try require(model.interruptions?.isAvailable == true && store.runningEntry == nil, "Sleep return must stay stopped")
+        model.rejectContinuation()
         workspace.post(name: NSWorkspace.willSleepNotification, object: nil)
         workspace.post(name: NSWorkspace.didWakeNotification, object: nil)
         try require(store.entries.count == 2 && model.interruptions?.interruptedTask == nil, "Idle sleep must not invent tracked work")

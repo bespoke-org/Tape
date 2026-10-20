@@ -1,4 +1,5 @@
 import AppKit
+import CoreGraphics
 import LineCore
 
 /// Only actual lock and system sleep affect tracking. Screen/display sleep is ignored.
@@ -6,6 +7,18 @@ import LineCore
 final class SystemActivityMonitor: NSObject {
     static let locked = Notification.Name("com.apple.screenIsLocked")
     static let unlocked = Notification.Name("com.apple.screenIsUnlocked")
+
+    static func sessionIsUsable() -> Bool {
+        guard let session = CGSessionCopyCurrentDictionary() as? [String: Any],
+              session[kCGSessionOnConsoleKey as String] as? Bool == true,
+              session[kCGSessionLoginDoneKey as String] as? Bool == true else { return false }
+        // macOS omits this key while unlocked. Like the lock notifications, the key
+        // is undocumented; keep the compatibility check confined to this adapter.
+        if let value = session["CGSSessionScreenIsLocked"] {
+            return value as? Bool == false
+        }
+        return true
+    }
 
     private let workspace: NotificationCenter
     private let lockNotifications: NotificationCenter
