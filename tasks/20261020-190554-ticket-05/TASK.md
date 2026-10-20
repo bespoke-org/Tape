@@ -1,14 +1,15 @@
 # 05: Stop tracking on screen lock and sleep
 
-**Spec:** [DayTape v1](../spec.md)
+- STATUS: CLOSED
+- PRIORITY: 100
+- TAGS:
+- LEGACY-ID: 05
+
+**Spec:** [DayTape v1](../../docs/spec.md)
 
 **What to build:** Detect actual lock/sleep, save the interruption endpoint, distinguish usable return from wake-while-locked, and ignore ordinary inactivity/display-off.
 
-**Blocked by:** [01: Track tasks on a live timeline](01-track-tasks-on-a-live-timeline.md).
-
-**Status:** ready-for-agent
-
-**Execution:** done
+**Blocked by:** [01: Track tasks on a live timeline](../20261020-190554-ticket-01/TASK.md).
 
 ## Acceptance criteria
 
@@ -25,4 +26,4 @@ Closing the lid stops tracking when it causes system sleep. A Mac that remains a
 
 The first lock/sleep ends the entry at notification receipt, saves it, and remembers its task in memory. Duplicate signals preserve that endpoint. Wake and unlock must both complete before the Mac is available again. This ticket leaves tracking stopped; ticket 06 supplies automatic continuation. Save failures retain the original stop boundary for retry.
 
-Accepted by the user on 2026-10-20 after the code review, automated checks, and their hands-on check. See [ticket 05 verification](../../../docs/ticket-05-verification.md). The user reported that it works without enumerating every physical scenario; the full matrix remains recorded for ticket 07.
+Accepted by the user on 2026-10-20 after the code review, automated checks, and their hands-on check. See [ticket 05 verification](../../docs/ticket-05-verification.md). The user reported that it works without enumerating every physical scenario; the full matrix remains recorded for ticket 07.

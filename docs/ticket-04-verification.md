@@ -1,6 +1,6 @@
 # Ticket 04 verification
 
-Implementation: [Correct entries and maintain reusable tasks](../.scratch/line-v1/issues/04-correct-entries-and-maintain-reusable-tasks.md).
+Implementation: [Correct entries and maintain reusable tasks](../tasks/20261020-190554-ticket-04/TASK.md).
 
 Implemented on 2026-10-19; accepted as done by the user on 2026-10-20 for usability and functionality.
 

@@ -1,14 +1,15 @@
 # 04: Correct entries and maintain reusable tasks
 
-**Spec:** [DayTape v1](../spec.md)
+- STATUS: CLOSED
+- PRIORITY: 100
+- TAGS:
+- LEGACY-ID: 04
+
+**Spec:** [DayTape v1](../../docs/spec.md)
 
 **What to build:** Edit tasks and timestamps, resize entries, recolor tasks, and confirm deletion; keep running-entry behavior and validation consistent.
 
-**Blocked by:** [03: Draw historical entries or start tracking from the past](03-draw-historical-entries-or-start-tracking-from-the-past.md).
-
-**Status:** ready-for-agent
-
-**Execution:** done
+**Blocked by:** [03: Draw historical entries or start tracking from the past](../20261020-190554-ticket-03/TASK.md).
 
 ## Interface
 
@@ -26,4 +27,4 @@ Native macOS appearance, Liquid Glass use, and accessibility follow the spec and
 
 Accepted by the user on 2026-10-20 after the final review. The current UI is accepted unchanged, including the subtle search-field border. Immediate color-menu dismissal attempts remain reverted. The unused general-purpose editing method is an optional cleanup, not a blocker.
 
-See [verification notes](../../../docs/ticket-04-verification.md) for automated checks, resolved review findings, and remaining manual input/appearance checks.
+See [verification notes](../../docs/ticket-04-verification.md) for automated checks, resolved review findings, and remaining manual input/appearance checks.

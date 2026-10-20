@@ -1,6 +1,6 @@
 # Ticket 02 verification
 
-Implementation: [Browse and zoom the timeline](../.scratch/line-v1/issues/02-browse-and-zoom-the-timeline.md).
+Implementation: [Browse and zoom the timeline](../tasks/20261020-190554-ticket-02/TASK.md).
 
 Accepted as done on 2026-10-18 after the user’s refinements and final review. Standards and spec reviews of the full ticket diff found no actionable issues or unnecessary complexity. All 14 core tests pass; the latest timeline smoke checks cover both steps of the double-tap gesture. The unverified manual checks below are deferred to ticket 07.
 

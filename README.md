@@ -27,7 +27,7 @@ open build/DayTape.app
 
 Built with Swift, SwiftUI, and AppKit. No account or subscription.
 
-[Usage & development](docs/guide.md) · [Spec](.scratch/line-v1/spec.md) · [Tickets](.scratch/line-v1/ticket-plan.md)
+[Usage & development](docs/guide.md) · [Spec](docs/spec.md) · [Tasks](tasks/README.md)
 
 ## License
 

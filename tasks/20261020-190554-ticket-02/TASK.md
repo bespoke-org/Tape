@@ -1,14 +1,15 @@
 # 02: Browse and zoom the timeline
 
-**Spec:** [DayTape v1](../spec.md)
+- STATUS: CLOSED
+- PRIORITY: 100
+- TAGS:
+- LEGACY-ID: 02
+
+**Spec:** [DayTape v1](../../docs/spec.md)
 
 **What to build:** Scroll into history/future, return to now, pinch to zoom, adapt date/time ticks to scale, and retain scale across reopen/relaunch.
 
-**Blocked by:** [01: Track tasks on a live timeline](01-track-tasks-on-a-live-timeline.md).
-
-**Status:** ready-for-agent
-
-**Execution:** done
+**Blocked by:** [01: Track tasks on a live timeline](../20261020-190554-ticket-01/TASK.md).
 
 ## Acceptance criteria
 
@@ -24,6 +25,6 @@ Native macOS appearance, Liquid Glass use, and accessibility follow the spec and
 - Fourteen core tests pass, including following/browsing, anchored zoom, adaptive ticks across daylight-saving changes, multi-day labels, range-query endpoints, and backward-compatible zoom persistence.
 - Both bounded packaged-app smoke modes pass. Timeline mode tests synthetic AppKit input, Now, reopening, zoom persistence across fresh launches, and stable anchoring. Existing tracking and jitter regressions also pass.
 - Real trackpad scrolling/pinch and the complete appearance/accessibility matrix remain manual checks; synthetic inputs do not establish physical gesture behavior.
-- See [the verification record](../../../docs/ticket-02-verification.md).
+- See [the verification record](../../docs/ticket-02-verification.md).
 
 - Accepted as done on 2026-10-18 after the user’s UI refinements and final standards/spec review. Both review axes found no actionable issues. Unverified physical gesture and appearance/accessibility checks remain unchecked and are deferred to ticket 07, not claimed as passed.

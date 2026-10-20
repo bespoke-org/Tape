@@ -1,14 +1,15 @@
 # 09: Overwrite entries with Command-drag
 
-**Spec:** [DayTape v1 — Command-drag overwrite](../spec.md#command-drag-overwrite)
+- STATUS: CLOSED
+- PRIORITY: 100
+- TAGS:
+- LEGACY-ID: 09
+
+**Spec:** [DayTape v1 — Command-drag overwrite](../../docs/spec.md#command-drag-overwrite)
 
 **What to build:** Hold ⌘ while drawing a new interval to replace time already assigned to other entries. Trim partially covered entries, split entries when the selection covers their middle, and delete entries covered entirely.
 
-**Blocked by:** [03: Draw historical entries or start tracking from the past](03-draw-historical-entries-or-start-tracking-from-the-past.md).
-
-**Status:** ready-for-agent
-
-**Execution:** done
+**Blocked by:** [03: Draw historical entries or start tracking from the past](../20261020-190554-ticket-03/TASK.md).
 
 **Scheduling:** follow-up; does not block tickets 04–08.
 
@@ -30,4 +31,4 @@ If the selected task is the original task, that same example remains one 10:00�
 
 The original ticket added overwrite to interval drawing. A follow-up adds Command overwrite to edge resizing: Command can be held before dragging or toggled during the gesture, and mouse-up commits the current mode. Ordinary resizing still stops at neighboring entries.
 
-Accepted as done by the user on 2026-10-19, including removal of tasks whose last entry disappears. See [verification notes](../../../docs/ticket-09-verification.md) for automated checks, review results, and the physical gesture/appearance checks carried to ticket 07.
+Accepted as done by the user on 2026-10-19, including removal of tasks whose last entry disappears. See [verification notes](../../docs/ticket-09-verification.md) for automated checks, review results, and the physical gesture/appearance checks carried to ticket 07.

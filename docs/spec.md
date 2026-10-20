@@ -1,6 +1,6 @@
 # DayTape v1: personal menu bar time tracking
 
-**Status:** ready-for-agent
+**Status:** approved
 
 **Scope:** Native Swift app for one person's Mac. This spec records the approved design interview, including the native macOS design requirement. Ticket decomposition is reviewed separately before publication.
 
@@ -94,7 +94,7 @@ The app should look and behave like a native macOS 26 utility, using system cont
 
 ### Command-drag overwrite
 
-- [Ticket 09](issues/09-overwrite-entries-with-command-drag.md) adds overwrite drawing. Hold Command at the start of a drag to select across existing entries, including starting inside one. Entry edges take priority and resize that entry. Retain overwrite intent through task selection and show a gray striped preview before committing, with explicit Overwrite or Overwrite & Start submission. Keep the picker compact: no extra overwrite label, selected-time caption, or Cancel button. Escape or closing the popover cancels the draft.
+- [Ticket 09](../tasks/20261020-190554-ticket-09/TASK.md) adds overwrite drawing. Hold Command at the start of a drag to select across existing entries, including starting inside one. Entry edges take priority and resize that entry. Retain overwrite intent through task selection and show a gray striped preview before committing, with explicit Overwrite or Overwrite & Start submission. Keep the picker compact: no extra overwrite label, selected-time caption, or Cancel button. Escape or closing the popover cancels the draft.
 - Committing replaces the selected time: trim partially covered edges, delete fully covered entries, and split an entry into two surviving fragments if the new interval covers its middle. Keep uncovered timestamps and task assignments unchanged. Delete a task when its final entry disappears; retain tasks referenced by any surviving or replacement entry. Clean up unused task records from earlier versions on load.
 - Merge the overwrite result with directly adjoining entries for the selected task, including fragments on either side and running entries. Continue through the connected same-task entries to form one continuous interval. A real gap or a different task stops merging. Do not merge unrelated history or change ordinary drawing's behavior.
 - Preserve ordinary drawing's snapping, cancellation, and historical/through-Now semantics. A historical overwrite leaves any uncovered running tail running; an overwrite through Now starts the selected task instead. Apply the entire replacement atomically after revalidation, preserving the single-running-entry and non-overlap invariants. Cancellation or failure changes no records.
@@ -140,7 +140,7 @@ The app should look and behave like a native macOS 26 utility, using system cont
 ### Delivery and planning
 
 - Deliver a locally runnable app bundle and source/build instructions for this Mac. No App Store submission, notarized distribution workflow, account system, or hosted component is required.
-- Keep the spec and individual implementation tickets in the local Markdown tracker. Approved tickets use ready-for-agent and explicitly declare their dependencies.
+- Keep the spec in the repository and implementation tasks in the [tatr tracker](../tasks/README.md). Tasks use only OPEN or CLOSED and declare dependencies as links in their descriptions. Follow the [task tracking workflow](issue-tracker.md).
 
 ## Testing Decisions
 

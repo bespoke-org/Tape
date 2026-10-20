@@ -1,6 +1,6 @@
 # Ticket 06 verification
 
-Implementation: [Resume interrupted work with a cancellable countdown](../.scratch/line-v1/issues/06-resume-interrupted-work-with-a-cancellable-countdown.md).
+Implementation: [Resume interrupted work with a cancellable countdown](../tasks/20261020-190554-ticket-06/TASK.md).
 
 Implemented and accepted as done by the user on 2026-10-20. Automated checks and review are complete. The user accepted the final behavior and UI; the full physical scenario matrix below carries forward to ticket 07.
 

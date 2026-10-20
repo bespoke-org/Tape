@@ -1,6 +1,6 @@
 # Ticket 03 verification
 
-Implementation: [Draw historical entries or start tracking from the past](../.scratch/line-v1/issues/03-draw-historical-entries-or-start-tracking-from-the-past.md).
+Implementation: [Draw historical entries or start tracking from the past](../tasks/20261020-190554-ticket-03/TASK.md).
 
 Accepted as done by the user on 2026-10-19 after exercising the app and refining drawing behavior. Remaining systematic hardware and appearance/accessibility checks are deferred to ticket 07.
 

@@ -1,6 +1,6 @@
 # Ticket 01 verification
 
-Implementation: [Track tasks on a live timeline](../.scratch/line-v1/issues/01-track-tasks-on-a-live-timeline.md).
+Implementation: [Track tasks on a live timeline](../tasks/20261020-190554-ticket-01/TASK.md).
 
 Accepted as done by the user on 2026-10-18 after confirming the popover jitter fix. The manual checks recorded below remain unverified and are deferred to ticket 07; they do not block ticket 01's closure.
 

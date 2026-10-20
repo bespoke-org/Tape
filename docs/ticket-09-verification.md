@@ -1,6 +1,6 @@
 # Ticket 09 verification
 
-Implementation: [Overwrite entries with Command-drag](../.scratch/line-v1/issues/09-overwrite-entries-with-command-drag.md).
+Implementation: [Overwrite entries with Command-drag](../tasks/20261020-190554-ticket-09/TASK.md).
 
 Accepted as done by the user on 2026-10-19, including cleanup of task names after their last entry is removed.
 

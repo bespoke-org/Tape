@@ -1,14 +1,15 @@
 # 01: Track tasks on a live timeline
 
-**Spec:** [DayTape v1](../spec.md)
+- STATUS: CLOSED
+- PRIORITY: 100
+- TAGS:
+- LEGACY-ID: 01
+
+**Spec:** [DayTape v1](../../docs/spec.md)
 
 **What to build:** A runnable native menu bar app; create/search tasks, start/stop/switch, and watch entries grow on an eight-hour timeline following now; preserve data and stop safely on quit or recovery.
 
 **Blocked by:** None (can start immediately).
-
-**Status:** ready-for-agent
-
-**Execution:** done
 
 **Acceptance:** Accepted by the user on 2026-10-18 after trying the app and confirming the popover jitter fix. Remaining appearance/accessibility checks are deferred to ticket 07 and do not block this ticket's completion.
 
@@ -32,4 +33,4 @@ Native macOS appearance, Liquid Glass use, and accessibility follow the spec and
 - Release build, app signature, and bundle metadata are checked separately. Build and run instructions are in the project README.
 - The user exercised the packaged app and accepted its appearance and interactions after the UI refinements and anchoring/jitter fixes. The unchecked appearance/accessibility criterion records checks not fully performed: the light/dark and contrast/transparency/motion matrix, dedicated outside-click dismissal verification, and VoiceOver. These remain part of ticket 07's final verification; they are deferred, not claimed as passed.
 
-See [the verification record](../../../docs/ticket-01-verification.md).
+See [the verification record](../../docs/ticket-01-verification.md).

@@ -37,7 +37,7 @@ Working record of agreed behavior and unresolved decisions. This is not the impl
 
 ## Planning status
 
-The product interview and proposed testing approach were accepted. The implementation reference is now [the DayTape v1 spec](../.scratch/line-v1/spec.md). The [approved ticket breakdown](../.scratch/line-v1/ticket-plan.md) merges the basic live timeline into the first tracking slice, with browsing and zoom as the next slice. Individual tickets are published under [issues](../.scratch/line-v1/issues/). Planning records follow [the local issue tracker configuration](issue-tracker.md).
+The product interview and proposed testing approach were accepted. The implementation reference is now [the DayTape v1 spec](spec.md). The [approved ticket breakdown](ticket-plan.md) merges the basic live timeline into the first tracking slice, with browsing and zoom as the next slice. Individual tasks are maintained with tatr under [tasks](../tasks/README.md). Planning records follow [the task tracking workflow](issue-tracker.md).
 
 ## Native macOS design requirements
 

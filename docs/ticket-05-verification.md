@@ -1,6 +1,6 @@
 # Ticket 05 verification
 
-Implementation: [Stop tracking on screen lock and sleep](../.scratch/line-v1/issues/05-stop-tracking-on-screen-lock-and-sleep.md).
+Implementation: [Stop tracking on screen lock and sleep](../tasks/20261020-190554-ticket-05/TASK.md).
 
 Implemented and accepted as done on 2026-10-20. After trying the rebuilt app, the user reported that it seems to be working. This records user-reported hands-on acceptance, not an independently observed pass of every physical scenario.
 

@@ -1,14 +1,15 @@
 # 03: Draw historical entries or start tracking from the past
 
-**Spec:** [DayTape v1](../spec.md)
+- STATUS: CLOSED
+- PRIORITY: 100
+- TAGS:
+- LEGACY-ID: 03
+
+**Spec:** [DayTape v1](../../docs/spec.md)
 
 **What to build:** Drag empty space, type/select a task, save historical time or keep running when drawing through now; support cancellation and reject overlaps without modifying existing entries.
 
-**Blocked by:** [02: Browse and zoom the timeline](02-browse-and-zoom-the-timeline.md).
-
-**Status:** ready-for-agent
-
-**Execution:** done
+**Blocked by:** [02: Browse and zoom the timeline](../20261020-190554-ticket-02/TASK.md).
 
 ## Acceptance criteria
 
@@ -24,4 +25,4 @@ Native macOS appearance, Liquid Glass use, and accessibility follow the spec and
 
 - All 22 core tests pass. Packaged-app creation, tracking, and timeline smoke checks pass with isolated data and bounded runtimes.
 - Standards and spec reviews found no actionable findings or unnecessary complexity.
-- Accepted by the user on 2026-10-19 after exercising drawing and refining selection boundaries, snapping, and cancellation. The full hardware and appearance/accessibility verification matrix remains deferred to ticket 07, not claimed as passed. See [the verification record](../../../docs/ticket-03-verification.md).
+- Accepted by the user on 2026-10-19 after exercising drawing and refining selection boundaries, snapping, and cancellation. The full hardware and appearance/accessibility verification matrix remains deferred to ticket 07, not claimed as passed. See [the verification record](../../docs/ticket-03-verification.md).

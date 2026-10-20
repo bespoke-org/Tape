@@ -1,16 +1,17 @@
 # 08: Migrate local storage to SQLite
 
-**Spec:** [DayTape v1 — local durability and lifecycle](../spec.md#local-durability-and-lifecycle)
+- STATUS: OPEN
+- PRIORITY: 100
+- TAGS:
+- LEGACY-ID: 08
+
+**Spec:** [DayTape v1 — local durability and lifecycle](../../docs/spec.md#local-durability-and-lifecycle)
 
 **What to build:** Replace the JSON store with SQLite so checkpoints update only the running entry and timeline browsing queries the visible time range instead of loading all history.
 
-**Blocked by:** [02: Browse and zoom the timeline](02-browse-and-zoom-the-timeline.md).
+**Blocked by:** [02: Browse and zoom the timeline](../20261020-190554-ticket-02/TASK.md).
 
-**Status:** ready-for-agent
-
-**Execution:** not started
-
-**Scheduling:** deferred; revisit after history browsing. This ticket does not block the existing v1 tickets.
+Added as a follow-up for later. This ticket does not block the existing v1 tickets.
 
 ## Acceptance criteria
 
