@@ -6,6 +6,7 @@ import Observation
 @Observable
 final class AppModel {
     private(set) var store: TrackingStore?
+    private(set) var interruptions: TrackingInterruption?
     private(set) var errorMessage: String?
     var timeline = TimelineViewport()
     private(set) var entrySelection: EntrySelection?
@@ -28,6 +29,7 @@ final class AppModel {
     func load() {
         perform {
             store = try TrackingStore(url: storeURL)
+            if let store { interruptions = TrackingInterruption(store: store) }
         }
     }
 
@@ -42,6 +44,18 @@ final class AppModel {
     func checkpoint() {
         guard store?.runningEntry != nil else { return }
         perform { try store?.checkpoint() }
+    }
+
+    func handleSystemEvent(_ event: SystemActivityEvent) {
+        guard let interruptions else { return }
+        // Update physical state even if a previous stop still needs its save retried.
+        do {
+            try interruptions.handle(event)
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        onChange?()
     }
 
     func preparePopover() {
@@ -142,6 +156,7 @@ final class AppModel {
         let reachesNow = abs(date.timeIntervalSince(instant)) <= timeline.span * tolerance
         cancelEntry()
         do {
+            try interruptions?.retryStop()
             try store.resizeEntry(id: id, edge: edge, to: date, reachesNow: reachesNow)
             errorMessage = nil
             onChange?()
@@ -197,6 +212,7 @@ final class AppModel {
     func createSelectedEntry(named name: String) -> Bool {
         guard let selection = entrySelection, let store else { return false }
         do {
+            try interruptions?.retryStop()
             try store.createEntry(named: name, selection: selection)
             cancelEntry()
             errorMessage = nil
@@ -226,6 +242,7 @@ final class AppModel {
 
     private func performEntryEdit(_ operation: () throws -> Void) -> Bool {
         do {
+            try interruptions?.retryStop()
             try operation()
             entryError = nil
             errorMessage = nil
@@ -240,6 +257,7 @@ final class AppModel {
     @discardableResult
     private func perform(_ operation: () throws -> Void) -> Bool {
         do {
+            try interruptions?.retryStop()
             try operation()
             errorMessage = nil
             onChange?()

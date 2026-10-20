@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import LineCore
 
 @main
 enum LineApp {
@@ -40,6 +41,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private var model: AppModel!
     private var checkpointTimer: Timer?
     private var outsideClickMonitor: Any?
+    private var systemActivityMonitor: SystemActivityMonitor?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let directory: URL
@@ -59,6 +61,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         popover.behavior = .transient
         popover.delegate = self
         updateStatus()
+        systemActivityMonitor = SystemActivityMonitor { [weak self] event in
+            self?.handleSystemEvent(event)
+        }
 
         let timer = Timer(timeInterval: 5, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.model.checkpoint() }
@@ -77,6 +82,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             }
         }
         #endif
+    }
+
+    func handleSystemEvent(_ event: SystemActivityEvent) {
+        model.handleSystemEvent(event)
+        switch event {
+        case .locked, .willSleep:
+            model.cancelEntry()
+            popover.close()
+        case .unlocked, .didWake:
+            break
+        }
     }
 
     @objc private func handleStatusItemClick() {

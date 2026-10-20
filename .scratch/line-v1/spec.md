@@ -108,7 +108,7 @@ The app should look and behave like a native macOS 26 utility, using system cont
 
 ### Lock, sleep, and continuation
 
-- Screen lock or system sleep ends a running entry at the interruption boundary and remembers its task for possible continuation. Ordinary inactivity and display-off alone do not stop tracking.
+- Screen lock or system sleep ends a running entry at the interruption boundary and remembers its task for possible continuation. Lid closure counts when it causes system sleep; an awake Mac with an external display keeps tracking. Ordinary inactivity and display-off alone do not stop tracking.
 - Treat locked and sleeping conditions independently. A return is usable only when awake and unlocked. Duplicate notifications, sleep followed by lock, and wake while still locked must not produce duplicate entries or multiple countdowns.
 - If a task was interrupted, a usable return starts one ten-second pending continuation and immediately presents a popover anchored to the menu bar without stealing focus. Show the task name, a decreasing countdown, and Reject. An idle app does not invent a task to resume.
 - Dismissing that popover or using another app leaves the countdown active. On completion, start one entry at the usable-return instant, including the countdown interval. Use elapsed time, not animation frames, to decide completion.

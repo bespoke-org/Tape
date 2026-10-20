@@ -19,7 +19,7 @@ Hold ⌘ when starting a drag to overwrite existing time, even when starting ins
 
 Click an entry to open its settings below the timeline. Click empty timeline space to deselect it. The color picker, task search field, and Delete share one row. Adjust start and end times by dragging the entry edges. Select a suggestion or press Return to reassign this entry, creating a task if the name is new. Typing alone does not change records. Color changes save immediately. Escape or closing the popover keeps saved changes. The swatch beside the search field changes the task color across all entries. There are no Save or Cancel buttons in the editor. Delete requires confirmation. Running entries keep tracking while their task or start is corrected. Hover near either edge of an entry for a bracket-style trim cursor. The bracket identifies which entry edge will move. It stays visible during resizing; holding Command suppresses the hint for overwrite mode. Drag either edge to resize it, snapping to minutes and stopping at neighboring entries. Dragging a completed entry’s end to or past Now continues that same entry as running, unless another entry blocks it. For a running entry, moving the start keeps tracking; dragging the end into the past stops it at that time, while leaving it at or beyond Now keeps tracking. Command-drag still overwrites instead of resizing.
 
-Tickets 1–4 and 9 supply tracking, browsing, drawing, corrections, and Command-drag overwrite. Lock/sleep handling, automatic continuation, and launch at login are subsequent tickets and are not implemented yet. Until lock/sleep handling lands, stop tracking before leaving the Mac.
+Tickets 1–5 and 9 supply tracking, browsing, drawing, corrections, automatic stopping on lock/sleep, and Command-drag overwrite. Lock or system sleep stops and saves the running entry; returning leaves Line stopped. Lid closure counts when it causes system sleep, while an awake Mac with an external display keeps tracking. Ordinary inactivity, dimming, and display-off alone keep tracking. Automatic continuation and launch at login are later tickets. Physical lock/sleep delivery is awaiting verification on this Mac; see [ticket 05 verification](docs/ticket-05-verification.md).
 
 New tasks use a nine-color palette, choosing an unused color when available before repeating colors. Saved mint/cyan shades load as teal and indigo as blue; other assigned colors stay unchanged.
 
@@ -46,6 +46,7 @@ python3 scripts/smoke-test.py --timeline
 python3 scripts/smoke-test.py --creation
 python3 scripts/smoke-test.py --overwrite
 python3 scripts/smoke-test.py --editing
+python3 scripts/smoke-test.py --system-activity
 ```
 
 Tests exercise the public tracking operations using a controlled clock and temporary real files. Native menu bar behavior, focus, dismissal, rendering, and appearance/accessibility settings also need checks in the running app.
@@ -67,3 +68,5 @@ The editing smoke check uses native color controls and confirmation buttons alon
 - [Tickets and dependencies](.scratch/line-v1/ticket-plan.md)
 
 The `python3 scripts/smoke-test.py --dismissal` check exercises the outside-click callback before using the color menu, after dismissing it, and after choosing a color. Physical outside-click delivery still needs a manual check.
+
+The system-activity smoke check injects private notification centers into the macOS adapter. It verifies lock/sleep stopping, duplicate and reordered signals, ignored display sleep, draft dismissal, and stopped state after return. It never broadcasts fake system notifications or changes the release app's data. Real lock/unlock and sleep/wake still require a physical check.

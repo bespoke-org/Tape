@@ -261,10 +261,14 @@ public final class TrackingStore {
         }
     }
 
-    public func stop() throws {
-        guard runningEntry != nil else { return }
+    public func stop(at boundary: Date? = nil) throws {
+        guard let running = runningEntry else { return }
+        let instant = try checkedInstant()
+        let end = boundary ?? instant
+        guard end.timeIntervalSince1970.isFinite, end >= running.start else { throw TrackingError.emptyInterval }
+        guard end <= instant else { throw TrackingError.futureInterval }
         var candidate = snapshot
-        finishRunning(in: &candidate, at: try checkedInstant())
+        finishRunning(in: &candidate, at: end)
         candidate.checkpoint = nil
         try commit(candidate)
     }

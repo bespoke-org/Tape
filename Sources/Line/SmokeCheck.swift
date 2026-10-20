@@ -18,6 +18,13 @@ enum SmokeCheck {
             try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
             try require(NSApp.activationPolicy() == .accessory, "App must have no Dock icon")
             try require(button.image != nil, "Status item must have an icon")
+            if ProcessInfo.processInfo.environment["LINE_SMOKE_SYSTEM_ACTIVITY"] == "1" {
+                try await checkSystemActivity(button: button, popover: popover, model: model)
+                try Data("PASS: lock/sleep notifications stop and save once, ignore display sleep, preserve return ordering, close drafts, and leave tracking stopped.\n".utf8)
+                    .write(to: output.appendingPathComponent("result.txt"))
+                NSApp.terminate(nil)
+                return
+            }
             if ProcessInfo.processInfo.environment["LINE_SMOKE_DISMISSAL"] == "1" {
                 popover.behavior = .transient
                 try await checkDismissal(button: button, popover: popover, model: model)
@@ -468,6 +475,56 @@ enum SmokeCheck {
         try require(store.runningEntry == nil && store.entries[0].id == remaining.id, "The continued entry must stop normally")
         try requireAnchored(popover, to: button)
         try await requireStablePosition(popover)
+    }
+
+    private static func checkSystemActivity(button: NSStatusBarButton, popover: NSPopover, model: AppModel) async throws {
+        // Inject private centers, never post fake system events to other apps or the release build.
+        let workspace = NotificationCenter()
+        let locks = NotificationCenter()
+        let delegate = NSApp.delegate as! AppDelegate
+        let monitor = SystemActivityMonitor(workspace: workspace, lockNotifications: locks,
+                                            receive: delegate.handleSystemEvent)
+        defer { withExtendedLifetime(monitor) {} }
+        let store = model.store!
+        try require(model.start("Lock check"), "Start lock check")
+        try await settle()
+        let running = store.runningEntry!
+        workspace.post(name: NSWorkspace.screensDidSleepNotification, object: nil)
+        workspace.post(name: NSWorkspace.screensDidWakeNotification, object: nil)
+        workspace.post(name: NSWorkspace.sessionDidResignActiveNotification, object: nil)
+        model.checkpoint()
+        try require(store.runningEntry?.id == running.id, "Display sleep and unrelated session notifications must not stop tracking")
+        try clickStatusItem(button)
+        try await settle()
+        model.editEntry(id: running.id)
+        let beforeLock = Date.now
+        locks.post(name: SystemActivityMonitor.locked, object: nil)
+        let afterLock = Date.now
+        try require(store.runningEntry == nil && store.entries.count == 1, "Screen lock must stop exactly one entry")
+        let end = store.entries[0].end!
+        try require(end >= beforeLock && end <= afterLock, "Lock must save synchronously at receipt")
+        try require(model.interruptions?.interruptedTask?.id == running.taskID, "Remember the interrupted task")
+        try await settle()
+        try require(!popover.isShown && model.editingEntryID == nil, "Lock must close the popover and discard editing state")
+        locks.post(name: SystemActivityMonitor.locked, object: nil)
+        workspace.post(name: NSWorkspace.willSleepNotification, object: nil)
+        workspace.post(name: NSWorkspace.didWakeNotification, object: nil)
+        try require(model.interruptions?.isAvailable == false, "Wake while locked is not a usable return")
+        locks.post(name: SystemActivityMonitor.unlocked, object: nil)
+        try require(model.interruptions?.isAvailable == true && store.runningEntry == nil, "Unlock must leave tracking stopped")
+        try require(store.entries[0].end == end, "Duplicate events must not extend the entry")
+        try require(model.start("Sleep check"), "Start sleep check")
+        try await settle()
+        workspace.post(name: NSWorkspace.willSleepNotification, object: nil)
+        locks.post(name: SystemActivityMonitor.locked, object: nil)
+        locks.post(name: SystemActivityMonitor.unlocked, object: nil)
+        try require(model.interruptions?.isAvailable == false, "Unlock before wake is not a usable return")
+        workspace.post(name: NSWorkspace.didWakeNotification, object: nil)
+        try require(model.interruptions?.isAvailable == true && store.runningEntry == nil, "Sleep return must stay stopped")
+        workspace.post(name: NSWorkspace.willSleepNotification, object: nil)
+        workspace.post(name: NSWorkspace.didWakeNotification, object: nil)
+        try require(store.entries.count == 2 && model.interruptions?.interruptedTask == nil, "Idle sleep must not invent tracked work")
+        try require(model.errorMessage == nil, "Notification handling must not produce errors")
     }
 
     private static func checkOverwrite(button: NSStatusBarButton, popover: NSPopover, model: AppModel) async throws {
