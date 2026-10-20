@@ -95,7 +95,7 @@ struct TrackingStoreTests {
         #expect(store.tasks.map(\.name) == ["Keep"])
         #expect(store.tasks.first?.color == .green)
         #expect(store.entries.count == 1 && store.entries.first?.duration(at: .now) == 60)
-        #expect(store.timelineSpan == 7_200)
+        #expect(store.defaultZoomHours == 8)
         let reopened = try TrackingStore(url: url)
         #expect(reopened.tasks == store.tasks && reopened.entries == store.entries)
     }
@@ -119,7 +119,7 @@ struct TrackingStoreTests {
         #expect(store.entries(overlapping: DateInterval(start: base.addingTimeInterval(130), duration: 10), now: now).count == 1)
         #expect(store.entries(overlapping: DateInterval(start: now, duration: 60), now: now).isEmpty)
     }
-    @Test func zoomSurvivesReopeningOldStoresWithoutChangingRecoveryTime() throws {
+    @Test func defaultZoomSurvivesReopeningOldStoresWithoutChangingRecoveryTime() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -127,17 +127,63 @@ struct TrackingStoreTests {
         try Data(#"{"version":1,"tasks":[],"entries":[]}"#.utf8).write(to: url)
         var now = Date(timeIntervalSince1970: 1_800_000_000)
         let store = try TrackingStore(url: url, now: { now })
-        #expect(store.timelineSpan == 28_800)
+        #expect(store.defaultZoomHours == 8)
         try store.startTask(named: "Read")
         now += 5
         try store.checkpoint()
         now += 10
-        try store.setTimelineSpan(7_200)
+        try store.setDefaultZoomHours(2)
         now += 3_600
         let reopened = try TrackingStore(url: url, now: { now })
-        #expect(reopened.timelineSpan == 7_200)
+        #expect(reopened.defaultZoomHours == 2)
         #expect(reopened.entries.first?.duration(at: now) == 5)
         #expect(reopened.runningTask == nil)
+    }
+
+    @Test func defaultZoomBoundsPersistWithoutChangingRecordedWork() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("tracking.json")
+        var now = Date(timeIntervalSince1970: 1_800_000_000)
+        let store = try TrackingStore(url: url, now: { now })
+        try store.startTask(named: "Keep this work")
+        now += 60
+        try store.stop()
+        let entries = store.entries
+        let tasks = store.tasks
+        for (requested, expected) in [(Int.min, 1), (2, 2), (3, 2), (6, 4), (7, 8), (10, 8), (12, 12), (14, 12), (16, 16), (18, 16), (20, 16), (21, 24), (Int.max, 24)] {
+            try store.setDefaultZoomHours(requested)
+            let reopened = try TrackingStore(url: url, now: { now })
+            #expect(reopened.defaultZoomHours == expected)
+            #expect(reopened.entries == entries && reopened.tasks == tasks)
+        }
+    }
+
+    @Test func legacyZoomUsesNearestPresetWithoutRewritingRecords() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let url = directory.appendingPathComponent("tracking.json")
+        let data = Data(#"{"version":1,"tasks":[],"entries":[],"defaultZoomHours":7}"#.utf8)
+        try data.write(to: url)
+        let store = try TrackingStore(url: url)
+        #expect(store.defaultZoomHours == 8)
+        #expect(try Data(contentsOf: url) == data)
+    }
+
+    @Test func failedDefaultZoomSaveKeepsPreviousSettingAndRunningEntry() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("tracking.json")
+        let store = try TrackingStore(url: url)
+        try store.startTask(named: "Keep tracking")
+        try store.setDefaultZoomHours(4)
+        let entries = store.entries
+        try FileManager.default.removeItem(at: url)
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: false)
+        #expect(throws: (any Error).self) { try store.setDefaultZoomHours(12) }
+        #expect(store.defaultZoomHours == 4)
+        #expect(store.entries == entries && store.runningTask?.name == "Keep tracking")
     }
     @Test func recoveryDropsAnEntryThatNeverReachedItsFirstCheckpoint() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)

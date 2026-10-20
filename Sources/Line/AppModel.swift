@@ -9,6 +9,9 @@ final class AppModel {
     private(set) var interruptions: TrackingInterruption?
     private(set) var errorMessage: String?
     private var interruptionError: String?
+    private(set) var settingsError: String?
+    var defaultZoomHours: Int { store?.defaultZoomHours ?? 8 }
+    var defaultTimelineSpan: TimeInterval { Double(defaultZoomHours) * 3_600 }
     var timeline = TimelineViewport()
     private var timelineAnimation: Task<Void, Never>?
     private var timelineAnimationTarget: TimelineViewport?
@@ -101,7 +104,7 @@ final class AppModel {
     func preparePopover() {
         stopTimelineAnimation()
         cancelEntry()
-        timeline = TimelineViewport(span: store?.timelineSpan ?? TimelineViewport.defaultSpan)
+        timeline = TimelineViewport(span: defaultTimelineSpan)
     }
 
     func editEntry(id: UUID) {
@@ -284,15 +287,14 @@ final class AppModel {
     func resetTimeline(animated: Bool) {
         var target = timelineAnimationTarget ?? timeline
         stopTimelineAnimation()
-        if abs(target.span - TimelineViewport.defaultSpan) < 0.001 {
+        if abs(target.span - defaultTimelineSpan) < 0.001 {
             target.followNow()
         } else {
-            target.zoom(factor: target.span / TimelineViewport.defaultSpan, anchorFraction: 0.5, now: .now)
+            target.zoom(factor: target.span / defaultTimelineSpan, anchorFraction: 0.5, now: .now)
         }
         let instant = Date.now
         guard animated, timeline.range(at: instant) != target.range(at: instant) else {
             timeline = target
-            saveTimelineScale()
             return
         }
         let origin = timeline
@@ -307,7 +309,6 @@ final class AppModel {
                 if progress >= 1 {
                     timelineAnimation = nil
                     timelineAnimationTarget = nil
-                    saveTimelineScale()
                     return
                 }
                 do { try await Task.sleep(for: .milliseconds(16)) }
@@ -323,9 +324,14 @@ final class AppModel {
         timelineAnimationTarget = nil
     }
 
-    func saveTimelineScale() {
-        guard let store, timeline.span != store.timelineSpan else { return }
-        perform { try store.setTimelineSpan(timeline.span) }
+    func setDefaultZoomHours(_ hours: Int) {
+        guard let store else { return }
+        do {
+            try store.setDefaultZoomHours(hours)
+            settingsError = nil
+        } catch {
+            settingsError = error.localizedDescription
+        }
     }
 
     private func performEntryEdit(_ operation: () throws -> Void) -> Bool {

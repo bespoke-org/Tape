@@ -164,7 +164,7 @@ struct LiveTimeline: View {
                     }, zoom: { factor, fraction in
                         model.stopTimelineAnimation()
                         model.timeline.zoom(factor: factor, anchorFraction: fraction, now: .now)
-                    }, endZoom: model.saveTimelineScale, resetZoom: {
+                    }, resetZoom: {
                         model.resetTimeline(animated: !reduceMotion)
                     }, drawingBounds: CGRect(x: 0, y: stripTop, width: geometry.size.width, height: stripHeight),
                        interruptNavigation: { model.stopTimelineAnimation() }, beginDraw: model.beginDrawing, updateDraw: model.updateDrawing,

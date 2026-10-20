@@ -6,7 +6,6 @@ import LineCore
 struct TimelineInput: NSViewRepresentable {
     let scroll: (Double, Double) -> Void
     let zoom: (Double, Double) -> Void
-    let endZoom: () -> Void
     let resetZoom: () -> Void
     let drawingBounds: CGRect
     let interruptNavigation: () -> Void
@@ -26,7 +25,6 @@ struct TimelineInput: NSViewRepresentable {
     func updateNSView(_ view: TimelineInputView, context: Context) {
         view.scroll = scroll
         view.zoom = zoom
-        view.endZoom = endZoom
         view.resetZoom = resetZoom
         view.drawingBounds = drawingBounds
         view.interruptNavigation = interruptNavigation
@@ -51,7 +49,6 @@ struct TimelineInput: NSViewRepresentable {
 final class TimelineInputView: NSView {
     var scroll: (Double, Double) -> Void = { _, _ in }
     var zoom: (Double, Double) -> Void = { _, _ in }
-    var endZoom: () -> Void = {}
     var resetZoom: () -> Void = {}
     var drawingBounds: CGRect = .zero
     var interruptNavigation: () -> Void = {}
@@ -238,7 +235,6 @@ final class TimelineInputView: NSView {
             zoom(nextScale / magnificationScale, fraction)
             magnificationScale = nextScale
             if event.phase == .ended || event.phase == .cancelled || event.phase.isEmpty {
-                endZoom()
                 magnificationScale = 1
             }
             return true

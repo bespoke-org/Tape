@@ -18,6 +18,13 @@ enum SmokeCheck {
             try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
             try require(NSApp.activationPolicy() == .accessory, "App must have no Dock icon")
             try require(button.image != nil, "Status item must have an icon")
+            if ProcessInfo.processInfo.environment["LINE_SMOKE_MAIN_WINDOW"] == "1" {
+                try await checkMainWindow(button: button, popover: popover, model: model, output: output)
+                try Data("PASS: explicit single-window opening, native slider, default zoom, draft dismissal, frame restoration, minimize/reopen, Command-comma/Command-W, Dock policy, and tracking continuity.\n".utf8)
+                    .write(to: output.appendingPathComponent("result.txt"))
+                NSApp.terminate(nil)
+                return
+            }
             if ProcessInfo.processInfo.environment["LINE_SMOKE_RESIZE_OVERWRITE"] == "1" {
                 try await checkResizeOverwrite(button: button, popover: popover, model: model)
                 try Data("PASS: Command before and during resize, stationary modifier changes, release to clamp, Escape cancellation, and overwrite commit.\n".utf8)
@@ -70,7 +77,7 @@ enum SmokeCheck {
             }
             if ProcessInfo.processInfo.environment["LINE_SMOKE_TIMELINE"] == "1" {
                 try await checkTimeline(button: button, popover: popover, model: model)
-                try Data("PASS: horizontal/Shift scroll, scoped input, pinch anchors, Now, saved zoom across reopen, stable popover.\n".utf8)
+                try Data("PASS: horizontal/Shift scroll, scoped input, pinch anchors, Now, configured default across reopen, temporary pinch zoom, stable popover.\n".utf8)
                     .write(to: output.appendingPathComponent("result.txt"))
                 NSApp.terminate(nil)
                 return
@@ -164,6 +171,141 @@ enum SmokeCheck {
 
     private static func settle() async throws {
         try await Task.sleep(for: .milliseconds(600))
+    }
+
+    private static func checkMainWindow(button: NSStatusBarButton, popover: NSPopover, model: AppModel, output: URL) async throws {
+        guard let delegate = NSApp.delegate as? AppDelegate else { throw NSError(domain: "LineSmokeCheck", code: 10) }
+        try require(delegate.mainWindowController == nil, "Launch must not create the main window")
+        let firstLaunch = model.defaultZoomHours == 8
+        try require(model.defaultZoomHours == (firstLaunch ? 8 : 12), "Configured zoom must survive a fresh process")
+        let frameName = "DayTape.MainWindow.\(ProcessInfo.processInfo.environment["LINE_DATA_DIRECTORY"]!)"
+        let frameKey = "NSWindow Frame \(frameName)"
+        if !firstLaunch {
+            let saved = try String(contentsOf: output.appendingPathComponent("window-frame.txt"), encoding: .utf8)
+            try require(UserDefaults.standard.string(forKey: frameKey) == saved, "Saved geometry must survive a fresh process")
+        }
+        try require(model.start("Window check"), "Tracking must start")
+        let runningID = model.store!.runningEntry!.id
+        try await settle()
+        try clickStatusItem(button)
+        try await settle()
+        try await openPicker(named: "Switch task", in: popover)
+        try enterTaskName("Unsubmitted draft", in: popover, submit: false)
+        try pressAccessibleControl(named: "Open DayTape", in: contentView(popover))
+        try await settle()
+        guard let window = delegate.mainWindowController?.window,
+              let content = window.contentView else { throw NSError(domain: "LineSmokeCheck", code: 11) }
+        try require(window.isVisible && window.isKeyWindow && NSApp.activationPolicy() == .regular,
+                    "Opening must focus the main window and enable Dock presence (visible=\(window.isVisible), key=\(window.isKeyWindow), policy=\(NSApp.activationPolicy().rawValue), active=\(NSApp.isActive), front=\(NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "unknown"))")
+        try require(!popover.isShown && popover.contentViewController == nil, "Opening the window must dismiss and release the popover")
+        try require(!model.store!.tasks.contains(where: { $0.name == "Unsubmitted draft" }), "Opening must discard unsubmitted text")
+        try require(model.store?.runningEntry?.id == runningID, "Opening must keep the same running entry")
+        try require(window.title == "DayTape" && window.styleMask.contains([.resizable, .miniaturizable, .closable]),
+                    "Main window must use normal native controls")
+        guard let split = window.contentViewController as? NSSplitViewController else { throw NSError(domain: "LineSmokeCheck", code: 12) }
+        try require(split.splitViewItems.count == 2 && !split.splitViewItems[0].canCollapse, "Settings sidebar must remain visible")
+        guard let sidebar = descendants(split.splitViewItems[0].viewController.view).compactMap({ $0 as? NSOutlineView }).first else {
+            throw NSError(domain: "LineSmokeCheck", code: 12, userInfo: [NSLocalizedDescriptionKey: "Native sidebar is missing"])
+        }
+        try require(sidebar.numberOfRows == 1 && sidebar.selectedRow == 0, "Settings must be the only selected sidebar row")
+        guard let slider = descendants(content).compactMap({ $0 as? NSSlider }).first else {
+            throw NSError(domain: "LineSmokeCheck", code: 13, userInfo: [NSLocalizedDescriptionKey: "Native default zoom slider is missing"])
+        }
+        if ProcessInfo.processInfo.environment["LINE_SMOKE_CAPTURE"] == "1" {
+            try checkInitialSliderThumb(slider, in: window, output: output)
+        }
+        let originalSpan = model.timeline.span
+        for hours in [1, 2, 4, 8, 16, 24, 12] {
+            slider.doubleValue = Double(TrackingStore.defaultZoomPresets.firstIndex(of: hours)!)
+            try require(slider.sendAction(slider.action, to: slider.target), "Native slider must deliver its change")
+            try await Task.sleep(for: .milliseconds(100))
+            try require(model.defaultZoomHours == hours && model.settingsError == nil, "Slider must save its selected value")
+            try require(model.timeline.span == originalSpan, "Changing the default must wait for timeline opening or reset")
+        }
+        if firstLaunch {
+            window.setContentSize(NSSize(width: 960, height: 640))
+        }
+        try await settle()
+        if let bitmap = content.bitmapImageRepForCachingDisplay(in: content.bounds) {
+            content.cacheDisplay(in: content.bounds, to: bitmap)
+            try bitmap.representation(using: .png, properties: [:])?.write(to: output.appendingPathComponent("settings.png"))
+        }
+        if ProcessInfo.processInfo.environment["LINE_SMOKE_CAPTURE"] == "1" {
+            // Opt-in composited capture includes native glass that cacheDisplay cannot reproduce.
+            let capture = Process()
+            capture.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+            capture.arguments = ["-x", "-l", String(window.windowNumber), output.appendingPathComponent("settings-window.png").path]
+            try capture.run()
+            capture.waitUntilExit()
+        }
+        func command(_ character: String, keyCode: UInt16) throws {
+            let event = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: .command,
+                                        timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+                                        context: nil, characters: character, charactersIgnoringModifiers: character,
+                                        isARepeat: false, keyCode: keyCode)!
+            try require(NSApp.mainMenu?.performKeyEquivalent(with: event) == true, "Command-\(character) must be handled")
+        }
+        try command(",", keyCode: 43)
+        try await settle()
+        try require(delegate.mainWindowController?.window === window, "Repeated opening must reuse the same window")
+        window.miniaturize(nil)
+        try await settle()
+        try require(window.isMiniaturized && NSApp.activationPolicy() == .regular, "Minimizing must keep Dock presence")
+        let actions = delegate.makeActionsMenu()
+        let open = actions.item(withTitle: "Open DayTape")!
+        try require(NSApp.sendAction(open.action!, to: open.target, from: open), "Status menu must open DayTape")
+        try await settle()
+        try require(!window.isMiniaturized && window.isKeyWindow && delegate.mainWindowController?.window === window,
+                    "Opening a minimized window must restore and focus it (minimized=\(window.isMiniaturized), key=\(window.isKeyWindow), active=\(NSApp.isActive), front=\(NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "unknown"))")
+        _ = delegate.applicationShouldHandleReopen(NSApp, hasVisibleWindows: true)
+        try await settle()
+        try require(window.isKeyWindow && delegate.mainWindowController?.window === window,
+                    "Dock reopening must focus the existing main window (key=\(window.isKeyWindow), active=\(NSApp.isActive), front=\(NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "unknown"))")
+        try command("w", keyCode: 13)
+        try await settle()
+        try require(!window.isVisible && NSApp.activationPolicy() == .accessory, "Closing must restore menu-bar-only operation")
+        try require(model.store?.runningEntry?.id == runningID, "Closing must keep tracking")
+        try clickStatusItem(button)
+        try await settle()
+        try require(model.timeline.span == 12 * 3_600 && model.timeline.isFollowingNow, "Reopening the timeline must use the configured default")
+        try draw(0.1, 0.2, in: popover)
+        try require(model.entrySelection != nil, "Historical draft must exist before opening Settings")
+        try command(",", keyCode: 43)
+        try await settle()
+        try require(model.entrySelection == nil && !popover.isShown && window.isKeyWindow, "Command-comma must discard the interval draft and open Settings")
+        try require(model.store?.runningEntry?.id == runningID, "Window and settings operations must preserve tracking")
+        window.close()
+        try await settle()
+        guard let savedFrame = UserDefaults.standard.string(forKey: frameKey) else {
+            throw NSError(domain: "LineSmokeCheck", code: 14, userInfo: [NSLocalizedDescriptionKey: "Native window geometry was not saved"])
+        }
+        try Data(savedFrame.utf8).write(to: output.appendingPathComponent("window-frame.txt"))
+    }
+
+    private static func checkInitialSliderThumb(_ slider: NSSlider, in window: NSWindow, output: URL) throws {
+        let url = output.appendingPathComponent("settings-first-open.png")
+        let capture = Process()
+        capture.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+        capture.arguments = ["-x", "-o", "-l", String(window.windowNumber), url.path]
+        try capture.run()
+        capture.waitUntilExit()
+        guard capture.terminationStatus == 0,
+              let bitmap = NSBitmapImageRep(data: try Data(contentsOf: url)),
+              let cell = slider.cell as? NSSliderCell else {
+            throw NSError(domain: "LineSmokeCheck", code: 15, userInfo: [NSLocalizedDescriptionKey: "Initial slider capture failed"])
+        }
+        let knob = cell.knobRect(flipped: slider.isFlipped)
+        let point = window.convertPoint(toScreen: slider.convert(NSPoint(x: knob.midX, y: knob.midY), to: nil))
+        let x = Int((point.x - window.frame.minX) * CGFloat(bitmap.pixelsWide) / window.frame.width)
+        let y = Int((window.frame.maxY - point.y) * CGFloat(bitmap.pixelsHigh) / window.frame.height)
+        guard let color = bitmap.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB) else {
+            throw NSError(domain: "LineSmokeCheck", code: 15)
+        }
+        let brightness = (color.redComponent + color.greenComponent + color.blueComponent) / 3
+        print("Initial slider thumb brightness: \(brightness), enabled=\(slider.isEnabled), key=\(window.isKeyWindow), sample=(\(x), \(y))")
+        if slider.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua {
+            try require(brightness > 0.5, "Slider thumb must be light on first opening, before interaction (brightness=\(brightness))")
+        }
     }
 
     private static func timelineInput(in popover: NSPopover) throws -> TimelineInputView {
@@ -955,8 +1097,8 @@ enum SmokeCheck {
               let window = input.window else {
             throw NSError(domain: "LineSmokeCheck", code: 9, userInfo: [NSLocalizedDescriptionKey: "Timeline input is missing"])
         }
-        let initialSpan = model.store!.timelineSpan
-        try require(model.timeline.span == initialSpan && model.timeline.isFollowingNow, "Opening must restore saved zoom and follow now")
+        let initialSpan = model.defaultTimelineSpan
+        try require(model.timeline.span == initialSpan && model.timeline.isFollowingNow, "Opening must use the configured default and follow now")
         let location = input.convert(NSPoint(x: input.bounds.width / 4, y: input.bounds.height / 2), to: nil)
         let vertical = TimelineTestEvent(type: .scrollWheel, window: window, location: location, dy: 20)
         try require(!input.handle(vertical) && model.timeline.isFollowingNow, "Unmodified vertical scrolling must not browse")
@@ -977,18 +1119,18 @@ enum SmokeCheck {
         _ = input.handle(TimelineTestEvent(type: .magnify, window: window, location: location, phase: .ended))
         try require(model.timeline.span == initialSpan / 2, "Pinch increments must accumulate to a twofold zoom")
         try require(abs(model.timeline.date(at: 0.25, now: .now).timeIntervalSince(anchor)) < 0.001, "Pinch must preserve the time under the pointer")
-        try require(model.store?.timelineSpan == initialSpan / 2, "Ending the pinch must persist zoom")
+        try require(model.defaultTimelineSpan == initialSpan, "Pinching must not change the configured default")
         let outsideReset = TimelineTestEvent(type: .smartMagnify, window: window, location: NSPoint(x: -100, y: -100))
         try require(!input.handle(outsideReset) && model.timeline.span == initialSpan / 2, "Smart zoom outside the timeline must be ignored")
         let center = model.timeline.date(at: 0.5, now: .now)
         let reset = TimelineTestEvent(type: .smartMagnify, window: window, location: location)
         try require(input.handle(reset), "Two-finger double-tap must be handled")
         try await Task.sleep(for: .milliseconds(400))
-        try require(model.timeline.span == TimelineViewport.defaultSpan && model.store?.timelineSpan == TimelineViewport.defaultSpan, "Smart zoom must reset and save the eight-hour scale")
+        try require(model.timeline.span == initialSpan, "Smart zoom must reset to the configured default")
         try require(!model.timeline.isFollowingNow && abs(model.timeline.date(at: 0.5, now: .now).timeIntervalSince(center)) < 0.001, "Resetting zoom must preserve the browsed center")
         _ = input.handle(reset)
         try await Task.sleep(for: .milliseconds(400))
-        try require(model.timeline.span == TimelineViewport.defaultSpan && model.timeline.isFollowingNow, "A second double-tap must return to Now at the default scale")
+        try require(model.timeline.span == initialSpan && model.timeline.isFollowingNow, "A second double-tap must return to Now at the default scale")
         _ = input.handle(reset)
         try await Task.sleep(for: .milliseconds(400))
         try require(model.timeline.isFollowingNow, "Further double-taps at Now must keep following")
@@ -998,11 +1140,11 @@ enum SmokeCheck {
         model.resetTimeline(animated: true)
         try require(model.timeline.span == zoomStart, "Animated zoom must not jump immediately")
         try await Task.sleep(for: .milliseconds(100))
-        try require(model.timeline.span > zoomStart && model.timeline.span < TimelineViewport.defaultSpan && model.timeline.isFollowingNow,
+        try require(model.timeline.span > zoomStart && model.timeline.span < initialSpan && model.timeline.isFollowingNow,
                     "Zoom must pass through intermediate scales while keeping Now centered")
         try await Task.sleep(for: .milliseconds(350))
-        try require(model.timeline.span == TimelineViewport.defaultSpan && model.store?.timelineSpan == TimelineViewport.defaultSpan,
-                    "Animated zoom must finish and persist the exact default scale")
+        try require(model.timeline.span == initialSpan,
+                    "Animated zoom must finish at the configured default scale")
         _ = input.handle(horizontal)
         let animationStart = model.timeline.date(at: 0.5, now: .now)
         model.resetTimeline(animated: true)
@@ -1019,9 +1161,9 @@ enum SmokeCheck {
                     "Scrolling must interrupt animation without a later jump")
         model.resetTimeline(animated: false)
         try require(model.timeline.isFollowingNow, "Reduced-motion reset must finish immediately")
-        // Leave a nondefault scale for the reopen and fresh-process persistence checks.
+        // Leave a temporary pinch scale; reopening must discard it.
         _ = input.handle(TimelineTestEvent(type: .magnify, window: window, location: location,
-                                         magnification: TimelineViewport.defaultSpan / (initialSpan / 2) - 1, phase: .began))
+                                         magnification: 1, phase: .began))
         _ = input.handle(TimelineTestEvent(type: .magnify, window: window, location: location, phase: .ended))
         _ = input.handle(horizontal)
         try await settle()
@@ -1031,9 +1173,11 @@ enum SmokeCheck {
         try await settle()
         try clickStatusItem(button)
         try await settle()
-        try require(model.timeline.isFollowingNow && model.timeline.span == initialSpan / 2, "Reopening must follow now at the saved scale")
+        try require(model.timeline.isFollowingNow && model.timeline.span == initialSpan, "Reopening must follow now at the configured default")
         try requireAnchored(popover, to: button)
         try await requireStablePosition(popover)
+        model.setDefaultZoomHours(model.defaultZoomHours == 8 ? 4 : 12)
+        try require(model.settingsError == nil, "Configured default must save")
     }
 
     private static func requireStablePosition(_ popover: NSPopover) async throws {

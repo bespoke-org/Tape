@@ -9,6 +9,7 @@ import tempfile
 
 parser = argparse.ArgumentParser()
 modes = parser.add_mutually_exclusive_group()
+modes.add_argument('--main-window', action='store_true', help='Verify main window, settings, and persistence across two launches')
 modes.add_argument('--resize-overwrite', action='store_true', help='Verify live Command switching during entry resizing')
 modes.add_argument('--continuation', action='store_true', help='Verify continuation focus, rejection, cancellation, and timer completion')
 modes.add_argument('--system-activity', action='store_true', help='Verify lock/sleep notification handling with private notification centers')
@@ -18,22 +19,22 @@ modes.add_argument('--overwrite', action='store_true', help='Verify Command-drag
 modes.add_argument('--dismissal', action='store_true', help='Verify outside-click dismissal after color menu use')
 modes.add_argument('--editing', action='store_true', help='Verify inline entry correction, resizing, and deletion')
 args = parser.parse_args()
-run_timeout = 50 if args.continuation else 40 if args.editing else 20
+run_timeout = 50 if args.continuation else 40 if args.editing or args.main_window else 20
 root = Path(__file__).resolve().parent.parent
 app = root / 'build/smoke/DayTape.app'
 subprocess.run([str(root / 'scripts/build-app.sh'), 'debug'], cwd=root,
                env=dict(os.environ, LINE_APP_OUTPUT=str(app)), check=True, timeout=180)
-output = root / 'build' / ('continuation-smoke-results' if args.continuation else 'system-activity-smoke-results' if args.system_activity else 'dismissal-smoke-results' if args.dismissal else 'editing-smoke-results' if args.editing else 'overwrite-smoke-results' if args.overwrite else 'creation-smoke-results' if args.creation else 'timeline-smoke-results' if args.timeline else 'smoke-results')
+output = root / 'build' / ('main-window-smoke-results' if args.main_window else 'continuation-smoke-results' if args.continuation else 'system-activity-smoke-results' if args.system_activity else 'dismissal-smoke-results' if args.dismissal else 'editing-smoke-results' if args.editing else 'overwrite-smoke-results' if args.overwrite else 'creation-smoke-results' if args.creation else 'timeline-smoke-results' if args.timeline else 'smoke-results')
 output.mkdir(parents=True, exist_ok=True)
 report = output / 'result.txt'
 
 with tempfile.TemporaryDirectory(prefix='line-smoke-') as data:
-    for launch in range(2 if args.timeline else 1):
+    for launch in range(2 if args.timeline or args.main_window else 1):
         report.unlink(missing_ok=True)
         try:
             result = subprocess.run(
                 [str(app / 'Contents/MacOS/DayTape'), '--smoke-test', str(output)],
-                env=dict(os.environ, LINE_DATA_DIRECTORY=data, LINE_SMOKE_RESIZE_OVERWRITE='1' if args.resize_overwrite else '0', LINE_SMOKE_CONTINUATION='1' if args.continuation else '0', LINE_SMOKE_SYSTEM_ACTIVITY='1' if args.system_activity else '0', LINE_SMOKE_DISMISSAL='1' if args.dismissal else '0', LINE_SMOKE_TIMELINE='1' if args.timeline else '0',
+                env=dict(os.environ, LINE_DATA_DIRECTORY=data, LINE_SMOKE_MAIN_WINDOW='1' if args.main_window else '0', LINE_SMOKE_RESIZE_OVERWRITE='1' if args.resize_overwrite else '0', LINE_SMOKE_CONTINUATION='1' if args.continuation else '0', LINE_SMOKE_SYSTEM_ACTIVITY='1' if args.system_activity else '0', LINE_SMOKE_DISMISSAL='1' if args.dismissal else '0', LINE_SMOKE_TIMELINE='1' if args.timeline else '0',
                          LINE_SMOKE_EDITING='1' if args.editing else '0', LINE_SMOKE_CREATION='1' if args.creation else '0', LINE_SMOKE_OVERWRITE='1' if args.overwrite else '0'),
                 capture_output=True, text=True, timeout=run_timeout,
             )
@@ -50,7 +51,11 @@ with tempfile.TemporaryDirectory(prefix='line-smoke-') as data:
         if result.returncode:
             raise SystemExit(result.returncode)
         records = json.loads((Path(data) / 'tracking.json').read_text())
-        if args.resize_overwrite:
+        if args.main_window:
+            assert records['defaultZoomHours'] == 12
+            assert len(records['entries']) == launch + 1
+            assert all(entry.get('end') is not None for entry in records['entries'])
+        elif args.resize_overwrite:
             assert len(records['entries']) == 2 and len(records['tasks']) == 2
             assert all(entry.get('end') is not None for entry in records['entries'])
         elif args.continuation:
@@ -61,7 +66,7 @@ with tempfile.TemporaryDirectory(prefix='line-smoke-') as data:
             assert len(records['tasks']) == 2
             assert all(entry.get('end') is not None for entry in records['entries'])
         elif args.timeline:
-            assert records['timelineSpan'] == 28_800 / (2 ** (launch + 1))
+            assert records['defaultZoomHours'] == (4 if launch == 0 else 12)
             assert records['entries'] == []
         elif args.editing or args.dismissal:
             assert len(records['entries']) == 1
@@ -78,5 +83,5 @@ with tempfile.TemporaryDirectory(prefix='line-smoke-') as data:
         else:
             assert len(records['entries']) == 7
             assert all(entry.get('end') is not None for entry in records['entries'])
-    print('PASS: saved zoom survived a fresh process.' if args.timeline else
+    print('PASS: configured default survived a fresh process.' if args.timeline or args.main_window else
           'PASS: packaged app exited with completed entries saved.')

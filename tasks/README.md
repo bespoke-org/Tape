@@ -4,6 +4,10 @@ Tasks are Markdown files managed with [tatr](https://github.com/tsoding/tatr) an
 
 See [task tracking](../docs/issue-tracker.md) for the workflow and commands.
 
+## Current additions
+
+- [Main window, Settings, and default zoom](20261020-194050/TASK.md)
+
 ## Migrated v1 tickets
 
 Original ticket numbers remain in the titles for reference. New tasks use tatr’s generated IDs.

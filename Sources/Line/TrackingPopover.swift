@@ -4,6 +4,7 @@ import LineCore
 struct TrackingPopover: View {
     @Bindable var model: AppModel
     let dismiss: () -> Void
+    let openMainWindow: () -> Void
     let contentSizeDidChange: (CGSize) -> Void
     @State private var taskName = ""
     @State private var isTaskPickerShown = false
@@ -41,6 +42,10 @@ struct TrackingPopover: View {
                         }
                 }
             } else {
+                HStack {
+                    Spacer()
+                    mainWindowButton
+                }
                 ContentUnavailableView("Couldn’t open your time records", systemImage: "externaldrive.badge.exclamationmark")
                 Button("Try Again") { model.load() }
             }
@@ -98,7 +103,6 @@ struct TrackingPopover: View {
         }
         .onDisappear {
             model.stopTimelineAnimation(finish: true)
-            model.saveTimelineScale()
             model.cancelEntry()
         }
     }
@@ -125,8 +129,22 @@ struct TrackingPopover: View {
                 Spacer()
                 pickerButton("Start task", systemImage: "play.fill")
             }
+            mainWindowButton
         }
         .frame(minHeight: 24)
+    }
+
+    private var mainWindowButton: some View {
+        Button(action: openMainWindow) {
+            Label("Open DayTape", systemImage: "gearshape")
+                .labelStyle(.iconOnly)
+                .fontWeight(.semibold)
+                .frame(width: 24, height: 24)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("Open DayTape")
+        .accessibilityLabel("Open DayTape")
     }
 
     private func pickerButton(_ title: String, systemImage: String) -> some View {

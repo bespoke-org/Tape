@@ -41,5 +41,5 @@ struct TrackingSnapshot: Codable {
     var tasks: [TrackedTask] = []
     var entries: [TimeEntry] = []
     var checkpoint: Date?
-    var timelineSpan: TimeInterval?
+    var defaultZoomHours: Int?
 }

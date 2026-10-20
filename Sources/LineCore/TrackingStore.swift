@@ -11,7 +11,8 @@ public final class TrackingStore {
 
     public var tasks: [TrackedTask] { snapshot.tasks }
     public var entries: [TimeEntry] { snapshot.entries }
-    public var timelineSpan: TimeInterval { TimelineViewport.usableSpan(snapshot.timelineSpan ?? TimelineViewport.defaultSpan) }
+    public static let defaultZoomPresets = [1, 2, 4, 8, 12, 16, 24]
+    public var defaultZoomHours: Int { Self.nearestZoomPreset(snapshot.defaultZoomHours ?? 8) }
     public var runningEntry: TimeEntry? { entries.last(where: { $0.end == nil }) }
     public var runningTask: TrackedTask? {
         guard let entry = runningEntry else { return nil }
@@ -293,12 +294,17 @@ public final class TrackingStore {
         try commit(candidate)
     }
 
-    public func setTimelineSpan(_ span: TimeInterval) throws {
-        let span = TimelineViewport.usableSpan(span)
-        guard span != timelineSpan else { return }
+    public func setDefaultZoomHours(_ hours: Int) throws {
+        let hours = Self.nearestZoomPreset(hours)
+        guard hours != defaultZoomHours else { return }
         var candidate = snapshot
-        candidate.timelineSpan = span
+        candidate.defaultZoomHours = hours
         try commit(candidate)
+    }
+
+    private static func nearestZoomPreset(_ hours: Int) -> Int {
+        let bounded = min(max(hours, 1), 24)
+        return defaultZoomPresets.min { abs($0 - bounded) < abs($1 - bounded) }!
     }
 
     private func checkedInstant() throws -> Date {

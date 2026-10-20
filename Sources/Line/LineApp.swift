@@ -10,14 +10,17 @@ enum DayTapeApp {
         let delegate = AppDelegate()
         app.delegate = delegate
         app.setActivationPolicy(.accessory)
-        app.mainMenu = makeMainMenu()
+        app.mainMenu = makeMainMenu(delegate: delegate)
         withExtendedLifetime(delegate) { app.run() }
     }
 
     @MainActor
-    private static func makeMainMenu() -> NSMenu {
+    private static func makeMainMenu(delegate: AppDelegate) -> NSMenu {
         let menu = NSMenu()
         let application = NSMenu()
+        let settings = application.addItem(withTitle: "Settings…", action: #selector(AppDelegate.openMainWindow(_:)), keyEquivalent: ",")
+        settings.target = delegate
+        application.addItem(.separator())
         application.addItem(withTitle: "Quit DayTape", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         let applicationItem = NSMenuItem()
         applicationItem.submenu = application
@@ -30,6 +33,14 @@ enum DayTapeApp {
         let editItem = NSMenuItem(title: "Edit", action: nil, keyEquivalent: "")
         editItem.submenu = edit
         menu.addItem(editItem)
+        let window = NSMenu(title: "Window")
+        window.addItem(withTitle: "Close Window", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+        window.addItem(withTitle: "Minimize", action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m")
+        window.addItem(withTitle: "Zoom", action: #selector(NSWindow.performZoom(_:)), keyEquivalent: "")
+        let windowItem = NSMenuItem(title: "Window", action: nil, keyEquivalent: "")
+        windowItem.submenu = window
+        menu.addItem(windowItem)
+        NSApplication.shared.windowsMenu = window
         return menu
     }
 }
@@ -45,6 +56,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private(set) var continuationPanel: ContinuationPanel?
     private var continuationTimer: Timer?
     private var presentedContinuationID: UUID?
+    private(set) var mainWindowController: MainWindowController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let directory: URL
@@ -160,15 +172,46 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         model.acceptContinuation()
         continuationPanel?.dismiss()
         popover.close()
-        let menu = NSMenu()
-        let quit = NSMenuItem(title: "Quit DayTape", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
-        quit.target = NSApplication.shared
-        menu.addItem(quit)
+        let menu = makeActionsMenu()
 
         // Let the status item present its native menu, then restore left-click handling.
         statusItem.menu = menu
         defer { statusItem.menu = nil }
         statusItem.button?.performClick(nil)
+    }
+
+    func makeActionsMenu() -> NSMenu {
+        let menu = NSMenu()
+        let open = menu.addItem(withTitle: "Open DayTape", action: #selector(openMainWindow(_:)), keyEquivalent: "")
+        open.target = self
+        menu.addItem(.separator())
+        let quit = NSMenuItem(title: "Quit DayTape", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        quit.target = NSApplication.shared
+        menu.addItem(quit)
+
+        return menu
+    }
+
+    @objc func openMainWindow(_ sender: Any?) {
+        model.acceptContinuation()
+        continuationPanel?.dismiss()
+        popover.close()
+        model.cancelEntry()
+        if mainWindowController == nil {
+            mainWindowController = MainWindowController(model: model)
+        }
+        mainWindowController?.present()
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if let window = mainWindowController?.window, window.isVisible || window.isMiniaturized {
+            openMainWindow(nil)
+        }
+        return false
+    }
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        false
     }
 
     private func showPopover() {
@@ -179,13 +222,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         popover.animates = !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         let controller = NSHostingController(rootView: TrackingPopover(model: model, dismiss: { [weak self] in
             self?.popover.performClose(nil)
+        }, openMainWindow: { [weak self] in
+            self?.openMainWindow(nil)
         }, contentSizeDidChange: { [weak self] size in
             self?.resizePopover(to: size)
         }))
         popover.contentViewController = controller
         // AppKit anchors using the initial size. A later shrink otherwise leaves a gap below the icon.
         popover.contentSize = controller.view.fittingSize
-        // Only this user-initiated path activates DayTape. Continuation uses a non-activating panel.
+        // User-initiated opening activates DayTape. Continuation uses a non-activating panel.
         NSApplication.shared.activate(ignoringOtherApps: true)
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         popover.contentViewController?.view.window?.makeKey()

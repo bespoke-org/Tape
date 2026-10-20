@@ -16,7 +16,7 @@
 - [ ] Offer launch at login, initially off, through supported macOS facilities; reflect the actual registration state. Login launches idle.
 - [ ] Provide reproducible build, launch, and local installation instructions and a runnable app bundle that retains data independently of the checkout.
 - [ ] Run applicable automated checks, then verify packaged-app workflows combining tracking, historical corrections, lock/sleep continuation, rejection, quit/relaunch, and recovery.
-- [ ] Check native controls/materials, light/dark appearance, contrast/transparency/motion settings, readable task colors, keyboard editing, accessible labels, and no Dock icon. Fix discovered issues within the agreed scope.
+- [ ] Check native controls/materials, light/dark appearance, contrast/transparency/motion settings, readable task colors, keyboard editing, accessible labels, and Dock visibility only while the main window is open or minimized. Fix discovered issues within the agreed scope.
 - [ ] Record what was verified and any remaining platform limitations; do not claim manual checks that were not performed.
 
 Native macOS appearance, Liquid Glass use, and accessibility follow the spec and apply to every UI change in this ticket.
@@ -32,3 +32,5 @@ Ticket 04 was accepted as done on 2026-10-20. Complete its remaining physical en
 Ticket 05 was accepted as done on 2026-10-20 after the user reported it working. Repeat the full lock/sleep matrix, including combined lock/sleep with an open editor, display-off without lock, and awake external-display use with the lid closed. The user did not enumerate every scenario as tested. See [ticket 05 verification](../../docs/ticket-05-verification.md).
 
 Ticket 06 was accepted as done on 2026-10-20, resolving this ticket's blocker. Complete its physical continuation checks, including hover pause, menu bar highlighting, OK/Reject and outside clicks, focus, wake/unlock ordering, Spaces, monitor arrangements, and appearance/accessibility. See [ticket 06 verification](../../docs/ticket-06-verification.md).
+
+The [main-window task](../20261020-194050/TASK.md) adds remaining manual checks for physical Dock/app-switcher navigation, Spaces, VoiceOver, light/high-contrast/reduced-transparency appearance, and window geometry and floating behavior. Automated lifecycle and persistence checks passed.
