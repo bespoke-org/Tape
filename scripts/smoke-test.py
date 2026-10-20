@@ -61,7 +61,7 @@ with tempfile.TemporaryDirectory(prefix='line-smoke-') as data:
             assert len(records['tasks']) == 2
             assert all(entry.get('end') is not None for entry in records['entries'])
         elif args.timeline:
-            assert records['timelineSpan'] == 14_400 / (2 ** (launch + 1))
+            assert records['timelineSpan'] == 28_800 / (2 ** (launch + 1))
             assert records['entries'] == []
         elif args.editing or args.dismissal:
             assert len(records['entries']) == 1

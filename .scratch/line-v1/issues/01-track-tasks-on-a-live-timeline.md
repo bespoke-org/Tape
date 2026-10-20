@@ -2,7 +2,7 @@
 
 **Spec:** [DayTape v1](../spec.md)
 
-**What to build:** A runnable native menu bar app; create/search tasks, start/stop/switch, and watch entries grow on a four-hour timeline following now; preserve data and stop safely on quit or recovery.
+**What to build:** A runnable native menu bar app; create/search tasks, start/stop/switch, and watch entries grow on an eight-hour timeline following now; preserve data and stop safely on quit or recovery.
 
 **Blocked by:** None (can start immediately).
 
@@ -17,7 +17,7 @@
 - [x] Build and run a native Swift app bundle on this Mac without a Dock icon; show a compact status item and a dismissible popover with system controls and materials.
 - [x] Type to create or search reusable tasks; enforce trimmed, nonempty, case-insensitively unique names and persist a random legible color.
 - [x] Start, stop, and switch tasks with a single-running-entry invariant, adjacent switch timestamps, and a running indicator. Closing the popover does not stop tracking.
-- [x] Show saved and growing entries with readable task labels/colors on a basic four-hour timeline centered on now. Follow time automatically beneath the now marker, with enough date/time context to read the strip.
+- [x] Show saved and growing entries with readable task labels/colors on a basic eight-hour timeline centered on now. Follow time automatically beneath the now marker, with enough date/time context to read the strip.
 - [ ] Verify that starting a task grows its entry on the timeline, stopping fixes its endpoint, and switching produces adjacent entries. Keep the basic timeline legible in light/dark appearance and with accessibility preferences; closed popovers do not need continuous rendering.
 - [x] Save mutations atomically; persist five-second running checkpoints; reopen the store; clean quit ends tracking and relaunch starts idle. Unexpected-exit recovery stops at the saved point rather than counting downtime.
 - [x] Verify through observable tracking operations and real storage reopening, plus a manual smoke test of the app bundle. Provide initial build/run instructions with the slice.

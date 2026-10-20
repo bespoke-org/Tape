@@ -874,7 +874,7 @@ enum SmokeCheck {
         let firstSelection = model.entrySelection!
         try require(firstSelection.start.timeIntervalSince1970.truncatingRemainder(dividingBy: 300) == 0 &&
                     firstSelection.end!.timeIntervalSince1970.truncatingRemainder(dividingBy: 300) == 0,
-                    "The default four-hour view must snap to five-minute boundaries")
+                    "The default eight-hour view must snap to five-minute boundaries")
         try require(model.store!.entries.isEmpty && model.store!.tasks.isEmpty, "Drawing must not save a task or entry")
         try requireAnchored(popover, to: button)
         let fields = try descendants(contentView(popover)).compactMap { $0 as? NSTextField }
@@ -983,12 +983,42 @@ enum SmokeCheck {
         let center = model.timeline.date(at: 0.5, now: .now)
         let reset = TimelineTestEvent(type: .smartMagnify, window: window, location: location)
         try require(input.handle(reset), "Two-finger double-tap must be handled")
-        try require(model.timeline.span == TimelineViewport.defaultSpan && model.store?.timelineSpan == TimelineViewport.defaultSpan, "Smart zoom must reset and save the four-hour scale")
+        try await Task.sleep(for: .milliseconds(400))
+        try require(model.timeline.span == TimelineViewport.defaultSpan && model.store?.timelineSpan == TimelineViewport.defaultSpan, "Smart zoom must reset and save the eight-hour scale")
         try require(!model.timeline.isFollowingNow && abs(model.timeline.date(at: 0.5, now: .now).timeIntervalSince(center)) < 0.001, "Resetting zoom must preserve the browsed center")
         _ = input.handle(reset)
+        try await Task.sleep(for: .milliseconds(400))
         try require(model.timeline.span == TimelineViewport.defaultSpan && model.timeline.isFollowingNow, "A second double-tap must return to Now at the default scale")
         _ = input.handle(reset)
+        try await Task.sleep(for: .milliseconds(400))
         try require(model.timeline.isFollowingNow, "Further double-taps at Now must keep following")
+        // Force animation for this check even if the test Mac has Reduce Motion enabled.
+        model.timeline.zoom(factor: 2, anchorFraction: 0.5, now: .now)
+        let zoomStart = model.timeline.span
+        model.resetTimeline(animated: true)
+        try require(model.timeline.span == zoomStart, "Animated zoom must not jump immediately")
+        try await Task.sleep(for: .milliseconds(100))
+        try require(model.timeline.span > zoomStart && model.timeline.span < TimelineViewport.defaultSpan && model.timeline.isFollowingNow,
+                    "Zoom must pass through intermediate scales while keeping Now centered")
+        try await Task.sleep(for: .milliseconds(350))
+        try require(model.timeline.span == TimelineViewport.defaultSpan && model.store?.timelineSpan == TimelineViewport.defaultSpan,
+                    "Animated zoom must finish and persist the exact default scale")
+        _ = input.handle(horizontal)
+        let animationStart = model.timeline.date(at: 0.5, now: .now)
+        model.resetTimeline(animated: true)
+        try require(model.timeline.date(at: 0.5, now: .now) == animationStart,
+                    "Animated return must not jump immediately")
+        try await Task.sleep(for: .milliseconds(100))
+        let intermediate = model.timeline.date(at: 0.5, now: .now)
+        try require(intermediate > animationStart && intermediate < .now,
+                    "Animated return must pass through intermediate times")
+        _ = input.handle(horizontal)
+        let interruptedRange = model.timeline.range(at: .now)
+        try await Task.sleep(for: .milliseconds(350))
+        try require(model.timeline.range(at: .now) == interruptedRange,
+                    "Scrolling must interrupt animation without a later jump")
+        model.resetTimeline(animated: false)
+        try require(model.timeline.isFollowingNow, "Reduced-motion reset must finish immediately")
         // Leave a nondefault scale for the reopen and fresh-process persistence checks.
         _ = input.handle(TimelineTestEvent(type: .magnify, window: window, location: location,
                                          magnification: TimelineViewport.defaultSpan / (initialSpan / 2) - 1, phase: .began))

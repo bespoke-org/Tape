@@ -2,7 +2,7 @@ import Foundation
 
 /// Time navigation independent of rendering cadence and native input events.
 public struct TimelineViewport {
-    public static let defaultSpan: TimeInterval = 4 * 60 * 60
+    public static let defaultSpan: TimeInterval = 8 * 60 * 60
     public private(set) var span: TimeInterval
     private var browsingCenter: Date?
     public var isFollowingNow: Bool { browsingCenter == nil }
@@ -25,6 +25,18 @@ public struct TimelineViewport {
     public func range(at now: Date) -> DateInterval {
         let center = browsingCenter ?? now
         return DateInterval(start: center.addingTimeInterval(-span / 2), duration: span)
+    }
+
+    public func interpolated(to target: Self, progress: Double, now: Date) -> Self {
+        let progress = min(max(progress, 0), 1)
+        if progress == 0 { return self }
+        if progress == 1 { return target }
+        var result = Self(span: span + (target.span - span) * progress)
+        if isFollowingNow && target.isFollowingNow { return result }
+        let center = browsingCenter ?? now
+        let targetCenter = target.browsingCenter ?? now
+        result.browsingCenter = center.addingTimeInterval(targetCenter.timeIntervalSince(center) * progress)
+        return result
     }
 
     public mutating func scroll(points: Double, width: Double, now: Date) {

@@ -10,6 +10,8 @@ final class AppModel {
     private(set) var errorMessage: String?
     private var interruptionError: String?
     var timeline = TimelineViewport()
+    private var timelineAnimation: Task<Void, Never>?
+    private var timelineAnimationTarget: TimelineViewport?
     private(set) var entrySelection: EntrySelection?
     private(set) var drawnRange: DateInterval?
     private(set) var entryError: String?
@@ -97,6 +99,7 @@ final class AppModel {
     }
 
     func preparePopover() {
+        stopTimelineAnimation()
         cancelEntry()
         timeline = TimelineViewport(span: store?.timelineSpan ?? TimelineViewport.defaultSpan)
     }
@@ -276,6 +279,48 @@ final class AppModel {
         drawnRange = nil
         entrySelection = nil
         entryError = nil
+    }
+
+    func resetTimeline(animated: Bool) {
+        var target = timelineAnimationTarget ?? timeline
+        stopTimelineAnimation()
+        if abs(target.span - TimelineViewport.defaultSpan) < 0.001 {
+            target.followNow()
+        } else {
+            target.zoom(factor: target.span / TimelineViewport.defaultSpan, anchorFraction: 0.5, now: .now)
+        }
+        let instant = Date.now
+        guard animated, timeline.range(at: instant) != target.range(at: instant) else {
+            timeline = target
+            saveTimelineScale()
+            return
+        }
+        let origin = timeline
+        let started = ProcessInfo.processInfo.systemUptime
+        timelineAnimationTarget = target
+        timelineAnimation = Task { @MainActor in
+            while !Task.isCancelled {
+                let progress = min((ProcessInfo.processInfo.systemUptime - started) / 0.3, 1)
+                // Smoothstep eases both ends while keeping every tick and entry on the same time scale.
+                let eased = progress * progress * (3 - 2 * progress)
+                timeline = origin.interpolated(to: target, progress: eased, now: .now)
+                if progress >= 1 {
+                    timelineAnimation = nil
+                    timelineAnimationTarget = nil
+                    saveTimelineScale()
+                    return
+                }
+                do { try await Task.sleep(for: .milliseconds(16)) }
+                catch { return }
+            }
+        }
+    }
+
+    func stopTimelineAnimation(finish: Bool = false) {
+        timelineAnimation?.cancel()
+        timelineAnimation = nil
+        if finish, let target = timelineAnimationTarget { timeline = target }
+        timelineAnimationTarget = nil
     }
 
     func saveTimelineScale() {

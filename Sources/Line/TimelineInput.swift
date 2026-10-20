@@ -9,6 +9,7 @@ struct TimelineInput: NSViewRepresentable {
     let endZoom: () -> Void
     let resetZoom: () -> Void
     let drawingBounds: CGRect
+    let interruptNavigation: () -> Void
     let beginDraw: (Double, Bool) -> Bool
     let updateDraw: (Double) -> Void
     let endDraw: (Double, Double) -> Void
@@ -28,6 +29,7 @@ struct TimelineInput: NSViewRepresentable {
         view.endZoom = endZoom
         view.resetZoom = resetZoom
         view.drawingBounds = drawingBounds
+        view.interruptNavigation = interruptNavigation
         view.beginDraw = beginDraw
         view.updateDraw = updateDraw
         view.endDraw = endDraw
@@ -52,6 +54,7 @@ final class TimelineInputView: NSView {
     var endZoom: () -> Void = {}
     var resetZoom: () -> Void = {}
     var drawingBounds: CGRect = .zero
+    var interruptNavigation: () -> Void = {}
     var beginDraw: (Double, Bool) -> Bool = { _, _ in false }
     var updateDraw: (Double) -> Void = { _ in }
     var endDraw: (Double, Double) -> Void = { _, _ in }
@@ -171,6 +174,7 @@ final class TimelineInputView: NSView {
         let fraction = point.x / max(bounds.width, 1)
         if event.type == .leftMouseDown {
             dragOrigin = drawingBounds.contains(point) && !event.modifierFlags.contains(.control) ? point : nil
+            if dragOrigin != nil { interruptNavigation() }
             lastResizeFraction = nil
             dragOverwrites = event.modifierFlags.contains(.command)
             // Own the full pointer sequence so entry buttons cannot activate after a drag.

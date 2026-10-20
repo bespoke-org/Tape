@@ -97,6 +97,7 @@ struct TrackingPopover: View {
             }
         }
         .onDisappear {
+            model.stopTimelineAnimation(finish: true)
             model.saveTimelineScale()
             model.cancelEntry()
         }

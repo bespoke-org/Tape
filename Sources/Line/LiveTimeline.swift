@@ -5,6 +5,7 @@ struct LiveTimeline: View {
     let store: TrackingStore
     let now: Date
     @Bindable var model: AppModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.colorSchemeContrast) private var contrast
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
@@ -158,18 +159,15 @@ struct LiveTimeline: View {
             .background {
                 GeometryReader { geometry in
                     TimelineInput(scroll: { points, width in
+                        model.stopTimelineAnimation()
                         model.timeline.scroll(points: points, width: width, now: .now)
                     }, zoom: { factor, fraction in
+                        model.stopTimelineAnimation()
                         model.timeline.zoom(factor: factor, anchorFraction: fraction, now: .now)
                     }, endZoom: model.saveTimelineScale, resetZoom: {
-                        if abs(model.timeline.span - TimelineViewport.defaultSpan) < 0.001 {
-                            model.timeline.followNow()
-                        } else {
-                            model.timeline.zoom(factor: model.timeline.span / TimelineViewport.defaultSpan, anchorFraction: 0.5, now: .now)
-                        }
-                        model.saveTimelineScale()
+                        model.resetTimeline(animated: !reduceMotion)
                     }, drawingBounds: CGRect(x: 0, y: stripTop, width: geometry.size.width, height: stripHeight),
-                       beginDraw: model.beginDrawing, updateDraw: model.updateDrawing,
+                       interruptNavigation: { model.stopTimelineAnimation() }, beginDraw: model.beginDrawing, updateDraw: model.updateDrawing,
                        endDraw: model.finishDrawing, cancelDraw: model.cancelEntry,
                        selectEntry: model.selectEntry, resizeEdge: model.resizeEdge, beginResize: model.beginResizing,
                        updateResize: model.updateResizing, endResize: model.finishResizing, cancelEdit: {

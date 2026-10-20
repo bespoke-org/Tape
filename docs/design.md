@@ -10,7 +10,7 @@ Working record of agreed behavior and unresolved decisions. This is not the impl
 - The main view is a continuous horizontal timeline with extensive scrolling in either direction.
 - While following the present, time moves beneath a centered now marker. Browsing pauses following; a Now action returns to the present and resumes following. The now marker need not remain visible when browsing.
 - Click-and-drag on empty timeline space creates a time entry. Horizontal scrolling browses time; Shift+mouse-wheel provides a mouse alternative.
-- The default visible timeline span is four hours. Users adjust the scale with pinch-to-zoom; no zoom buttons. Product zoom limits have not been selected.
+- The default visible timeline span is eight hours. Users adjust the scale with pinch-to-zoom; no zoom buttons. Product zoom limits have not been selected.
 - After drawing, a text field accepts a new task name while searching existing tasks. Selecting an existing task or creating a new one saves the entry; Escape cancels. Live tracking uses the same task picker.
 - Clicking an entry allows changing its task, editing start/end times, or deleting it. Dragging an edge resizes it. Mouse edits snap to whole minutes; live tracking retains actual timestamps.
 - Creating or editing an entry cannot overlap another entry. Reject the overlap with an explanation and preserve existing entries.

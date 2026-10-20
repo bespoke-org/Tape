@@ -127,7 +127,7 @@ struct TrackingStoreTests {
         try Data(#"{"version":1,"tasks":[],"entries":[]}"#.utf8).write(to: url)
         var now = Date(timeIntervalSince1970: 1_800_000_000)
         let store = try TrackingStore(url: url, now: { now })
-        #expect(store.timelineSpan == 14_400)
+        #expect(store.timelineSpan == 28_800)
         try store.startTask(named: "Read")
         now += 5
         try store.checkpoint()

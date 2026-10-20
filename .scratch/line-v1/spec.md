@@ -33,7 +33,7 @@ The app should look and behave like a native macOS 26 utility, using system cont
 13. As the user, I want the timeline to follow the present beneath a centered now marker, so that the display stays current.
 14. As the user, I want to scroll backward and forward without the view snapping back, so that I can browse time freely.
 15. As the user, I want two-finger double-tap and reopening the popover to return to the present, so that I can quickly regain my current context.
-16. As the user, I want a four-hour initial view and pinch-to-zoom with a remembered scale, so that I can choose how much time I see without zoom buttons.
+16. As the user, I want an eight-hour initial view and pinch-to-zoom with a remembered scale, so that I can choose how much time I see without zoom buttons.
 17. As the user, I want to draw an interval on empty timeline space and then name or select its task, so that I can record work retrospectively.
 18. As the user, I want cancelling task selection to discard the proposed entry, so that an unfinished interaction does not create records.
 19. As the user, I want drawing up to or beyond now to start tracking from the selected start time, so that recording recent work can flow directly into ongoing work.
@@ -82,9 +82,9 @@ The app should look and behave like a native macOS 26 utility, using system cont
 
 ### Timeline and entry creation
 
-- Show four hours initially, with now centered. Maintain following and browsing states. Scrolling enters browsing; two-finger double-tap at the default scale and reopening the popover return to following. Retain and persist the chosen zoom scale.
+- Show eight hours initially, with now centered. Maintain following and browsing states. Scrolling enters browsing; two-finger double-tap at the default scale and reopening the popover return to following. Retain and persist the chosen zoom scale.
 - The now marker denotes actual current time only. It can move offscreen while browsing; a central marker must not relabel a historical time as now.
-- Support horizontal trackpad scrolling and Shift+mouse-wheel navigation. Click-and-drag on empty space draws an interval; it does not pan. Pinch changes scale without zoom buttons. Keep zoom stable around the interaction location where practical. A two-finger double-tap resets to the default four-hour scale, preserving the viewed center and following/browsing state, and saves that scale. At the default scale, a two-finger double-tap returns to Now.
+- Support horizontal trackpad scrolling and Shift+mouse-wheel navigation. Click-and-drag on empty space draws an interval; it does not pan. Pinch changes scale without zoom buttons. Keep zoom stable around the interaction location where practical. A two-finger double-tap resets to the default eight-hour scale, preserving the viewed center and following/browsing state, and saves that scale. At the default scale, a two-finger double-tap returns to Now. Animate both transitions with 0.3-second ease-in-out movement of the whole viewport. Direct timeline interaction interrupts the animation; respect Reduce Motion with an immediate transition.
 - There is no user-selected product minimum or maximum zoom range. Use finite internal bounds to keep labels, selection, and rendering usable; do not turn those bounds into extra controls or claim the previously suggested ranges were approved.
 - Present date context and time ticks at a density appropriate to scale, and render only the visible range. Browsing is not restricted to a fixed day or week. Future space remains available for navigation but cannot contain recorded future entries.
 - After a valid drag, focus a native text field that both accepts a new task name and filters existing tasks. Enter/select commits; Escape cancels. No task or entry is persisted by merely typing a draft.
