@@ -2,7 +2,7 @@
 
 Implementation: [Correct entries and maintain reusable tasks](../.scratch/line-v1/issues/04-correct-entries-and-maintain-reusable-tasks.md).
 
-Implemented on 2026-10-19; awaiting user acceptance.
+Implemented on 2026-10-19; accepted as done by the user on 2026-10-20 for usability and functionality.
 
 ## Behavior
 
@@ -16,22 +16,22 @@ Running entries can change task/start without stopping. Dragging a running end i
 
 ## Automated checks
 
-- `swift test`: 49 tests passed in five suites. Fourteen editing tests cover reassignment, identity, recoloring with names preserved, resizing to Now with recovery checkpoints and neighbor/write-failure protection, deletion/orphan pruning, minute resizing, exact boundaries, invalid/stale edits, running recovery, write failures, reopening, midnight, and repeated-hour absolute timestamps.
+- `swift test`: 50 tests passed in five suites on 2026-10-20, including compatibility loading for removed palette colors. Fourteen editing tests cover reassignment, identity, recoloring with names preserved, resizing to Now with recovery checkpoints and neighbor/write-failure protection, deletion/orphan pruning, minute resizing, exact boundaries, invalid/stale edits, running recovery, write failures, reopening, midnight, and repeated-hour absolute timestamps.
 - `python3 scripts/smoke-test.py --editing`: passed. Exercises distinct start/end cursors at completed edges and both sides of a shared boundary, preservation of the selected edge during dragging, interior/strip exit, Command overwrite, running entries, hover without mutation, task search, creation on Return and reassignment from suggestions without stopping tracking, drag-to-Now continuation, running start/end resizing and normal stop, full-color swatch-only native menu choices, left-side picker placement, immediate color selection, Escape, native deletion confirmation and cancellation, running corrections/deletion, short-entry clicks, shared boundaries, adjacent-entry resizing, and stable popover anchoring.
-- Existing base, `--timeline`, `--creation`, and `--overwrite` packaged smoke checks all passed.
+- Final review on 2026-10-20: `--editing`, `--dismissal`, `--creation`, and `--overwrite` packaged smoke checks passed. Base and `--timeline` checks passed earlier.
 - Each smoke process uses isolated temporary data and a bounded limit: 40 seconds for the expanded editing sequence, 20 seconds for other modes. Native controls are driven within the app; pointer and Escape inputs exercise the same handler as the local event monitor.
 
 ## Standards
 
-No remaining actionable findings. The initial exclusive-end hit-testing finding was resolved and covered in the packaged smoke check.
+No blocking findings. The initial exclusive-end hit-testing finding was resolved and covered in the packaged smoke check. `TrackingStore.updateEntry` has only test callers now; removing it is optional cleanup.
 
 ## Spec
 
-No remaining blockers. Review identified minimum-width click targets and coincident resize edges; both were fixed and covered in the packaged smoke check.
+No remaining blockers. Review identified minimum-width click targets and coincident resize edges; both were fixed and covered in the packaged smoke check. The user accepted the current UI, including its subtle search-field border. Ticket/spec descriptions now match the approved single-row editor, edge-only time editing, omitted dividers, and nine-color palette.
 
 ## Still manual
 
-Physical mouse/trackpad and keyboard delivery, VoiceOver navigation, and the complete light/dark and accessibility appearance matrix need hands-on verification. Synthetic event delivery and native control actions do not establish these. The user should try the inline layout before accepting the ticket.
+The user exercised and accepted the current UI. The complete physical-input, keyboard/VoiceOver, light/dark, and accessibility-preference matrix remains carried to ticket 07. Synthetic event delivery and native control actions do not establish these checks. Acceptance does not claim that full matrix passed. Immediate color-menu dismissal attempts were reverted at the user's request and are not part of the accepted behavior.
 
 Color-menu regression: the original SF Symbol images arrived in the native menu as monochrome templates. Non-template swatch images preserve the task colors. The packaged editing check inspects every native menu image and its center pixel; it failed on the original blue swatch and passes with full-color images.
 

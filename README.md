@@ -21,7 +21,7 @@ Click an entry to open its settings below the timeline. Click empty timeline spa
 
 Tickets 1–4 and 9 supply tracking, browsing, drawing, corrections, and Command-drag overwrite. Lock/sleep handling, automatic continuation, and launch at login are subsequent tickets and are not implemented yet. Until lock/sleep handling lands, stop tracking before leaving the Mac.
 
-New tasks use a 12-color palette, choosing an unused color when available before repeating colors. Existing tasks keep their assigned colors.
+New tasks use a nine-color palette, choosing an unused color when available before repeating colors. Saved mint/cyan shades load as teal and indigo as blue; other assigned colors stay unchanged.
 
 ## Local data
 

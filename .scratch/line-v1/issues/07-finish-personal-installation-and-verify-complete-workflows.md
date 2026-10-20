@@ -26,4 +26,4 @@ Tickets 01, 02, and 03 are accepted as done. Complete their remaining manual che
 
 Also verify physical Command-drag overwrite and its striped preview from ticket 09 in the same appearance/accessibility matrix. See [ticket 09 verification](../../../docs/ticket-09-verification.md).
 
-Ticket 04 also records remaining physical entry-click/edge-resize, keyboard/VoiceOver, appearance, and repeated-hour timestamp checks. See [ticket 04 verification](../../../docs/ticket-04-verification.md).
+Ticket 04 was accepted as done on 2026-10-20. Complete its remaining physical entry-click/edge-resize, keyboard/VoiceOver, appearance, and repeated-hour timeline checks. Timestamp fields were removed from the approved UI. See [ticket 04 verification](../../../docs/ticket-04-verification.md).
