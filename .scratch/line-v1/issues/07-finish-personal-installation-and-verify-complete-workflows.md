@@ -27,3 +27,5 @@ Tickets 01, 02, and 03 are accepted as done. Complete their remaining manual che
 Also verify physical Command-drag overwrite and its striped preview from ticket 09 in the same appearance/accessibility matrix. See [ticket 09 verification](../../../docs/ticket-09-verification.md).
 
 Ticket 04 was accepted as done on 2026-10-20. Complete its remaining physical entry-click/edge-resize, keyboard/VoiceOver, appearance, and repeated-hour timeline checks. Timestamp fields were removed from the approved UI. See [ticket 04 verification](../../../docs/ticket-04-verification.md).
+
+Ticket 05 was accepted as done on 2026-10-20 after the user reported it working. Repeat the full lock/sleep matrix, including combined lock/sleep with an open editor, display-off without lock, and awake external-display use with the lid closed. The user did not enumerate every scenario as tested. See [ticket 05 verification](../../../docs/ticket-05-verification.md).

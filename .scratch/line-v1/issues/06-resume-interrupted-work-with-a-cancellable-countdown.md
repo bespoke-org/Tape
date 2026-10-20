@@ -19,3 +19,7 @@
 - [ ] Test completion/action races and restart during a countdown with controlled time; manually verify focus, anchoring, dismissal, and real system-event behavior.
 
 Native macOS appearance, Liquid Glass use, and accessibility follow the spec and apply to every UI change in this ticket.
+
+## Implementation note from ticket 05
+
+Both blockers are done. Current availability reflects received lock/sleep events rather than an independent OS-state query. Before implementing automatic continuation, account for an initially unknown or missed lock state; do not treat the initial availability value as proof the Mac is unlocked. See [ticket 05 verification](../../../docs/ticket-05-verification.md).

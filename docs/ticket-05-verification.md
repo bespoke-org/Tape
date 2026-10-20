@@ -2,7 +2,7 @@
 
 Implementation: [Stop tracking on screen lock and sleep](../.scratch/line-v1/issues/05-stop-tracking-on-screen-lock-and-sleep.md).
 
-Implemented on 2026-10-20. Physical system-event verification and user acceptance remain pending.
+Implemented and accepted as done on 2026-10-20. After trying the rebuilt app, the user reported that it seems to be working. This records user-reported hands-on acceptance, not an independently observed pass of every physical scenario.
 
 ## Behavior
 
@@ -18,7 +18,7 @@ Save failures retain the prior stored state and show the existing error indicato
 
 `SystemActivityMonitor` observes [NSWorkspace system sleep](https://developer.apple.com/documentation/appkit/nsworkspace/willsleepnotification) and wake notifications. The stop save runs synchronously in the sleep handler. It does not subscribe to [screen sleep](https://developer.apple.com/documentation/appkit/nsworkspace/screensdidsleepnotification), which is a distinct signal.
 
-Screen lock uses `com.apple.screenIsLocked` and `com.apple.screenIsUnlocked` through `DistributedNotificationCenter`. These names are not documented AppKit API; their use is also visible in [Hammerspoon's own implementation](https://github.com/Hammerspoon/hammerspoon/blob/master/extensions/caffeinate/libcaffeinate_watcher.m). They are isolated in the adapter and need verification on this Mac. Apple's [distributed-notification documentation](https://developer.apple.com/documentation/Foundation/DistributedNotificationCenter?language=objc) notes that delivery can be delayed or dropped, so the recorded boundary is receipt time, not a guaranteed system timestamp. No accessibility permission, input monitoring, or idle-time polling is required.
+Screen lock uses `com.apple.screenIsLocked` and `com.apple.screenIsUnlocked` through `DistributedNotificationCenter`. These names are not documented AppKit API; their use is also visible in [Hammerspoon's own implementation](https://github.com/Hammerspoon/hammerspoon/blob/master/extensions/caffeinate/libcaffeinate_watcher.m). They are isolated in the adapter. The user reports the implementation working on this Mac; delivery remains a regression check for final verification and OS updates. Apple's [distributed-notification documentation](https://developer.apple.com/documentation/Foundation/DistributedNotificationCenter?language=objc) notes that delivery can be delayed or dropped, so the recorded boundary is receipt time, not a guaranteed system timestamp. No accessibility permission, input monitoring, or idle-time polling is required.
 
 ## Automated verification
 
@@ -29,11 +29,11 @@ Screen lock uses `com.apple.screenIsLocked` and `com.apple.screenIsUnlocked` thr
 
 Review found no functional blockers. For ticket 06, availability currently reflects received events, not an independent query of the OS lock state. Automatic continuation must account for an initially unknown or missed lock state before using availability to start work.
 
-## Physical checks still required
+## Physical scenarios for final verification
 
 1. Start a task, lock with Control-Command-Q, then unlock. Confirm the entry ended at lock and Line remains stopped.
 2. Start another task, sleep the Mac or close its lid so it sleeps, then wake/unlock. Confirm the absence is untracked and no task starts automatically.
 3. Repeat with the popover/editor open and through a lock followed by sleep.
 4. Where the Mac remains unlocked and awake, verify display-off and normal inactivity keep tracking. A closed lid with an external display should also keep tracking if the Mac stays awake.
 
-These checks have not been claimed as passed. Ticket 06 will add the ten-second continuation popup after a usable return.
+The user confirmed the implementation works but did not enumerate these scenarios individually. Repeat the complete matrix in ticket 07. Ticket 06 will add the ten-second continuation popup after a usable return.

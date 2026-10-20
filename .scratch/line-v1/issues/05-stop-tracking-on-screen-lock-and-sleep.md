@@ -6,16 +6,16 @@
 
 **Blocked by:** [01: Track tasks on a live timeline](01-track-tasks-on-a-live-timeline.md).
 
-**Status:** ready-for-human
+**Status:** ready-for-agent
 
-**Execution:** implemented; awaiting physical lock/sleep verification and user acceptance
+**Execution:** done
 
 ## Acceptance criteria
 
 - [x] Actual screen lock and system sleep stop and save a running entry once, remembering its task for potential continuation.
 - [x] Duplicate and differently ordered lock/sleep events do not create extra entries; wake while locked is not a usable return.
 - [x] Inactivity, display dimming, and display-off alone leave tracking running. Idle state remains idle.
-- [ ] Test state transitions with controlled signals and verify real lock/unlock and sleep/wake on this Mac. This slice stops safely but does not yet resume automatically.
+- [x] State transitions pass controlled-signal tests; the user reports the implementation working on this Mac and accepts the ticket. This slice stops safely but does not yet resume automatically. The complete physical scenario matrix remains part of ticket 07.
 
 Native macOS appearance, Liquid Glass use, and accessibility follow the spec and apply to every UI change in this ticket.
 
@@ -25,4 +25,4 @@ Closing the lid stops tracking when it causes system sleep. A Mac that remains a
 
 The first lock/sleep ends the entry at notification receipt, saves it, and remembers its task in memory. Duplicate signals preserve that endpoint. Wake and unlock must both complete before the Mac is available again. This ticket leaves tracking stopped; ticket 06 supplies automatic continuation. Save failures retain the original stop boundary for retry.
 
-See [ticket 05 verification](../../../docs/ticket-05-verification.md). Physical lock/unlock and sleep/wake delivery still need verification on this Mac; automated notification checks do not establish it.
+Accepted by the user on 2026-10-20 after the code review, automated checks, and their hands-on check. See [ticket 05 verification](../../../docs/ticket-05-verification.md). The user reported that it works without enumerating every physical scenario; the full matrix remains recorded for ticket 07.
