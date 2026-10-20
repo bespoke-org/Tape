@@ -75,6 +75,7 @@ struct LiveTimeline: View {
                                     .frame(width: entryWidth, height: 46)
                             }
                                 .buttonStyle(.plain)
+                                .zIndex(model.resizingEntryID == entry.id ? 1 : 0)
                                 .offset(x: left, y: stripTop + (stripHeight - 46) / 2)
                                 .help(entryDescription(entry, task: task))
                                 .accessibilityElement(children: .ignore)
@@ -120,6 +121,7 @@ struct LiveTimeline: View {
                     if nowX >= 0 && nowX <= width {
                         Rectangle().fill(playheadColor).frame(width: 1.5, height: stripHeight + 2 * nowOverhang)
                             .offset(x: nowX - 0.75, y: stripTop - nowOverhang)
+                            .zIndex(2)
                             .allowsHitTesting(false)
                             .accessibilityHidden(true)
                         Path { path in
@@ -133,6 +135,7 @@ struct LiveTimeline: View {
                         .fill(playheadColor)
                         .frame(width: 12, height: 10)
                         .offset(x: nowX - 6, y: stripTop - nowOverhang)
+                        .zIndex(2)
                         .allowsHitTesting(false)
                         .accessibilityHidden(true)
                         if model.timeline.isFollowingNow {

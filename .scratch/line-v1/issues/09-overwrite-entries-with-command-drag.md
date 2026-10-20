@@ -28,6 +28,6 @@ Example: overwriting 10:20–10:40 inside an existing 10:00–11:00 entry leaves
 
 If the selected task is the original task, that same example remains one 10:00–11:00 entry. Extending it through 11:30 produces one 10:00–11:30 entry.
 
-This ticket adds overwrite to interval drawing. It does not change ordinary entry resizing or timestamp editing into overwrite operations.
+The original ticket added overwrite to interval drawing. A follow-up adds Command overwrite to edge resizing: Command can be held before dragging or toggled during the gesture, and mouse-up commits the current mode. Ordinary resizing still stops at neighboring entries.
 
 Accepted as done by the user on 2026-10-19, including removal of tasks whose last entry disappears. See [verification notes](../../../docs/ticket-09-verification.md) for automated checks, review results, and the physical gesture/appearance checks carried to ticket 07.

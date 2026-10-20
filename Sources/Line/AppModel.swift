@@ -179,17 +179,18 @@ final class AppModel {
         return nearest.1
     }
 
-    func updateResizing(to fraction: Double) {
+    func updateResizing(to fraction: Double, overwriting: Bool) {
         guard let id = resizingEntryID, let edge = resizingEdge, let store else { return }
         let date = timeline.date(at: min(max(fraction, 0), 1), now: .now)
-        if let selection = try? store.prepareResize(id: id, edge: edge, to: date) {
+        isOverwriting = overwriting
+        if let selection = try? store.prepareResize(id: id, edge: edge, to: date, overwriting: overwriting) {
             drawnRange = DateInterval(start: selection.start, end: selection.end ?? .now)
         } else {
             drawnRange = nil
         }
     }
 
-    func finishResizing(at fraction: Double, tolerance: Double) {
+    func finishResizing(at fraction: Double, tolerance: Double, overwriting: Bool) {
         guard let id = resizingEntryID, let edge = resizingEdge, let store else { cancelEntry(); return }
         let instant = Date.now
         let date = timeline.date(at: min(max(fraction, 0), 1), now: instant)
@@ -197,7 +198,7 @@ final class AppModel {
         cancelEntry()
         do {
             try interruptions?.retryStop()
-            try store.resizeEntry(id: id, edge: edge, to: date, reachesNow: reachesNow)
+            try store.resizeEntry(id: id, edge: edge, to: date, reachesNow: reachesNow, overwriting: overwriting)
             errorMessage = nil
             onChange?()
         } catch TrackingError.emptyInterval {

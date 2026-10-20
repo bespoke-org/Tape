@@ -9,6 +9,7 @@ import tempfile
 
 parser = argparse.ArgumentParser()
 modes = parser.add_mutually_exclusive_group()
+modes.add_argument('--resize-overwrite', action='store_true', help='Verify live Command switching during entry resizing')
 modes.add_argument('--continuation', action='store_true', help='Verify continuation focus, rejection, cancellation, and timer completion')
 modes.add_argument('--system-activity', action='store_true', help='Verify lock/sleep notification handling with private notification centers')
 modes.add_argument('--creation', action='store_true', help='Verify drawing and task selection')
@@ -32,7 +33,7 @@ with tempfile.TemporaryDirectory(prefix='line-smoke-') as data:
         try:
             result = subprocess.run(
                 [str(app / 'Contents/MacOS/DayTape'), '--smoke-test', str(output)],
-                env=dict(os.environ, LINE_DATA_DIRECTORY=data, LINE_SMOKE_CONTINUATION='1' if args.continuation else '0', LINE_SMOKE_SYSTEM_ACTIVITY='1' if args.system_activity else '0', LINE_SMOKE_DISMISSAL='1' if args.dismissal else '0', LINE_SMOKE_TIMELINE='1' if args.timeline else '0',
+                env=dict(os.environ, LINE_DATA_DIRECTORY=data, LINE_SMOKE_RESIZE_OVERWRITE='1' if args.resize_overwrite else '0', LINE_SMOKE_CONTINUATION='1' if args.continuation else '0', LINE_SMOKE_SYSTEM_ACTIVITY='1' if args.system_activity else '0', LINE_SMOKE_DISMISSAL='1' if args.dismissal else '0', LINE_SMOKE_TIMELINE='1' if args.timeline else '0',
                          LINE_SMOKE_EDITING='1' if args.editing else '0', LINE_SMOKE_CREATION='1' if args.creation else '0', LINE_SMOKE_OVERWRITE='1' if args.overwrite else '0'),
                 capture_output=True, text=True, timeout=run_timeout,
             )
@@ -49,7 +50,10 @@ with tempfile.TemporaryDirectory(prefix='line-smoke-') as data:
         if result.returncode:
             raise SystemExit(result.returncode)
         records = json.loads((Path(data) / 'tracking.json').read_text())
-        if args.continuation:
+        if args.resize_overwrite:
+            assert len(records['entries']) == 2 and len(records['tasks']) == 2
+            assert all(entry.get('end') is not None for entry in records['entries'])
+        elif args.continuation:
             assert len(records['entries']) >= 2
             assert all(entry.get('end') is not None for entry in records['entries'])
         elif args.system_activity:

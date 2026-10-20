@@ -18,6 +18,13 @@ enum SmokeCheck {
             try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
             try require(NSApp.activationPolicy() == .accessory, "App must have no Dock icon")
             try require(button.image != nil, "Status item must have an icon")
+            if ProcessInfo.processInfo.environment["LINE_SMOKE_RESIZE_OVERWRITE"] == "1" {
+                try await checkResizeOverwrite(button: button, popover: popover, model: model)
+                try Data("PASS: Command before and during resize, stationary modifier changes, release to clamp, Escape cancellation, and overwrite commit.\n".utf8)
+                    .write(to: output.appendingPathComponent("result.txt"))
+                NSApp.terminate(nil)
+                return
+            }
             if ProcessInfo.processInfo.environment["LINE_SMOKE_CONTINUATION"] == "1" {
                 try await checkContinuation(button: button, popover: popover, model: model)
                 try Data("PASS: continuation panel preserves focus, hover pauses the nine-second countdown, OK resumes immediately, Reject and explicit actions cancel, outside clicks preserve the notice and opening DayTape accepts continuation, and short-break continuation reopens the original entry.\n".utf8)
@@ -261,7 +268,7 @@ enum SmokeCheck {
         hover(original.end!)
         try require(NSCursor.current == EntryResizeCursor.end, "Completed entry ends must show the end-edge bracket")
         hover(original.end!, flags: .command)
-        try require(NSCursor.current == NSCursor.arrow, "Command overwrite must not advertise resizing")
+        try require(NSCursor.current == EntryResizeCursor.end, "Command must keep the resize cursor at entry edges")
         hover(original.start)
         hover(running.start)
         try require(NSCursor.current == EntryResizeCursor.start, "Running starts must show the start-edge bracket")
@@ -693,6 +700,73 @@ enum SmokeCheck {
         workspace.post(name: NSWorkspace.didWakeNotification, object: nil)
         try require(store.entries.count == 2 && model.interruptions?.interruptedTask == nil, "Idle sleep must not invent tracked work")
         try require(model.errorMessage == nil, "Notification handling must not produce errors")
+    }
+
+    private static func checkResizeOverwrite(button: NSStatusBarButton, popover: NSPopover, model: AppModel) async throws {
+        try await settle()
+        try clickStatusItem(button)
+        try await settle()
+        let store = model.store!
+        let base = Date(timeIntervalSince1970: floor(Date.now.timeIntervalSince1970 / 60) * 60)
+        for commandAtStart in [false, true] {
+            for commandAtRelease in [false, true] {
+                model.cancelEntry()
+                for entry in store.entries { try store.deleteEntry(id: entry.id) }
+                for (name, start, end) in [("Resize", -6_000.0, -4_800.0), ("Covered", -4_200.0, -3_000.0), ("Trimmed", -2_400.0, -1_200.0)] {
+                    try store.createEntry(named: name, selection: store.prepareEntry(from: base + start, to: base + end))
+                }
+                try await settle()
+                let original = store.entries
+                let first = original[0]
+                let input = try timelineInput(in: popover)
+                let window = input.window!
+                let from = model.timeline.fraction(for: first.end!, now: .now)
+                let to = model.timeline.fraction(for: base - 1_800, now: .now)
+                func send(_ type: NSEvent.EventType, _ fraction: Double, command: Bool) {
+                    _ = input.handle(TimelineTestEvent(type: type, window: window,
+                        location: input.convert(NSPoint(x: input.bounds.width * fraction, y: 60), to: nil),
+                        flags: command ? .command : []))
+                }
+                send(.leftMouseDown, from, command: commandAtStart)
+                send(.leftMouseDragged, to, command: commandAtStart)
+                try require(model.resizingEntryID == first.id && !model.isDrawing,
+                            "Entry edges must resize even when Command is already held")
+                try require(model.drawnRange?.end == (commandAtStart ? base - 1_800 : original[1].start),
+                            "Resize preview must use the initial Command state")
+                send(.flagsChanged, to, command: true)
+                try require(model.drawnRange?.end == base - 1_800 && model.isOverwriting,
+                            "Pressing Command without moving must immediately extend across neighbors")
+                send(.flagsChanged, to, command: false)
+                try require(model.drawnRange?.end == original[1].start && !model.isOverwriting,
+                            "Releasing Command without moving must immediately clamp to the neighbor")
+                send(.flagsChanged, to, command: true)
+                try require(store.entries == original, "Resizing previews must not write or delete time")
+                let escape = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [],
+                    timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+                    context: nil, characters: "\u{1b}", charactersIgnoringModifiers: "\u{1b}", isARepeat: false, keyCode: 53)!
+                _ = input.handle(escape)
+                try require(model.resizingEntryID == nil && model.drawnRange == nil && store.entries == original,
+                            "Escape must discard an overwrite resize without changing records")
+                send(.leftMouseDown, from, command: commandAtStart)
+                send(.leftMouseDragged, to, command: commandAtStart)
+                send(.flagsChanged, to, command: true)
+                // Mouse-up is authoritative even if a modifier-change event was not delivered first.
+                send(.leftMouseUp, to, command: commandAtRelease)
+                try require(model.entryError == nil && model.resizingEntryID == nil && model.entrySelection == nil,
+                            "Resize must commit without opening a task picker")
+                if commandAtRelease {
+                    try require(store.entries.count == 2 && store.tasks.count == 2,
+                                "Overwrite resize must remove the fully covered entry and orphan task")
+                    try require(store.entries[0].id == first.id && store.entries[0].end == base - 1_800 && store.entries[1].start == base - 1_800,
+                                "Overwrite resize must keep the resized entry and trim the later neighbor")
+                } else {
+                    try require(store.entries.count == 3 && store.entries[0].end == original[1].start && Array(store.entries.dropFirst()) == Array(original.dropFirst()),
+                                "Releasing Command at mouse-up must preserve neighbors")
+                }
+            }
+        }
+        try await settle()
+        try requireAnchored(popover, to: button)
     }
 
     private static func checkOverwrite(button: NSStatusBarButton, popover: NSPopover, model: AppModel) async throws {
