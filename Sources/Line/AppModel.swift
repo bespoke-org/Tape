@@ -84,6 +84,18 @@ final class AppModel {
         onChange?()
     }
 
+    func setContinuationHovered(_ hovered: Bool, id: UUID) {
+        guard interruptions?.pendingContinuation?.id == id else { return }
+        interruptions?.setContinuationHovered(hovered)
+    }
+
+    func acceptContinuation() {
+        guard let interruptions, interruptions.pendingContinuation != nil else { return }
+        perform {
+            try interruptions.acceptContinuation(sessionIsUsable: SystemActivityMonitor.sessionIsUsable())
+        }
+    }
+
     func preparePopover() {
         cancelEntry()
         timeline = TimelineViewport(span: store?.timelineSpan ?? TimelineViewport.defaultSpan)

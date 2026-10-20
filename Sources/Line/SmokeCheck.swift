@@ -20,7 +20,7 @@ enum SmokeCheck {
             try require(button.image != nil, "Status item must have an icon")
             if ProcessInfo.processInfo.environment["LINE_SMOKE_CONTINUATION"] == "1" {
                 try await checkContinuation(button: button, popover: popover, model: model)
-                try Data("PASS: continuation panel preserves focus, Reject and explicit actions cancel, dismissal/browsing preserve the countdown, and timer completion resumes from return.\n".utf8)
+                try Data("PASS: continuation panel preserves focus, hover pauses the nine-second countdown, OK resumes immediately, Reject and explicit actions cancel, outside clicks preserve the notice and opening Line accepts continuation, and short-break continuation reopens the original entry.\n".utf8)
                     .write(to: output.appendingPathComponent("result.txt"))
                 NSApp.terminate(nil)
                 return
@@ -497,6 +497,10 @@ enum SmokeCheck {
             guard let pending = model.interruptions?.pendingContinuation else {
                 throw NSError(domain: "LineSmokeCheck", code: 30, userInfo: [NSLocalizedDescriptionKey: "An unlocked return must offer continuation"])
             }
+            // Keep hardware pointer position from affecting the synthetic countdown tests.
+            if let notice = delegate.continuationPanel {
+                notice.mouseExited(with: TimelineTestEvent(type: .mouseExited, window: notice, location: .zero))
+            }
             return pending
         }
         let frontmost = NSWorkspace.shared.frontmostApplication?.processIdentifier
@@ -506,6 +510,7 @@ enum SmokeCheck {
         }
         try require(panel.isVisible && !panel.canBecomeKey && !panel.isKeyWindow && !panel.isMainWindow,
                     "Automatic continuation must show without becoming key or main")
+        try require(button.isHighlighted, "The menu bar icon must highlight while the continuation notice is visible")
         try require(NSWorkspace.shared.frontmostApplication?.processIdentifier == frontmost,
                     "Automatic presentation must preserve the frontmost application")
         let anchor = button.window!.convertToScreen(button.convert(button.bounds, to: nil))
@@ -515,35 +520,87 @@ enum SmokeCheck {
         }
         try require(reject.isEnabled && reject.acceptsFirstMouse(for: nil), "Reject must accept the first click without activation")
         try require(accessibilityElement(named: "Reject", in: content) != nil, "Reject must have an accessibility title")
+        panel.mouseEntered(with: TimelineTestEvent(type: .mouseEntered, window: panel, location: .zero))
         reject.performClick(nil)
         try await settle()
         try require(model.interruptions?.pendingContinuation == nil && !panel.isVisible && store.runningEntry == nil,
                     "Reject must close the panel without recording the provisional interval")
+        try require(!button.isHighlighted, "Reject must clear the menu bar highlight")
         try require(NSWorkspace.shared.frontmostApplication?.processIdentifier == frontmost,
                     "Reject must preserve the frontmost application")
 
-        let pending = try await offer()
-        delegate.continuationPanel?.dismiss() // The outside-click handler only dismisses this panel.
+        let outside = try await offer()
+        let otherWindow = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 100, height: 100),
+                                   styleMask: .borderless, backing: .buffered, defer: false)
+        otherWindow.isReleasedWhenClosed = false
+        defer { otherWindow.close() }
+        for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+            let event = NSEvent.mouseEvent(with: type, location: NSPoint(x: 10, y: 10), modifierFlags: [],
+                                          timestamp: ProcessInfo.processInfo.systemUptime,
+                                          windowNumber: otherWindow.windowNumber, context: nil,
+                                          eventNumber: 0, clickCount: 1, pressure: 1)!
+            NSApp.sendEvent(event)
+        }
+        try await settle()
         model.pollContinuation()
-        try require(model.interruptions?.pendingContinuation?.id == pending.id && delegate.continuationPanel?.isVisible == false,
-                    "Dismissal must preserve the countdown without reopening the panel")
+        try require(model.interruptions?.pendingContinuation?.id == outside.id && store.runningEntry == nil,
+                    "Clicks outside the notice must leave the countdown pending")
+        try require(delegate.continuationPanel?.isVisible == true,
+                    "The continuation notice must remain visible after outside clicks")
+        try require(button.isHighlighted, "Outside clicks must preserve the notice's menu bar highlight")
+        guard let notice = delegate.continuationPanel, let noticeContent = notice.contentView,
+              let accept = descendants(noticeContent).compactMap({ $0 as? NSButton }).first(where: { $0.title == "OK" }) else {
+            throw NSError(domain: "LineSmokeCheck", code: 33, userInfo: [NSLocalizedDescriptionKey: "Native OK button missing"])
+        }
+        try require(accept.isEnabled && accept.acceptsFirstMouse(for: nil), "OK must accept the first click without activation")
+        try require(accessibilityElement(named: "OK", in: noticeContent) != nil, "OK must have an accessibility title")
+        let hoverAreas = descendants(noticeContent).flatMap(\.trackingAreas).filter { ($0.owner as? ContinuationPanel) === notice }
+        try require(hoverAreas.contains { $0.options.contains([.activeAlways, .mouseEnteredAndExited, .inVisibleRect]) },
+                    "The full notice must track hover even while Line is inactive")
+        notice.mouseEntered(with: TimelineTestEvent(type: .mouseEntered, window: notice, location: .zero))
+        let frozenSeconds = model.interruptions!.remainingSeconds
+        try await Task.sleep(for: .milliseconds(1_200))
+        model.pollContinuation()
+        try require(model.interruptions?.remainingSeconds == frozenSeconds && store.runningEntry == nil,
+                    "Hover must freeze the displayed countdown and keep continuation pending")
+        notice.mouseExited(with: TimelineTestEvent(type: .mouseExited, window: notice, location: .zero))
+        try await Task.sleep(for: .milliseconds(1_200))
+        try require(model.interruptions!.remainingSeconds < frozenSeconds,
+                    "Leaving the notice must resume the remaining countdown")
+        notice.mouseEntered(with: TimelineTestEvent(type: .mouseEntered, window: notice, location: .zero))
+        let beforeAccept = NSWorkspace.shared.frontmostApplication?.processIdentifier
+        let acceptedEntry = store.entries.last!
+        accept.performClick(nil)
+        try await settle()
+        try require(store.runningEntry?.id == acceptedEntry.id && model.interruptions?.pendingContinuation == nil && !notice.isVisible,
+                    "OK must resume immediately and close the notice")
+        try require(!button.isHighlighted, "OK must clear the menu bar highlight")
+        try require(NSWorkspace.shared.frontmostApplication?.processIdentifier == beforeAccept,
+                    "OK must preserve the frontmost application")
+        try require(model.stop(), "Stop work accepted with OK")
+
+        _ = try await offer()
+        let openedEntry = store.entries.last!
         try clickStatusItem(button)
         try await settle()
-        try require(model.interruptions?.pendingContinuation?.id == pending.id, "Opening the main popover must not reject")
-        try require(accessibilityElement(named: "Reject continuation", in: contentView(popover)) != nil,
-                    "The main popover must also expose Reject")
-        model.timeline.scroll(points: 15, width: 580, now: .now)
-        model.saveTimelineScale()
+        try require(store.runningEntry?.id == openedEntry.id && model.interruptions?.pendingContinuation == nil,
+                    "Opening Line must immediately accept continuation")
+        try require(accessibilityElement(named: "Reject continuation", in: contentView(popover)) == nil,
+                    "The main popover must never contain a continuation dialog")
         try clickStatusItem(button)
         try await settle()
-        try require(model.interruptions?.pendingContinuation?.id == pending.id, "Browsing and closing must not reject")
+        try require(model.stop(), "Stop work accepted by opening Line")
+
+        let pending = try await offer()
+        let timerEntry = store.entries.last!
         // Exercise the real timer with a bounded wait, without changing its production duration.
         let deadline = ContinuousClock.now + .seconds(12)
         while store.runningEntry == nil && ContinuousClock.now < deadline {
             try await Task.sleep(for: .milliseconds(100))
         }
-        try require(store.runningEntry?.start == pending.returnedAt && store.runningTask?.id == pending.task.id,
-                    "The timer must continue the same task from the return instant")
+        try require(store.runningEntry?.id == timerEntry.id && store.runningEntry?.start == timerEntry.start && store.runningTask?.id == pending.task.id,
+                    "The timer must reopen the original entry after a short break")
+        try require(!button.isHighlighted, "Countdown completion must clear the menu bar highlight")
         try require(model.stop(), "Stop automatically continued work")
 
         let old = Date.now - 3_600
@@ -555,7 +612,8 @@ enum SmokeCheck {
             case "picker":
                 try clickStatusItem(button)
                 try await settle()
-                try pressAccessibleControl(named: "Start task", in: contentView(popover))
+                try pressAccessibleControl(named: "Switch task", in: contentView(popover))
+                try require(model.stop(), "Stop work already accepted when opening Line")
             case "edit":
                 model.editEntry(id: historical.id)
                 model.cancelEntry()

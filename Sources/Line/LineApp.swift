@@ -128,10 +128,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         guard pending.id != presentedContinuationID, let button = statusItem.button else { return }
         presentedContinuationID = pending.id
         continuationPanel?.dismiss()
-        guard !popover.isShown else { return }
-        let panel = ContinuationPanel(task: pending.task, remainingSeconds: interruptions.remainingSeconds) { [weak self] in
-            self?.model.rejectContinuation()
+        guard !popover.isShown else {
+            model.acceptContinuation()
+            return
         }
+        let panel = ContinuationPanel(task: pending.task, remainingSeconds: interruptions.remainingSeconds,
+                                      hoverChanged: { [weak self] hovered in
+                                          self?.model.setContinuationHovered(hovered, id: pending.id)
+                                      },
+                                      accept: { [weak self] in self?.model.acceptContinuation() },
+                                      reject: { [weak self] in self?.model.rejectContinuation() })
         continuationPanel = panel
         panel.show(below: button)
     }
@@ -150,6 +156,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     }
 
     private func showActionsMenu() {
+        model.acceptContinuation()
         continuationPanel?.dismiss()
         popover.close()
         let menu = NSMenu()
@@ -165,6 +172,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
     private func showPopover() {
         guard let button = statusItem.button else { return }
+        model.acceptContinuation()
         continuationPanel?.dismiss()
         model.preparePopover()
         popover.animates = !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion

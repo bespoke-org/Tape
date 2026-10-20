@@ -4,10 +4,88 @@ import LineCore
 
 @MainActor
 struct ContinuationTests {
-    @Test func rejectionAndRestartDiscardProvisionalTime() throws {
+    @Test func hoveringPausesAndResumesTheExactRemainingTime() throws {
         let fixture = try ContinuationFixture()
         defer { fixture.cleanup() }
         try fixture.offer()
+        let pending = try #require(fixture.interruptions.pendingContinuation)
+        fixture.advance(2.25)
+        fixture.interruptions.setContinuationHovered(true)
+        fixture.advance(30)
+        fixture.interruptions.setContinuationHovered(true)
+        try fixture.interruptions.pollContinuation(sessionIsUsable: true)
+        #expect(fixture.store.runningEntry == nil)
+        #expect(fixture.interruptions.remainingSeconds == 7)
+        fixture.interruptions.setContinuationHovered(false)
+        fixture.advance(6.5)
+        fixture.interruptions.setContinuationHovered(false)
+        try fixture.interruptions.pollContinuation(sessionIsUsable: true)
+        #expect(fixture.store.runningEntry == nil)
+        #expect(fixture.interruptions.remainingSeconds == 1)
+        fixture.advance(0.25)
+        try fixture.interruptions.pollContinuation(sessionIsUsable: true)
+        #expect(fixture.store.runningEntry?.start == pending.returnedAt)
+        #expect(fixture.interruptions.pendingContinuation == nil)
+    }
+
+    @Test(arguments: [299.0, 300.0, 301.0], [false, true])
+    func shortBreakContinuesTheOriginalEntry(breakSeconds: Double, waitsForCountdown: Bool) throws {
+        let fixture = try ContinuationFixture()
+        defer { fixture.cleanup() }
+        try fixture.store.startTask(named: "Build")
+        let original = try #require(fixture.store.runningEntry)
+        fixture.advance(60)
+        try fixture.interruptions.handle(.locked)
+        fixture.advance(breakSeconds)
+        try fixture.interruptions.handle(.unlocked)
+        try fixture.interruptions.pollContinuation(sessionIsUsable: true)
+        let returnedAt = fixture.clock.now
+        fixture.advance(waitsForCountdown ? 10 : 1)
+        if waitsForCountdown {
+            try fixture.interruptions.pollContinuation(sessionIsUsable: true)
+        } else {
+            try fixture.interruptions.acceptContinuation(sessionIsUsable: true)
+        }
+        let running = try #require(fixture.store.runningEntry)
+        if breakSeconds < 300 {
+            #expect(running.id == original.id)
+            #expect(running.start == original.start)
+            #expect(fixture.store.entries.count == 1)
+        } else {
+            #expect(running.id != original.id)
+            #expect(running.start == returnedAt)
+            #expect(fixture.store.entries.count == 2)
+        }
+        let reopened = try TrackingStore(url: fixture.directory.appendingPathComponent("data/tracking.json"),
+                                         now: { fixture.clock.now + 100 })
+        #expect(reopened.entries.last?.id == running.id)
+        #expect(reopened.entries.last?.start == running.start)
+        #expect(reopened.entries.last?.end == fixture.clock.now)
+    }
+
+    @Test func acceptingEarlyResumesFromReturnAndCannotCommitTwice() throws {
+        let fixture = try ContinuationFixture()
+        defer { fixture.cleanup() }
+        try fixture.offer()
+        let pending = try #require(fixture.interruptions.pendingContinuation)
+        fixture.interruptions.setContinuationHovered(true)
+        fixture.advance(2)
+        try fixture.interruptions.acceptContinuation(sessionIsUsable: true)
+        #expect(fixture.store.runningEntry?.start == pending.returnedAt)
+        #expect(fixture.store.runningTask == pending.task)
+        #expect(fixture.interruptions.pendingContinuation == nil)
+        let accepted = fixture.store.entries
+        try fixture.interruptions.acceptContinuation(sessionIsUsable: true)
+        fixture.advance(10)
+        try fixture.interruptions.pollContinuation(sessionIsUsable: true)
+        #expect(fixture.store.entries == accepted)
+    }
+
+    @Test(arguments: [120.0, 600.0])
+    func rejectionAndRestartDiscardProvisionalTime(breakSeconds: Double) throws {
+        let fixture = try ContinuationFixture()
+        defer { fixture.cleanup() }
+        try fixture.offer(breakSeconds: breakSeconds)
         let before = fixture.store.entries
         let reopened = try TrackingStore(url: fixture.directory.appendingPathComponent("data/tracking.json"),
                                          now: { fixture.clock.now })
@@ -15,6 +93,7 @@ struct ContinuationTests {
         try restarted.handle(.unlocked)
         try restarted.pollContinuation(sessionIsUsable: true)
         #expect(restarted.pendingContinuation == nil && reopened.entries == before)
+        fixture.interruptions.setContinuationHovered(true)
         fixture.advance(10)
         fixture.interruptions.cancelContinuation()
         try fixture.interruptions.pollContinuation(sessionIsUsable: true)
@@ -32,7 +111,8 @@ struct ContinuationTests {
         let initial = try #require(fixture.interruptions.pendingContinuation)
         fixture.clock.now += 3_600
         try fixture.interruptions.pollContinuation(sessionIsUsable: true)
-        #expect(fixture.store.runningEntry == nil && fixture.interruptions.remainingSeconds == 10)
+        #expect(fixture.store.runningEntry == nil && fixture.interruptions.remainingSeconds == 9)
+        fixture.interruptions.setContinuationHovered(true)
         fixture.advance(10)
         try fixture.interruptions.pollContinuation(sessionIsUsable: false)
         #expect(fixture.store.runningEntry == nil && fixture.interruptions.pendingContinuation == nil)
@@ -40,7 +120,7 @@ struct ContinuationTests {
         try fixture.interruptions.pollContinuation(sessionIsUsable: true)
         let fresh = try #require(fixture.interruptions.pendingContinuation)
         #expect(fresh.id != initial.id && fresh.returnedAt == fixture.clock.now)
-        #expect(fixture.interruptions.remainingSeconds == 10)
+        #expect(fixture.interruptions.remainingSeconds == 9)
         fixture.advance(10)
         try fixture.interruptions.pollContinuation(sessionIsUsable: true)
         #expect(fixture.store.runningEntry?.start == fresh.returnedAt)
@@ -73,10 +153,11 @@ struct ContinuationTests {
         #expect(fixture.store.entries == conflict && fixture.interruptions.pendingContinuation == nil)
     }
 
-    @Test func failedCompletionAndClockReversalDoNotRetryLater() throws {
+    @Test(arguments: [120.0, 600.0])
+    func failedCompletionAndClockReversalDoNotRetryLater(breakSeconds: Double) throws {
         let fixture = try ContinuationFixture()
         defer { fixture.cleanup() }
-        try fixture.offer()
+        try fixture.offer(breakSeconds: breakSeconds)
         let before = fixture.store.entries
         let parent = fixture.directory.appendingPathComponent("data")
         let moved = fixture.directory.appendingPathComponent("saved-data")
@@ -90,7 +171,7 @@ struct ContinuationTests {
         fixture.advance(100)
         try fixture.interruptions.pollContinuation(sessionIsUsable: true)
         #expect(fixture.store.entries == before)
-        try fixture.offer()
+        try fixture.offer(breakSeconds: breakSeconds)
         let saved = fixture.store.entries
         fixture.clock.now -= 20
         fixture.clock.uptime += 10
@@ -103,6 +184,7 @@ struct ContinuationTests {
         defer { fixture.cleanup() }
         try fixture.offer()
         let first = try #require(fixture.interruptions.pendingContinuation)
+        fixture.interruptions.setContinuationHovered(true)
         fixture.advance(4)
         try fixture.interruptions.handle(.locked)
         #expect(fixture.interruptions.pendingContinuation == nil)
@@ -140,10 +222,10 @@ struct ContinuationTests {
         try interruptions.pollContinuation(sessionIsUsable: true)
         let pending = try #require(interruptions.pendingContinuation)
         #expect(pending.returnedAt == base + 660)
-        #expect(interruptions.remainingSeconds == 10)
+        #expect(interruptions.remainingSeconds == 9)
         #expect(store.runningEntry == nil)
-        now += 9
-        uptime += 9
+        now += 8
+        uptime += 8
         try interruptions.handle(.unlocked)
         try interruptions.pollContinuation(sessionIsUsable: true)
         #expect(interruptions.pendingContinuation?.id == pending.id)
@@ -160,7 +242,7 @@ struct ContinuationTests {
         let reopened = try TrackingStore(url: url, now: { now + 100 })
         #expect(reopened.runningEntry == nil)
         #expect(reopened.entries.last?.start == base + 660)
-        #expect(reopened.entries.last?.end == base + 670)
+        #expect(reopened.entries.last?.end == base + 669)
     }
 }
 
@@ -186,11 +268,11 @@ private final class ContinuationFixture {
         clock.uptime += seconds
     }
 
-    func offer() throws {
+    func offer(breakSeconds: Double = 600) throws {
         try store.startTask(named: "Build")
         advance(60)
         try interruptions.handle(.locked)
-        advance(600)
+        advance(breakSeconds)
         try interruptions.handle(.unlocked)
         try interruptions.pollContinuation(sessionIsUsable: true)
     }

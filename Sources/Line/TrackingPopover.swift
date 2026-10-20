@@ -23,9 +23,6 @@ struct TrackingPopover: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             if let store = model.store {
-                if let interruptions = model.interruptions, interruptions.pendingContinuation != nil {
-                    ContinuationContent(interruptions: interruptions, reject: model.rejectContinuation)
-                }
                 TimelineView(.periodic(from: .now, by: reduceMotion ? 5 : 1)) { context in
                     VStack(alignment: .leading, spacing: 2) {
                         runningControls(store: store)

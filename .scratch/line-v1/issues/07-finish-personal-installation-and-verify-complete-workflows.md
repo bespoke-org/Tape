@@ -29,3 +29,5 @@ Also verify physical Command-drag overwrite and its striped preview from ticket 
 Ticket 04 was accepted as done on 2026-10-20. Complete its remaining physical entry-click/edge-resize, keyboard/VoiceOver, appearance, and repeated-hour timeline checks. Timestamp fields were removed from the approved UI. See [ticket 04 verification](../../../docs/ticket-04-verification.md).
 
 Ticket 05 was accepted as done on 2026-10-20 after the user reported it working. Repeat the full lock/sleep matrix, including combined lock/sleep with an open editor, display-off without lock, and awake external-display use with the lid closed. The user did not enumerate every scenario as tested. See [ticket 05 verification](../../../docs/ticket-05-verification.md).
+
+Ticket 06 was accepted as done on 2026-10-20, resolving this ticket's blocker. Complete its physical continuation checks, including hover pause, menu bar highlighting, OK/Reject and outside clicks, focus, wake/unlock ordering, Spaces, monitor arrangements, and appearance/accessibility. See [ticket 06 verification](../../../docs/ticket-06-verification.md).
