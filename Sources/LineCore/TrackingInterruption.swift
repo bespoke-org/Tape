@@ -11,6 +11,7 @@ public struct PendingContinuation: Identifiable, Equatable, Sendable {
     public let returnedAt: Date
     var deadline: TimeInterval
     var pausedAt: TimeInterval?
+    var shortBreakSeconds: TimeInterval
 }
 
 /// Lock and sleep are independent. Waking alone does not make a locked Mac available.
@@ -27,7 +28,7 @@ public final class TrackingInterruption {
     public private(set) var interruptedTask: TrackedTask?
     public private(set) var pendingContinuation: PendingContinuation?
     public var isAvailable: Bool { !locked && !sleeping && pendingStop == nil }
-    public var needsContinuationPolling: Bool { !locked && !sleeping && interruptedTask != nil }
+    public var needsContinuationPolling: Bool { !locked && !sleeping && (interruptedTask != nil || pendingStop != nil) }
     public var remainingSeconds: Int {
         guard let pendingContinuation else { return 0 }
         return Int(ceil(max(0, pendingContinuation.deadline - (pendingContinuation.pausedAt ?? uptime()))))
@@ -54,12 +55,13 @@ public final class TrackingInterruption {
         }
         if !wasAway && (locked || sleeping) && pendingStop == nil {
             if let entry = store.runningEntry {
-                interruptedTask = store.runningTask
-                interruptedEntryID = entry.id
+                interruptedTask = store.automaticResumeEnabled ? store.runningTask : nil
+                interruptedEntryID = store.automaticResumeEnabled ? entry.id : nil
                 pendingStop = (entry.id, now())
             }
         }
         try retryStop()
+        if !store.automaticResumeEnabled { cancelContinuation() }
     }
 
     /// Retry the same endpoint after a storage failure, never the later retry time.
@@ -75,6 +77,11 @@ public final class TrackingInterruption {
         pendingContinuation = nil
         interruptedTask = nil
         interruptedEntryID = nil
+    }
+
+    public func setAutomaticResumeEnabled(_ enabled: Bool) throws {
+        try store.setAutomaticResumeEnabled(enabled)
+        if !enabled { cancelContinuation() }
     }
 
     public func setContinuationHovered(_ hovered: Bool) {
@@ -93,6 +100,7 @@ public final class TrackingInterruption {
     /// The caller rechecks the current OS session before each poll, including completion.
     public func pollContinuation(sessionIsUsable: Bool) throws {
         try retryStop()
+        guard store.automaticResumeEnabled else { cancelContinuation(); return }
         guard isAvailable, sessionIsUsable else {
             pendingContinuation = nil
             return
@@ -100,7 +108,9 @@ public final class TrackingInterruption {
         guard let task = interruptedTask else { return }
         guard store.runningEntry == nil else { cancelContinuation(); return }
         if pendingContinuation == nil {
-            pendingContinuation = PendingContinuation(id: UUID(), task: task, returnedAt: now(), deadline: uptime() + 9)
+            pendingContinuation = PendingContinuation(id: UUID(), task: task, returnedAt: now(),
+                                                      deadline: uptime() + TimeInterval(store.resumeCountdownSeconds),
+                                                      shortBreakSeconds: TimeInterval(store.shortBreakSeconds))
             return
         }
         guard let pending = pendingContinuation, pending.pausedAt == nil, uptime() >= pending.deadline else { return }
@@ -108,6 +118,7 @@ public final class TrackingInterruption {
     }
 
     public func acceptContinuation(sessionIsUsable: Bool) throws {
+        guard store.automaticResumeEnabled else { cancelContinuation(); return }
         guard let pending = pendingContinuation else { return }
         guard isAvailable, sessionIsUsable else {
             pendingContinuation = nil
@@ -122,7 +133,7 @@ public final class TrackingInterruption {
         guard instant >= pending.returnedAt else { throw TrackingError.futureInterval }
         if let previous, previous.id == previousID, previous.taskID == pending.task.id,
            let end = previous.end,
-           pending.returnedAt >= end, pending.returnedAt.timeIntervalSince(end) < 5 * 60 {
+           pending.returnedAt >= end, pending.returnedAt.timeIntervalSince(end) < pending.shortBreakSeconds {
             try store.resizeEntry(id: previous.id, edge: .end, to: instant, reachesNow: true)
             return
         }

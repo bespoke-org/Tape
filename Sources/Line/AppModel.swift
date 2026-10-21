@@ -11,6 +11,11 @@ final class AppModel {
     private var interruptionError: String?
     private(set) var settingsError: String?
     var defaultZoomHours: Int { store?.defaultZoomHours ?? 8 }
+    var timeFormat: TimeFormat { store?.timeFormat ?? .system }
+    var resumeCountdownSeconds: Int { store?.resumeCountdownSeconds ?? TrackingStore.defaultResumeCountdownSeconds }
+    var automaticResumeEnabled: Bool { store?.automaticResumeEnabled ?? true }
+    var shortBreakSeconds: Int { store?.shortBreakSeconds ?? 300 }
+    let loginItem = LoginItemSettings()
     var defaultTimelineSpan: TimeInterval { Double(defaultZoomHours) * 3_600 }
     var timeline = TimelineViewport()
     private var timelineAnimation: Task<Void, Never>?
@@ -70,7 +75,7 @@ final class AppModel {
     }
 
     func pollContinuation() {
-        guard let interruptions, interruptions.interruptedTask != nil else { return }
+        guard let interruptions, interruptions.needsContinuationPolling else { return }
         let previous = interruptions.pendingContinuation?.id
         let previousError = errorMessage
         do {
@@ -328,6 +333,47 @@ final class AppModel {
         guard let store else { return }
         do {
             try store.setDefaultZoomHours(hours)
+            settingsError = nil
+        } catch {
+            settingsError = error.localizedDescription
+        }
+    }
+
+    func setTimeFormat(_ format: TimeFormat) {
+        guard let store else { return }
+        do {
+            try store.setTimeFormat(format)
+            settingsError = nil
+        } catch {
+            settingsError = error.localizedDescription
+        }
+    }
+
+    func setResumeCountdownSeconds(_ seconds: Int) {
+        guard let store else { return }
+        do {
+            try store.setResumeCountdownSeconds(seconds)
+            settingsError = nil
+        } catch {
+            settingsError = error.localizedDescription
+        }
+    }
+
+    func setAutomaticResumeEnabled(_ enabled: Bool) {
+        guard let interruptions else { return }
+        do {
+            try interruptions.setAutomaticResumeEnabled(enabled)
+            settingsError = nil
+            onChange?()
+        } catch {
+            settingsError = error.localizedDescription
+        }
+    }
+
+    func setShortBreakSeconds(_ seconds: Int) {
+        guard let store else { return }
+        do {
+            try store.setShortBreakSeconds(seconds)
             settingsError = nil
         } catch {
             settingsError = error.localizedDescription

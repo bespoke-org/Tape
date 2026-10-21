@@ -53,6 +53,10 @@ with tempfile.TemporaryDirectory(prefix='line-smoke-') as data:
         records = json.loads((Path(data) / 'tracking.json').read_text())
         if args.main_window:
             assert records['defaultZoomHours'] == 12
+            assert records['timeFormat'] == 'twentyFourHour'
+            assert records['resumeCountdownSeconds'] == 15
+            assert records['automaticResumeEnabled'] is True
+            assert records['shortBreakSeconds'] == 30
             assert len(records['entries']) == launch + 1
             assert all(entry.get('end') is not None for entry in records['entries'])
         elif args.resize_overwrite:

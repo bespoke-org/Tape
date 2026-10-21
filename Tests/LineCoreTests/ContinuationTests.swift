@@ -4,6 +4,144 @@ import LineCore
 
 @MainActor
 struct ContinuationTests {
+    @Test(arguments: [0, 30, 45, 60, 600, 3600], [-1.0, 0.0, 1.0])
+    func configuredShortBreakThresholdUsesStrictBoundary(seconds: Int, offset: Double) throws {
+        let fixture = try ContinuationFixture()
+        defer { fixture.cleanup() }
+        try fixture.store.setShortBreakSeconds(seconds)
+        let gap = max(0, Double(seconds) + offset)
+        try fixture.offer(breakSeconds: gap)
+        let original = try #require(fixture.store.entries.first)
+        let returnedAt = fixture.clock.now
+        fixture.advance(9)
+        try fixture.interruptions.pollContinuation(sessionIsUsable: true)
+        let merges = gap < Double(seconds)
+        #expect(fixture.store.entries.count == (merges ? 1 : 2))
+        #expect(fixture.store.runningEntry?.start == (merges ? original.start : returnedAt))
+    }
+
+    @Test func thresholdChangeDoesNotAlterAnExistingOffer() throws {
+        let fixture = try ContinuationFixture()
+        defer { fixture.cleanup() }
+        try fixture.offer(breakSeconds: 60)
+        let originalID = fixture.store.entries.first?.id
+        try fixture.store.setShortBreakSeconds(0)
+        fixture.advance(1)
+        try fixture.interruptions.acceptContinuation(sessionIsUsable: true)
+        #expect(fixture.store.runningEntry?.id == originalID)
+        fixture.advance(60)
+        try fixture.interruptions.handle(.locked)
+        fixture.advance(1)
+        try fixture.interruptions.handle(.unlocked)
+        try fixture.interruptions.pollContinuation(sessionIsUsable: true)
+        fixture.advance(9)
+        try fixture.interruptions.pollContinuation(sessionIsUsable: true)
+        #expect(fixture.store.entries.count == 2)
+    }
+
+    @Test func disablingResumeStillStopsAndDoesNotReviveOldOffers() throws {
+        let fixture = try ContinuationFixture()
+        defer { fixture.cleanup() }
+        try fixture.interruptions.setAutomaticResumeEnabled(false)
+        try fixture.offer()
+        #expect(fixture.store.runningEntry == nil)
+        #expect(fixture.store.entries.first?.end != nil)
+        #expect(fixture.interruptions.pendingContinuation == nil)
+        #expect(!fixture.interruptions.needsContinuationPolling)
+        try fixture.interruptions.setAutomaticResumeEnabled(true)
+        try fixture.interruptions.pollContinuation(sessionIsUsable: true)
+        #expect(fixture.interruptions.pendingContinuation == nil)
+        try fixture.offer()
+        #expect(fixture.interruptions.pendingContinuation != nil)
+        fixture.interruptions.setContinuationHovered(true)
+        try fixture.interruptions.setAutomaticResumeEnabled(false)
+        try fixture.interruptions.setAutomaticResumeEnabled(true)
+        fixture.advance(100)
+        try fixture.interruptions.acceptContinuation(sessionIsUsable: true)
+        try fixture.interruptions.pollContinuation(sessionIsUsable: true)
+        #expect(fixture.interruptions.pendingContinuation == nil)
+        #expect(fixture.store.runningEntry == nil)
+    }
+
+    @Test func failedDisablePreservesPendingContinuation() throws {
+        let fixture = try ContinuationFixture()
+        defer { fixture.cleanup() }
+        try fixture.offer()
+        let pending = fixture.interruptions.pendingContinuation
+        let url = fixture.directory.appendingPathComponent("data/tracking.json")
+        try FileManager.default.removeItem(at: url)
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: false)
+        #expect(throws: (any Error).self) { try fixture.interruptions.setAutomaticResumeEnabled(false) }
+        #expect(fixture.store.automaticResumeEnabled)
+        #expect(fixture.interruptions.pendingContinuation == pending)
+    }
+
+    @Test func disabledResumeStillRetriesFailedStopAtOriginalTime() throws {
+        let fixture = try ContinuationFixture()
+        defer { fixture.cleanup() }
+        try fixture.interruptions.setAutomaticResumeEnabled(false)
+        try fixture.store.startTask(named: "Build")
+        fixture.advance(60)
+        let stopTime = fixture.clock.now
+        let url = fixture.directory.appendingPathComponent("data/tracking.json")
+        try FileManager.default.removeItem(at: url)
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: false)
+        #expect(throws: (any Error).self) { try fixture.interruptions.handle(.locked) }
+        fixture.advance(600)
+        #expect(throws: (any Error).self) { try fixture.interruptions.handle(.unlocked) }
+        #expect(fixture.interruptions.needsContinuationPolling)
+        try FileManager.default.removeItem(at: url)
+        try fixture.interruptions.pollContinuation(sessionIsUsable: true)
+        #expect(fixture.store.entries.first?.end == stopTime)
+        #expect(fixture.store.runningEntry == nil && fixture.interruptions.pendingContinuation == nil)
+        #expect(!fixture.interruptions.needsContinuationPolling)
+    }
+
+    @Test(arguments: [1, 9, 60])
+    func configuredCountdownResumesAtItsDeadline(seconds: Int) throws {
+        let fixture = try ContinuationFixture()
+        defer { fixture.cleanup() }
+        try fixture.store.setResumeCountdownSeconds(seconds)
+        try fixture.offer()
+        let returnedAt = fixture.clock.now
+        #expect(fixture.interruptions.remainingSeconds == seconds)
+        fixture.advance(Double(seconds) - 0.25)
+        try fixture.interruptions.pollContinuation(sessionIsUsable: true)
+        #expect(fixture.store.runningEntry == nil)
+        fixture.advance(0.25)
+        try fixture.interruptions.pollContinuation(sessionIsUsable: true)
+        #expect(fixture.store.runningEntry?.start == returnedAt)
+        #expect(fixture.interruptions.pendingContinuation == nil)
+        try fixture.interruptions.pollContinuation(sessionIsUsable: true)
+        #expect(fixture.store.entries.count == 2)
+    }
+
+    @Test func changedDurationAppliesToNextOfferAndPreservesPausedCountdown() throws {
+        let fixture = try ContinuationFixture()
+        defer { fixture.cleanup() }
+        try fixture.store.setResumeCountdownSeconds(15)
+        try fixture.offer()
+        fixture.advance(2)
+        fixture.interruptions.setContinuationHovered(true)
+        try fixture.store.setResumeCountdownSeconds(30)
+        fixture.advance(100)
+        try fixture.interruptions.pollContinuation(sessionIsUsable: true)
+        #expect(fixture.interruptions.remainingSeconds == 13)
+        fixture.interruptions.setContinuationHovered(false)
+        fixture.advance(12)
+        try fixture.interruptions.pollContinuation(sessionIsUsable: true)
+        #expect(fixture.interruptions.remainingSeconds == 1)
+        #expect(fixture.store.runningEntry == nil)
+        try fixture.interruptions.handle(.locked)
+        fixture.advance(60)
+        try fixture.interruptions.handle(.unlocked)
+        try fixture.interruptions.pollContinuation(sessionIsUsable: true)
+        #expect(fixture.interruptions.remainingSeconds == 30)
+        fixture.advance(30)
+        try fixture.interruptions.pollContinuation(sessionIsUsable: true)
+        #expect(fixture.store.runningEntry?.start == fixture.clock.now - 30)
+    }
+
     @Test func hoveringPausesAndResumesTheExactRemainingTime() throws {
         let fixture = try ContinuationFixture()
         defer { fixture.cleanup() }

@@ -87,7 +87,7 @@ final class ContinuationPanel: NSPanel {
     override func mouseExited(with event: NSEvent) { hoverChanged(false) }
 
     func updateCountdown(seconds: Int) {
-        countdown.stringValue = "Auto-continuing in \(seconds) seconds"
+        countdown.stringValue = seconds == 1 ? "Auto-continuing in 1 second" : "Auto-continuing in \(seconds) seconds"
     }
 
     func show(below button: NSStatusBarButton) {

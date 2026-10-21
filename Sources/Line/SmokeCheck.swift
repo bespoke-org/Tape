@@ -1,6 +1,7 @@
 #if DEBUG
 import AppKit
 import LineCore
+import ServiceManagement
 
 /// Bounded, opt-in verification of the actual packaged app, using an isolated data directory.
 /// Drives its own native field editor without requiring system-wide Accessibility permission.
@@ -173,11 +174,58 @@ enum SmokeCheck {
         try await Task.sleep(for: .milliseconds(600))
     }
 
+    private static func checkLoginItemSettings() throws {
+        var status = SMAppService.Status.notRegistered
+        var registrationCount = 0
+        var openedSettings = false
+        var fail = false
+        let setting = LoginItemSettings(readStatus: { status }, register: {
+            registrationCount += 1
+            if fail { throw NSError(domain: "LoginItemTest", code: 1) }
+            status = .enabled
+        }, unregister: {
+            if fail { throw NSError(domain: "LoginItemTest", code: 2) }
+            status = .notRegistered
+        }, openSettings: { openedSettings = true })
+        try require(!setting.isEnabled && registrationCount == 0, "Reading startup settings must not register the app")
+        setting.setEnabled(true)
+        try require(setting.isEnabled && registrationCount == 1, "Registering must reflect the resulting OS status")
+        fail = true
+        setting.setEnabled(false)
+        try require(setting.isEnabled && setting.errorMessage != nil, "Failed unregister must retain the actual enabled state")
+        fail = false
+        setting.setEnabled(false)
+        try require(!setting.isEnabled && setting.errorMessage == nil, "Successful unregister must refresh state and clear errors")
+        fail = true
+        setting.setEnabled(true)
+        try require(!setting.isEnabled && setting.errorMessage != nil, "Failed register must not claim launch at login is enabled")
+        status = .requiresApproval
+        setting.refresh()
+        try require(setting.needsApproval && !setting.isEnabled, "Pending approval must not claim an enabled login item")
+        let attempts = registrationCount
+        setting.setEnabled(true)
+        try require(openedSettings && registrationCount == attempts, "Pending approval must direct the user to System Settings")
+        status = .enabled
+        setting.refresh()
+        try require(setting.isEnabled && !setting.needsApproval, "External approval must refresh the toggle")
+        status = .notFound
+        setting.refresh()
+        try require(!setting.isEnabled, "A missing service must not appear enabled")
+        let missing = LoginItemSettings(readStatus: { .notFound }, register: {}, unregister: {}, openSettings: {})
+        try require(missing.errorMessage == nil, "An unregistered app must not show a startup error before an enable attempt")
+        missing.setEnabled(true)
+        try require(!missing.isEnabled && missing.errorMessage != nil, "An enable attempt with a missing service must report an error")
+    }
+
     private static func checkMainWindow(button: NSStatusBarButton, popover: NSPopover, model: AppModel, output: URL) async throws {
         guard let delegate = NSApp.delegate as? AppDelegate else { throw NSError(domain: "LineSmokeCheck", code: 10) }
         try require(delegate.mainWindowController == nil, "Launch must not create the main window")
+        try checkLoginItemSettings()
         let firstLaunch = model.defaultZoomHours == 8
         try require(model.defaultZoomHours == (firstLaunch ? 8 : 12), "Configured zoom must survive a fresh process")
+        try require(model.timeFormat == (firstLaunch ? .system : .twentyFourHour), "Time format must survive a fresh process")
+        try require(model.resumeCountdownSeconds == (firstLaunch ? 9 : 15), "Resume countdown must survive a fresh process")
+        try require(model.automaticResumeEnabled && model.shortBreakSeconds == (firstLaunch ? 300 : 30), "Resume preferences must survive a fresh process")
         let frameName = "DayTape.MainWindow.\(ProcessInfo.processInfo.environment["LINE_DATA_DIRECTORY"]!)"
         let frameKey = "NSWindow Frame \(frameName)"
         if !firstLaunch {
@@ -214,6 +262,149 @@ enum SmokeCheck {
         if ProcessInfo.processInfo.environment["LINE_SMOKE_CAPTURE"] == "1" {
             try checkInitialSliderThumb(slider, in: window, output: output)
         }
+        guard let timeFormatPicker = descendants(content).compactMap({ $0 as? NSPopUpButton }).first else {
+            throw NSError(domain: "LineSmokeCheck", code: 16, userInfo: [NSLocalizedDescriptionKey: "Native time format menu is missing"])
+        }
+        let entriesBeforeFormatChange = model.store!.entries
+        for format in [TimeFormat.twelveHour, .system, .twentyFourHour] {
+            let current = TimeFormat.allCases.firstIndex(of: model.timeFormat)!
+            let target = TimeFormat.allCases.firstIndex(of: format)!
+            let choose = Timer(timeInterval: 0.2, repeats: false) { _ in
+                MainActor.assumeIsolated {
+                    let arrow = target > current ? "\u{F701}" : "\u{F700}"
+                    let keyCode: UInt16 = target > current ? 125 : 126
+                    let keys = Array(repeating: (arrow, keyCode), count: abs(target - current)) + [("\r", UInt16(36))]
+                    for (characters, code) in keys {
+                        let event = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [],
+                                                     timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+                                                     context: nil, characters: characters, charactersIgnoringModifiers: characters,
+                                                     isARepeat: false, keyCode: code)!
+                        NSApp.postEvent(event, atStart: false)
+                    }
+                }
+            }
+            RunLoop.main.add(choose, forMode: .common)
+            RunLoop.main.add(choose, forMode: .eventTracking)
+            defer { choose.invalidate() }
+            let location = timeFormatPicker.convert(NSPoint(x: timeFormatPicker.bounds.midX, y: timeFormatPicker.bounds.midY), to: nil)
+            let down = NSEvent.mouseEvent(with: .leftMouseDown, location: location, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                          windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!
+            let up = NSEvent.mouseEvent(with: .leftMouseUp, location: location, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                        windowNumber: window.windowNumber, context: nil, eventNumber: 1, clickCount: 1, pressure: 0)!
+            NSApp.postEvent(up, atStart: true)
+            timeFormatPicker.mouseDown(with: down)
+            try await settle()
+            try require(model.timeFormat == format && model.settingsError == nil, "Time format must save immediately")
+            try require(model.store!.entries == entriesBeforeFormatChange, "Time format must preserve tracking records")
+        }
+        guard let countdownField = descendants(content).compactMap({ $0 as? NSTextField }).first(where: \.isEditable) else {
+            throw NSError(domain: "LineSmokeCheck", code: 17, userInfo: [NSLocalizedDescriptionKey: "Native resume countdown field is missing"])
+        }
+        func enterCountdown(_ value: String, submit: Bool = true) async throws {
+            window.makeFirstResponder(countdownField)
+            guard let editor = countdownField.currentEditor() as? NSTextView else {
+                throw NSError(domain: "LineSmokeCheck", code: 17)
+            }
+            editor.selectAll(nil)
+            editor.insertText(value, replacementRange: editor.selectedRange())
+            try await Task.sleep(for: .milliseconds(100))
+            if submit {
+                let event = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                             windowNumber: window.windowNumber, context: nil, characters: "\r", charactersIgnoringModifiers: "\r",
+                                             isARepeat: false, keyCode: 36)!
+                window.sendEvent(event)
+                try await Task.sleep(for: .milliseconds(100))
+            }
+        }
+        try await enterCountdown("1a5", submit: false)
+        try require(countdownField.stringValue == "15", "Countdown field must keep only digits")
+        try await enterCountdown("15")
+        try require(model.resumeCountdownSeconds == 15, "Return must save the countdown")
+        try await enterCountdown("")
+        try require(countdownField.stringValue == "15" && model.resumeCountdownSeconds == 15, "Empty input must restore the saved countdown")
+        try await enterCountdown("0")
+        try require(countdownField.stringValue == "1" && model.resumeCountdownSeconds == 1, "Countdown must keep its one-second minimum")
+        try await enterCountdown("999999999999999999999999999999")
+        try require(countdownField.stringValue == "60" && model.resumeCountdownSeconds == 60, "Large input must remain within the countdown maximum")
+        try await enterCountdown("15", submit: false)
+        window.makeFirstResponder(nil)
+        try await settle()
+        try require(model.resumeCountdownSeconds == 15 && model.settingsError == nil && model.store!.entries == entriesBeforeFormatChange,
+                    "Leaving the field must save without changing tracking records")
+        let menus = descendants(content).compactMap { $0 as? NSPopUpButton }
+        try require(menus.count == 2, "Time format and threshold must use native menus")
+        let thresholdPicker = menus[1]
+        func selectThreshold(_ seconds: Int) async throws {
+            var choices = [0, 30, 60, 120, 300, 600, 900, 1800, 3600]
+            if !choices.contains(model.shortBreakSeconds) { choices.append(model.shortBreakSeconds) }
+            choices.append(-1)
+            let current = choices.firstIndex(of: model.shortBreakSeconds)!
+            let target = choices.firstIndex(of: seconds)!
+            let choose = Timer(timeInterval: 0.2, repeats: false) { _ in
+                MainActor.assumeIsolated {
+                    let arrow = target > current ? "\u{F701}" : "\u{F700}"
+                    let keyCode: UInt16 = target > current ? 125 : 126
+                    let keys = Array(repeating: (arrow, keyCode), count: abs(target - current)) + [("\r", UInt16(36))]
+                    for (characters, code) in keys {
+                        let event = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [],
+                                                     timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+                                                     context: nil, characters: characters, charactersIgnoringModifiers: characters,
+                                                     isARepeat: false, keyCode: code)!
+                        NSApp.postEvent(event, atStart: false)
+                    }
+                }
+            }
+            RunLoop.main.add(choose, forMode: .common)
+            RunLoop.main.add(choose, forMode: .eventTracking)
+            defer { choose.invalidate() }
+            let location = thresholdPicker.convert(NSPoint(x: thresholdPicker.bounds.midX, y: thresholdPicker.bounds.midY), to: nil)
+            let down = NSEvent.mouseEvent(with: .leftMouseDown, location: location, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                          windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!
+            let up = NSEvent.mouseEvent(with: .leftMouseUp, location: location, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                        windowNumber: window.windowNumber, context: nil, eventNumber: 1, clickCount: 1, pressure: 0)!
+            NSApp.postEvent(up, atStart: true)
+            thresholdPicker.mouseDown(with: down)
+            try await settle()
+        }
+        for seconds in [0, 3600, 30] {
+            try await selectThreshold(seconds)
+            try require(model.shortBreakSeconds == seconds && model.settingsError == nil, "Threshold menu must save the selected duration")
+        }
+        try await selectThreshold(-1)
+        guard let sheet = window.attachedSheet, let sheetContent = sheet.contentView,
+              let field = descendants(sheetContent).compactMap({ $0 as? NSTextField }).first(where: \.isEditable) else {
+            throw NSError(domain: "LineSmokeCheck", code: 19, userInfo: [NSLocalizedDescriptionKey: "Custom threshold editor is missing"])
+        }
+        sheet.makeFirstResponder(field)
+        guard let editor = field.currentEditor() as? NSTextView else { throw NSError(domain: "LineSmokeCheck", code: 19) }
+        editor.selectAll(nil)
+        editor.insertText("45", replacementRange: editor.selectedRange())
+        try await settle()
+        try pressAccessibleControl(named: "Save", in: sheetContent)
+        try await settle()
+        try require(window.attachedSheet == nil && model.shortBreakSeconds == 45, "Custom threshold must save exact seconds")
+        try await selectThreshold(-1)
+        guard let cancelContent = window.attachedSheet?.contentView else { throw NSError(domain: "LineSmokeCheck", code: 19) }
+        try pressAccessibleControl(named: "Cancel", in: cancelContent)
+        try await settle()
+        try require(model.shortBreakSeconds == 45, "Cancelling a custom threshold must preserve its value")
+        try await selectThreshold(30)
+        try require(model.shortBreakSeconds == 30, "Selecting 30 seconds after Custom must save 30 (actual=\(model.shortBreakSeconds), displayed=\(thresholdPicker.titleOfSelectedItem ?? "none"))")
+        guard let resumeSwitch = descendants(content).compactMap({ $0 as? NSSwitch }).first else {
+            throw NSError(domain: "LineSmokeCheck", code: 18, userInfo: [NSLocalizedDescriptionKey: "Native automatic resume switch is missing"])
+        }
+        resumeSwitch.performClick(nil)
+        try await settle()
+        try require(!model.automaticResumeEnabled && !countdownField.isEnabled && !thresholdPicker.isEnabled,
+                    "Disabling resume must disable dependent controls")
+        resumeSwitch.performClick(nil)
+        try await settle()
+        try require(model.automaticResumeEnabled && countdownField.isEnabled && thresholdPicker.isEnabled,
+                    "Re-enabling resume must restore the saved controls")
+        try require(model.resumeCountdownSeconds == 15 && model.shortBreakSeconds == 30 && model.store!.entries == entriesBeforeFormatChange,
+                    "Resume preferences must preserve tracking and dependent values")
+        try require(accessibilityElement(named: "Launch at login", in: content) != nil, "Launch at login must have an accessible control")
+        try require(model.loginItem.status == SMAppService.mainApp.status, "Startup setting must reflect macOS registration")
         let originalSpan = model.timeline.span
         for hours in [1, 2, 4, 8, 16, 24, 12] {
             slider.doubleValue = Double(TrackingStore.defaultZoomPresets.firstIndex(of: hours)!)
@@ -305,6 +496,22 @@ enum SmokeCheck {
         print("Initial slider thumb brightness: \(brightness), enabled=\(slider.isEnabled), key=\(window.isKeyWindow), sample=(\(x), \(y))")
         if slider.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua {
             try require(brightness > 0.5, "Slider thumb must be light on first opening, before interaction (brightness=\(brightness))")
+        }
+        let switches = descendants(window.contentView!).compactMap { $0 as? NSSwitch }
+        try require(switches.count == 2, "Both settings switches must exist on first opening")
+        for (index, toggle) in switches.enumerated() {
+            let center = window.convertPoint(toScreen: toggle.convert(NSPoint(x: toggle.bounds.midX, y: toggle.bounds.midY), to: nil))
+            let scale = CGFloat(bitmap.pixelsWide) / window.frame.width
+            let midX = Int((center.x - window.frame.minX) * scale)
+            let midY = Int((window.frame.maxY - center.y) * scale)
+            let halfWidth = Int(toggle.bounds.width * scale / 2) - 3
+            var brightest = 0.0
+            for px in (midX - halfWidth)...(midX + halfWidth) {
+                guard let sample = bitmap.colorAt(x: px, y: midY)?.usingColorSpace(.deviceRGB) else { continue }
+                brightest = max(brightest, (sample.redComponent + sample.greenComponent + sample.blueComponent) / 3)
+            }
+            print("Initial switch \(index) brightness: \(brightest), state=\(toggle.state.rawValue), frame=\(toggle.frame)")
+            try require(brightest > 0.7, "Switch \(index) must show a light thumb before interaction (brightness=\(brightest))")
         }
     }
 

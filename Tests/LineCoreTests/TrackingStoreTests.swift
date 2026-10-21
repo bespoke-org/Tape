@@ -171,6 +171,157 @@ struct TrackingStoreTests {
         #expect(try Data(contentsOf: url) == data)
     }
 
+    @Test func resumePreferencesPersistWithoutChangingTrackingAndRecoverOnSaveFailure() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("tracking.json")
+        var now = Date(timeIntervalSince1970: 1_800_000_000)
+        let store = try TrackingStore(url: url, now: { now })
+        #expect(store.automaticResumeEnabled && store.shortBreakSeconds == 300)
+        try store.startTask(named: "Keep tracking")
+        now += 5
+        try store.checkpoint()
+        let entries = store.entries
+        now += 100
+        try store.setAutomaticResumeEnabled(false)
+        try store.setShortBreakSeconds(30)
+        #expect(store.entries == entries)
+        let reopened = try TrackingStore(url: url, now: { now })
+        #expect(!reopened.automaticResumeEnabled && reopened.shortBreakSeconds == 30)
+        #expect(reopened.entries.first?.duration(at: now) == 5)
+        try FileManager.default.removeItem(at: url)
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: false)
+        #expect(throws: (any Error).self) { try store.setAutomaticResumeEnabled(true) }
+        #expect(throws: (any Error).self) { try store.setShortBreakSeconds(0) }
+        #expect(!store.automaticResumeEnabled && store.shortBreakSeconds == 30)
+        #expect(store.entries == entries)
+    }
+
+    @Test func legacyResumePreferencesAndBoundedThreshold() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let url = directory.appendingPathComponent("tracking.json")
+        for (field, expected) in [("", 300), (#", "shortBreakMinutes":7"#, 420), (#", "shortBreakMinutes":-1"#, 0), (#", "shortBreakMinutes":100"#, 3600), (#", "shortBreakMinutes":5, "shortBreakSeconds":30"#, 30)] {
+            let data = Data((#"{"version":1,"tasks":[],"entries":[]"# + field + "}").utf8)
+            try data.write(to: url)
+            let store = try TrackingStore(url: url)
+            #expect(store.automaticResumeEnabled && store.shortBreakSeconds == expected)
+            #expect(try Data(contentsOf: url) == data)
+            try store.setShortBreakSeconds(Int.min)
+            #expect(store.shortBreakSeconds == 0)
+            try store.setShortBreakSeconds(Int.max)
+            #expect(store.shortBreakSeconds == 3600)
+        }
+    }
+
+    @Test(arguments: [1, 9, 60])
+    func resumeCountdownPersistsWithoutChangingTrackingOrRecovery(seconds: Int) throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("tracking.json")
+        var now = Date(timeIntervalSince1970: 1_800_000_000)
+        let store = try TrackingStore(url: url, now: { now })
+        #expect(store.resumeCountdownSeconds == 9)
+        try store.startTask(named: "Keep tracking")
+        now += 5
+        try store.checkpoint()
+        try store.setTimeFormat(.twelveHour)
+        let entries = store.entries
+        now += 10
+        try store.setResumeCountdownSeconds(seconds)
+        #expect(store.entries == entries)
+        let reopened = try TrackingStore(url: url, now: { now + 3_600 })
+        #expect(reopened.resumeCountdownSeconds == seconds)
+        #expect(reopened.timeFormat == .twelveHour && reopened.defaultZoomHours == 8)
+        #expect(reopened.entries.first?.duration(at: now) == 5)
+    }
+
+    @Test func resumeCountdownDefaultsAndBoundsDoNotRewriteOnLoad() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let url = directory.appendingPathComponent("tracking.json")
+        for (field, expected) in [("", 9), (#", "resumeCountdownSeconds":-1"#, 1),
+                                   (#", "resumeCountdownSeconds":100"#, 60)] {
+            let data = Data((#"{"version":1,"tasks":[],"entries":[]"# + field + "}").utf8)
+            try data.write(to: url)
+            let store = try TrackingStore(url: url)
+            #expect(store.resumeCountdownSeconds == expected)
+            #expect(try Data(contentsOf: url) == data)
+            try store.setResumeCountdownSeconds(Int.min)
+            #expect(store.resumeCountdownSeconds == 1)
+            try store.setResumeCountdownSeconds(Int.max)
+            #expect(store.resumeCountdownSeconds == 60)
+            #expect(try TrackingStore(url: url).resumeCountdownSeconds == 60)
+        }
+    }
+
+    @Test func failedResumeCountdownSaveKeepsPreviousChoiceAndRecords() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("tracking.json")
+        let store = try TrackingStore(url: url)
+        try store.startTask(named: "Keep tracking")
+        try store.setResumeCountdownSeconds(15)
+        let entries = store.entries
+        try FileManager.default.removeItem(at: url)
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: false)
+        #expect(throws: (any Error).self) { try store.setResumeCountdownSeconds(30) }
+        #expect(store.resumeCountdownSeconds == 15)
+        #expect(store.entries == entries && store.runningTask?.name == "Keep tracking")
+    }
+
+    @Test(arguments: TimeFormat.allCases)
+    func timeFormatPersistsWithoutChangingTrackingOrRecovery(format: TimeFormat) throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("tracking.json")
+        var now = Date(timeIntervalSince1970: 1_800_000_000)
+        let store = try TrackingStore(url: url, now: { now })
+        #expect(store.timeFormat == .system)
+        try store.startTask(named: "Keep tracking")
+        now += 5
+        try store.checkpoint()
+        let entries = store.entries
+        let tasks = store.tasks
+        now += 10
+        try store.setTimeFormat(format)
+        #expect(store.entries == entries && store.tasks == tasks)
+        #expect(store.defaultZoomHours == 8)
+        now += 3_600
+        let reopened = try TrackingStore(url: url, now: { now })
+        #expect(reopened.timeFormat == format)
+        #expect(reopened.entries.first?.duration(at: now) == 5)
+    }
+
+    @Test(arguments: ["", #", "timeFormat":"futureFormat""#])
+    func missingOrUnknownTimeFormatDefaultsToSystem(field: String) throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let url = directory.appendingPathComponent("tracking.json")
+        let data = Data((#"{"version":1,"tasks":[],"entries":[]"# + field + "}").utf8)
+        try data.write(to: url)
+        #expect(try TrackingStore(url: url).timeFormat == .system)
+        #expect(try Data(contentsOf: url) == data)
+    }
+
+    @Test func failedTimeFormatSaveKeepsPreviousChoiceAndRecords() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("tracking.json")
+        let store = try TrackingStore(url: url)
+        try store.startTask(named: "Keep tracking")
+        try store.setTimeFormat(.twelveHour)
+        let entries = store.entries
+        try FileManager.default.removeItem(at: url)
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: false)
+        #expect(throws: (any Error).self) { try store.setTimeFormat(.twentyFourHour) }
+        #expect(store.timeFormat == .twelveHour)
+        #expect(store.entries == entries && store.runningTask?.name == "Keep tracking")
+    }
+
     @Test func failedDefaultZoomSaveKeepsPreviousSettingAndRunningEntry() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }

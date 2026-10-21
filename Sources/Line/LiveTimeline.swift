@@ -40,7 +40,7 @@ struct LiveTimeline: View {
 
                     ForEach(ticks, id: \.self) { date in
                         let x = position(date, width: width)
-                        Text(TimelineViewport.tickLabel(for: date))
+                        Text(TimelineViewport.tickLabel(for: date, timeFormat: model.timeFormat))
                             .font(.caption2).monospacedDigit().foregroundStyle(.secondary)
                             .fixedSize()
                             .position(x: min(max(x, 22), width - 22), y: 108)
@@ -142,7 +142,7 @@ struct LiveTimeline: View {
                         if model.timeline.isFollowingNow {
                             Text("Now").font(.caption2.weight(.semibold))
                                 .position(x: nowX, y: 7)
-                                .accessibilityLabel("Now, \(now.formatted(date: .omitted, time: .shortened))")
+                                .accessibilityLabel("Now, \(model.timeFormat.string(from: now))")
                         }
                     }
                     HStack {
@@ -226,8 +226,8 @@ struct LiveTimeline: View {
     }
 
     private func entryDescription(_ entry: TimeEntry, task: TrackedTask) -> String {
-        let start = entry.start.formatted(date: .abbreviated, time: .shortened)
-        let end = entry.end?.formatted(date: .abbreviated, time: .shortened) ?? "now, tracking"
+        let start = model.timeFormat.string(from: entry.start, includeDate: true)
+        let end = entry.end.map { model.timeFormat.string(from: $0, includeDate: true) } ?? "now, tracking"
         return "\(task.name), \(start) to \(end)"
     }
 }

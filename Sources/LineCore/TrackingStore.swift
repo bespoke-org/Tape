@@ -13,7 +13,19 @@ public final class TrackingStore {
     public var entries: [TimeEntry] { snapshot.entries }
     public static let defaultZoomPresets = [1, 2, 4, 8, 12, 16, 24]
     public var defaultZoomHours: Int { Self.nearestZoomPreset(snapshot.defaultZoomHours ?? 8) }
+    public var timeFormat: TimeFormat { snapshot.timeFormat ?? .system }
+    public static let resumeCountdownRange = 1...60
+    public static let defaultResumeCountdownSeconds = 9
+    public var resumeCountdownSeconds: Int {
+        Self.boundedResumeCountdown(snapshot.resumeCountdownSeconds ?? Self.defaultResumeCountdownSeconds)
+    }
     public var runningEntry: TimeEntry? { entries.last(where: { $0.end == nil }) }
+    public var automaticResumeEnabled: Bool { snapshot.automaticResumeEnabled ?? true }
+    public static let shortBreakRange = 0...3_600
+    public var shortBreakSeconds: Int {
+        let legacySeconds = min(max(snapshot.shortBreakMinutes ?? 5, 0), 60) * 60
+        return Self.boundedShortBreak(snapshot.shortBreakSeconds ?? legacySeconds)
+    }
     public var runningTask: TrackedTask? {
         guard let entry = runningEntry else { return nil }
         return task(id: entry.taskID)
@@ -302,9 +314,48 @@ public final class TrackingStore {
         try commit(candidate)
     }
 
+    public func setTimeFormat(_ format: TimeFormat) throws {
+        guard format != timeFormat else { return }
+        var candidate = snapshot
+        candidate.timeFormat = format
+        try commit(candidate)
+    }
+
     private static func nearestZoomPreset(_ hours: Int) -> Int {
         let bounded = min(max(hours, 1), 24)
         return defaultZoomPresets.min { abs($0 - bounded) < abs($1 - bounded) }!
+    }
+
+    public func setResumeCountdownSeconds(_ seconds: Int) throws {
+        let seconds = Self.boundedResumeCountdown(seconds)
+        guard seconds != resumeCountdownSeconds else { return }
+        var candidate = snapshot
+        candidate.resumeCountdownSeconds = seconds
+        try commit(candidate)
+    }
+
+    private static func boundedResumeCountdown(_ seconds: Int) -> Int {
+        min(max(seconds, resumeCountdownRange.lowerBound), resumeCountdownRange.upperBound)
+    }
+
+    public func setAutomaticResumeEnabled(_ enabled: Bool) throws {
+        guard enabled != automaticResumeEnabled else { return }
+        var candidate = snapshot
+        candidate.automaticResumeEnabled = enabled
+        try commit(candidate)
+    }
+
+    public func setShortBreakSeconds(_ seconds: Int) throws {
+        let seconds = Self.boundedShortBreak(seconds)
+        guard seconds != shortBreakSeconds else { return }
+        var candidate = snapshot
+        candidate.shortBreakSeconds = seconds
+        candidate.shortBreakMinutes = nil
+        try commit(candidate)
+    }
+
+    private static func boundedShortBreak(_ seconds: Int) -> Int {
+        min(max(seconds, shortBreakRange.lowerBound), shortBreakRange.upperBound)
     }
 
     private func checkedInstant() throws -> Date {

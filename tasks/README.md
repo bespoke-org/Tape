@@ -6,6 +6,9 @@ See [task tracking](../docs/issue-tracker.md) for the workflow and commands.
 
 ## Current additions
 
+- [Login startup, automatic resume, and short breaks](20261021-065508/TASK.md)
+- [Resume countdown](20261020-210154/TASK.md)
+- [Time format](20261020-205017/TASK.md)
 - [Main window, Settings, and default zoom](20261020-194050/TASK.md)
 
 ## Migrated v1 tickets

@@ -34,3 +34,5 @@ Ticket 05 was accepted as done on 2026-10-20 after the user reported it working.
 Ticket 06 was accepted as done on 2026-10-20, resolving this ticket's blocker. Complete its physical continuation checks, including hover pause, menu bar highlighting, OK/Reject and outside clicks, focus, wake/unlock ordering, Spaces, monitor arrangements, and appearance/accessibility. See [ticket 06 verification](../../docs/ticket-06-verification.md).
 
 The [main-window task](../20261020-194050/TASK.md) adds remaining manual checks for physical Dock/app-switcher navigation, Spaces, VoiceOver, light/high-contrast/reduced-transparency appearance, and window geometry and floating behavior. Automated lifecycle and persistence checks passed.
+
+The [startup and resume settings task](../20261021-065508/TASK.md) implements the launch-at-login control. Actual logout/login behavior, macOS approval, and installation-path checks remain in this ticket.
