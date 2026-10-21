@@ -1,11 +1,30 @@
 import Observation
 
 enum SettingsPage: String, CaseIterable, Hashable {
-    case general, about
+    case statistics, general, about
 
-    var title: String { self == .general ? "General" : "About" }
-    var symbol: String { self == .general ? "gearshape" : "info.circle" }
-    var menuTitle: String { self == .general ? "General Settings…" : "About DayTape" }
+    var title: String {
+        switch self {
+        case .statistics: "Statistics"
+        case .general: "General"
+        case .about: "About"
+        }
+    }
+    var symbol: String {
+        switch self {
+        case .statistics: "chart.bar"
+        case .general: "gearshape"
+        case .about: "info.circle"
+        }
+    }
+    var menuTitle: String {
+        switch self {
+        case .statistics: "Statistics…"
+        case .general: "General Settings…"
+        case .about: "About DayTape"
+        }
+    }
+
 }
 
 @MainActor

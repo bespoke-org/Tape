@@ -8,12 +8,16 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSToolba
     private static let navigation = NSToolbarItem.Identifier("DayTape.Navigation")
     private static let settingsTitle = NSToolbarItem.Identifier("DayTape.SettingsTitle")
     private let navigation = SettingsNavigation()
+    let statisticsSelection = StatisticsSelection()
+    private let statisticsController: StatisticsHostingController
     private let generalController: SettingsHostingController
     private let aboutController: NSHostingController<AboutView>
     private weak var navigationControl: NSSegmentedControl?
     private weak var pageTitle: NSTextField?
 
     init(model: AppModel) {
+        statisticsController = StatisticsHostingController(rootView: StatisticsView(model: model, selection: statisticsSelection))
+        statisticsController.sizingOptions = []
         generalController = SettingsHostingController(rootView: SettingsView(model: model))
         aboutController = NSHostingController(rootView: AboutView(dataURL: model.dataURL))
         generalController.sizingOptions = []
@@ -115,7 +119,11 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSToolba
     private func showSelectedPage() {
         guard let window, let split = window.contentViewController as? NSSplitViewController else { return }
         window.makeFirstResponder(nil)
-        let controller: NSViewController = navigation.page == .general ? generalController : aboutController
+        let controller: NSViewController = switch navigation.page {
+        case .statistics: statisticsController
+        case .general: generalController
+        case .about: aboutController
+        }
         if let current = split.splitViewItems.last, current.viewController !== controller {
             split.removeSplitViewItem(current)
             split.addSplitViewItem(NSSplitViewItem(viewController: controller))
@@ -173,6 +181,48 @@ private struct MainSidebar: View {
         }
         .listStyle(.sidebar)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+private final class StatisticsHostingController: NSHostingController<StatisticsView> {
+    private weak var tableView: NSTableView?
+    private var clickMonitor: Any?
+
+    override func viewDidAppear() {
+        super.viewDidAppear()
+        if let clickMonitor { NSEvent.removeMonitor(clickMonitor) }
+        clickMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
+            guard let self, let table = self.tableView, event.window === self.view.window,
+                  event.modifierFlags.intersection([.command, .shift, .control, .option]).isEmpty else { return event }
+            let point = table.convert(event.locationInWindow, from: nil)
+            let row = table.row(at: point)
+            guard table.visibleRect.contains(point), row >= 0, row == table.selectedRow else { return event }
+            // AppKit normally keeps an already selected row selected. Consume only
+            // this repeat click so its default handling cannot immediately reselect it.
+            table.window?.makeFirstResponder(table)
+            table.deselectAll(nil)
+            self.rootView.selection.filter = nil
+            return nil
+        }
+    }
+
+    override func viewWillDisappear() {
+        super.viewWillDisappear()
+        if let clickMonitor { NSEvent.removeMonitor(clickMonitor) }
+        clickMonitor = nil
+    }
+
+    override func viewDidLayout() {
+        super.viewDidLayout()
+        removeTableBorder(in: view)
+    }
+
+    private func removeTableBorder(in view: NSView) {
+        if let table = view as? NSTableView, let scroll = table.enclosingScrollView {
+            tableView = table
+            if scroll.borderType != .noBorder { scroll.borderType = .noBorder }
+        }
+        view.subviews.forEach { removeTableBorder(in: $0) }
     }
 }
 

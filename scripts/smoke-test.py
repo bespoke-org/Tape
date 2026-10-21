@@ -9,6 +9,7 @@ import tempfile
 
 parser = argparse.ArgumentParser()
 modes = parser.add_mutually_exclusive_group()
+modes.add_argument('--statistics', action='store_true', help='Verify statistics charts, filters and navigation')
 modes.add_argument('--tags', action='store_true', help='Verify native task tags, autocomplete, and editing')
 modes.add_argument('--main-window', action='store_true', help='Verify main window, settings, and persistence across two launches')
 modes.add_argument('--resize-overwrite', action='store_true', help='Verify live Command switching during entry resizing')
@@ -20,12 +21,12 @@ modes.add_argument('--overwrite', action='store_true', help='Verify Command-drag
 modes.add_argument('--dismissal', action='store_true', help='Verify outside-click dismissal after color menu use')
 modes.add_argument('--editing', action='store_true', help='Verify inline entry correction, resizing, and deletion')
 args = parser.parse_args()
-run_timeout = 50 if args.tags or args.continuation or args.main_window else 40 if args.editing else 20
+run_timeout = 50 if args.statistics or args.tags or args.continuation or args.main_window else 40 if args.editing else 20
 root = Path(__file__).resolve().parent.parent
 app = root / 'build/smoke/DayTape.app'
 subprocess.run([str(root / 'scripts/build-app.sh'), 'debug'], cwd=root,
                env=dict(os.environ, LINE_APP_OUTPUT=str(app)), check=True, timeout=180)
-output = root / 'build' / ('tags-smoke-results' if args.tags else 'main-window-smoke-results' if args.main_window else 'continuation-smoke-results' if args.continuation else 'system-activity-smoke-results' if args.system_activity else 'dismissal-smoke-results' if args.dismissal else 'editing-smoke-results' if args.editing else 'overwrite-smoke-results' if args.overwrite else 'creation-smoke-results' if args.creation else 'timeline-smoke-results' if args.timeline else 'smoke-results')
+output = root / 'build' / ('statistics-smoke-results' if args.statistics else 'tags-smoke-results' if args.tags else 'main-window-smoke-results' if args.main_window else 'continuation-smoke-results' if args.continuation else 'system-activity-smoke-results' if args.system_activity else 'dismissal-smoke-results' if args.dismissal else 'editing-smoke-results' if args.editing else 'overwrite-smoke-results' if args.overwrite else 'creation-smoke-results' if args.creation else 'timeline-smoke-results' if args.timeline else 'smoke-results')
 output.mkdir(parents=True, exist_ok=True)
 report = output / 'result.txt'
 
@@ -35,7 +36,7 @@ with tempfile.TemporaryDirectory(prefix='line-smoke-') as data:
         try:
             result = subprocess.run(
                 [str(app / 'Contents/MacOS/DayTape'), '--smoke-test', str(output)],
-                env=dict(os.environ, LINE_DATA_DIRECTORY=data, LINE_SMOKE_TAGS='1' if args.tags else '0', LINE_SMOKE_MAIN_WINDOW='1' if args.main_window else '0', LINE_SMOKE_RESIZE_OVERWRITE='1' if args.resize_overwrite else '0', LINE_SMOKE_CONTINUATION='1' if args.continuation else '0', LINE_SMOKE_SYSTEM_ACTIVITY='1' if args.system_activity else '0', LINE_SMOKE_DISMISSAL='1' if args.dismissal else '0', LINE_SMOKE_TIMELINE='1' if args.timeline else '0',
+                env=dict(os.environ, LINE_DATA_DIRECTORY=data, LINE_SMOKE_STATISTICS='1' if args.statistics else '0', LINE_SMOKE_TAGS='1' if args.tags else '0', LINE_SMOKE_MAIN_WINDOW='1' if args.main_window else '0', LINE_SMOKE_RESIZE_OVERWRITE='1' if args.resize_overwrite else '0', LINE_SMOKE_CONTINUATION='1' if args.continuation else '0', LINE_SMOKE_SYSTEM_ACTIVITY='1' if args.system_activity else '0', LINE_SMOKE_DISMISSAL='1' if args.dismissal else '0', LINE_SMOKE_TIMELINE='1' if args.timeline else '0',
                          LINE_SMOKE_EDITING='1' if args.editing else '0', LINE_SMOKE_CREATION='1' if args.creation else '0', LINE_SMOKE_OVERWRITE='1' if args.overwrite else '0'),
                 capture_output=True, text=True, timeout=run_timeout,
             )
@@ -52,7 +53,10 @@ with tempfile.TemporaryDirectory(prefix='line-smoke-') as data:
         if result.returncode:
             raise SystemExit(result.returncode)
         records = json.loads((Path(data) / 'tracking.json').read_text())
-        if args.tags:
+        if args.statistics:
+            assert len(records['entries']) == 28
+            assert all(entry.get('end') is not None for entry in records['entries'])
+        elif args.tags:
             assert len(records['tasks']) == 2
             assert sorted(tag for task in records['tasks'] for tag in task['tags']) == ['coding']
             assert all(entry.get('end') is not None for entry in records['entries'])

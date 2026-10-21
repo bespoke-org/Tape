@@ -20,6 +20,13 @@ enum SmokeCheck {
             try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
             try require(NSApp.activationPolicy() == .accessory, "App must have no Dock icon")
             try require(button.image != nil, "Status item must have an icon")
+            if ProcessInfo.processInfo.environment["LINE_SMOKE_STATISTICS"] == "1" {
+                try await checkStatistics(model: model, output: output)
+                try Data("PASS: statistics navigation, chart drilldown, filters, search, small-window layout and unchanged tracking data.\n".utf8)
+                    .write(to: output.appendingPathComponent("result.txt"))
+                NSApp.terminate(nil)
+                return
+            }
             if ProcessInfo.processInfo.environment["LINE_SMOKE_TAGS"] == "1" {
                 try await checkTags(button: button, popover: popover, model: model, output: output)
                 try Data("PASS: inline tags, native completion keys, search, editing, cleanup, and tracking continuity.\n".utf8)
@@ -263,7 +270,7 @@ enum SmokeCheck {
         guard let sidebar = descendants(split.splitViewItems[0].viewController.view).compactMap({ $0 as? NSOutlineView }).first else {
             throw NSError(domain: "LineSmokeCheck", code: 12, userInfo: [NSLocalizedDescriptionKey: "Native sidebar is missing"])
         }
-        try require(sidebar.numberOfRows == 2 && sidebar.selectedRow == 0, "Sidebar must show General followed by About, initially selecting General")
+        try require(sidebar.numberOfRows == 3 && sidebar.selectedRow == 1, "Sidebar must show Statistics, General, About, initially selecting General")
         guard let slider = descendants(content).compactMap({ $0 as? NSSlider }).first else {
             throw NSError(domain: "LineSmokeCheck", code: 13, userInfo: [NSLocalizedDescriptionKey: "Native default zoom slider is missing"])
         }
@@ -458,7 +465,7 @@ enum SmokeCheck {
         try require(!navigation.isEnabled(forSegment: 0) && !navigation.isEnabled(forSegment: 1), "New window must have no page history")
         let sidebarWidth = sidebar.enclosingScrollView?.frame.width
         try await enterCountdown("17", submit: false)
-        sidebar.selectRowIndexes(IndexSet(integer: 1), byExtendingSelection: false)
+        sidebar.selectRowIndexes(IndexSet(integer: 2), byExtendingSelection: false)
         try await settle()
         try require(heading.stringValue == "About" && split.splitViewItems.last?.viewController is NSHostingController<AboutView>,
                     "Selecting About must update the detail and toolbar title")
@@ -487,15 +494,15 @@ enum SmokeCheck {
             try await settle()
         }
         try await navigate(0)
-        try require(sidebar.selectedRow == 0 && heading.stringValue == "General" && navigation.isEnabled(forSegment: 1),
+        try require(sidebar.selectedRow == 1 && heading.stringValue == "General" && navigation.isEnabled(forSegment: 1),
                     "Back must restore General and enable Forward (row=\(sidebar.selectedRow), heading=\(heading.stringValue), forward=\(navigation.isEnabled(forSegment: 1)))")
         try await navigate(1)
-        try require(sidebar.selectedRow == 1 && heading.stringValue == "About", "Forward must restore About")
+        try require(sidebar.selectedRow == 2 && heading.stringValue == "About", "Forward must restore About")
         try await navigate(0)
-        sidebar.selectRowIndexes(IndexSet(integer: 1), byExtendingSelection: false)
+        sidebar.selectRowIndexes(IndexSet(integer: 2), byExtendingSelection: false)
         try await settle()
         try require(!navigation.isEnabled(forSegment: 1), "Selecting a page after Back must clear forward history")
-        sidebar.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
+        sidebar.selectRowIndexes(IndexSet(integer: 1), byExtendingSelection: false)
         try await settle()
         try require(sidebar.enclosingScrollView?.frame.width == sidebarWidth, "Page navigation must preserve sidebar width")
         try require(model.store!.entries == entriesBeforeFormatChange, "About navigation must preserve tracking")
@@ -518,18 +525,18 @@ enum SmokeCheck {
         try await settle()
         try require(window.isMiniaturized && NSApp.activationPolicy() == .regular, "Minimizing must keep Dock presence")
         let actions = delegate.makeActionsMenu()
-        try require(actions.items.map(\.title) == ["General Settings…", "About DayTape", "", "Quit DayTape"] && actions.items[2].isSeparatorItem,
-                    "Status menu must order General, About, then a separator and Quit")
+        try require(actions.items.map(\.title) == ["Statistics…", "General Settings…", "About DayTape", "", "Quit DayTape"] && actions.items[3].isSeparatorItem,
+                    "Status menu must order Statistics, General, About, then a separator and Quit")
         let general = actions.item(withTitle: "General Settings…")!
         let about = actions.item(withTitle: "About DayTape")!
         try require(NSApp.sendAction(about.action!, to: about.target, from: about), "Status menu must open About")
         try await settle()
         try require(!window.isMiniaturized && window.isKeyWindow && delegate.mainWindowController?.window === window,
                     "Opening a minimized window must restore and focus it (minimized=\(window.isMiniaturized), key=\(window.isKeyWindow), active=\(NSApp.isActive), front=\(NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "unknown"))")
-        try require(sidebar.selectedRow == 1 && heading.stringValue == "About", "About menu item must select About even when General was minimized")
+        try require(sidebar.selectedRow == 2 && heading.stringValue == "About", "About menu item must select About even when General was minimized")
         try require(NSApp.sendAction(general.action!, to: general.target, from: general), "Status menu must open General Settings")
         try await settle()
-        try require(sidebar.selectedRow == 0 && heading.stringValue == "General" && delegate.mainWindowController?.window === window,
+        try require(sidebar.selectedRow == 1 && heading.stringValue == "General" && delegate.mainWindowController?.window === window,
                     "General Settings must select General in the same window")
         _ = delegate.applicationShouldHandleReopen(NSApp, hasVisibleWindows: true)
         try await settle()
@@ -541,7 +548,7 @@ enum SmokeCheck {
         try require(model.store?.runningEntry?.id == runningID, "Closing must keep tracking")
         try require(NSApp.sendAction(about.action!, to: about.target, from: about), "About must reopen a closed window")
         try await settle()
-        try require(window.isKeyWindow && sidebar.selectedRow == 1 && heading.stringValue == "About" && NSApp.activationPolicy() == .regular,
+        try require(window.isKeyWindow && sidebar.selectedRow == 2 && heading.stringValue == "About" && NSApp.activationPolicy() == .regular,
                     "About must directly select its page when reopening from menu-bar-only operation")
         try require(model.store?.runningEntry?.id == runningID && delegate.mainWindowController?.window === window,
                     "Section menu actions must preserve tracking and reuse the window")
@@ -562,6 +569,197 @@ enum SmokeCheck {
             throw NSError(domain: "LineSmokeCheck", code: 14, userInfo: [NSLocalizedDescriptionKey: "Native window geometry was not saved"])
         }
         try Data(savedFrame.utf8).write(to: output.appendingPathComponent("window-frame.txt"))
+    }
+
+    private static func checkStatistics(model: AppModel, output: URL) async throws {
+        let store = model.store!
+        let calendar = Calendar.autoupdatingCurrent
+        let yesterday = calendar.date(byAdding: .day, value: -1, to: calendar.startOfDay(for: .now))!
+        for (name, offset, duration) in [("Building DayTape :dayline :coding", 8.0, 2.0),
+                                         ("Meeting :dayline :meeting", 11.0, 1.0),
+                                         ("Reading", 14.0, 1.0)] {
+            let start = yesterday.addingTimeInterval(offset * 3_600)
+            try store.createEntry(named: name, selection: store.prepareEntry(from: start, to: start + duration * 3_600))
+        }
+        for index in 0..<24 {
+            let start = yesterday.addingTimeInterval(17 * 3_600 + Double(index) * 60)
+            try store.createEntry(named: "Sample \(index) :sample\(index)",
+                                  selection: store.prepareEntry(from: start, to: start + 60))
+        }
+        try require(model.start("Live task :coding"), "Start live task before statistics")
+        let entries = store.entries
+        let tasks = store.tasks
+        let delegate = NSApp.delegate as! AppDelegate
+        let item = delegate.makeActionsMenu().item(withTitle: "Statistics…")!
+        try require(item.image != nil, "Statistics menu item must have its sidebar icon")
+        try require(NSApp.sendAction(item.action!, to: item.target, from: item), "Open Statistics from the status menu")
+        try await settle()
+        let controller = delegate.mainWindowController!
+        let window = controller.window!
+        let state = controller.statisticsSelection
+        let content = window.contentView!
+        try require(state.period == .week && state.grouping == .tags, "Statistics must begin with the current week and tags")
+        state.anchor = yesterday
+        try await settle()
+        func breakdownTable() throws -> NSTableView {
+            let detail = (window.contentViewController as! NSSplitViewController).splitViewItems.last!.viewController.view
+            guard let table = descendants(detail).compactMap({ $0 as? NSTableView }).first else {
+                throw NSError(domain: "LineSmokeCheck", code: 40, userInfo: [NSLocalizedDescriptionKey: "Native statistics table missing"])
+            }
+            return table
+        }
+        func clickRow(_ row: Int, column: Int = 0) async throws {
+            let table = try breakdownTable()
+            try require(row >= 0 && row < table.numberOfRows, "The row to click must exist")
+            table.scrollRowToVisible(row)
+            let cell = table.frameOfCell(atColumn: column, row: row)
+            let point = table.convert(NSPoint(x: cell.midX, y: cell.midY), to: nil)
+            for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+                let event = NSEvent.mouseEvent(with: type, location: point, modifierFlags: [],
+                                              timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+                                              context: nil, eventNumber: 0, clickCount: 1, pressure: type == .leftMouseDown ? 1 : 0)!
+                NSApp.postEvent(event, atStart: false)
+            }
+            try await settle()
+        }
+        let initialTable = try breakdownTable()
+        try require(initialTable.usesAlternatingRowBackgroundColors, "Native table must use alternating row backgrounds")
+        try require(initialTable.enclosingScrollView?.borderType == .noBorder, "Statistics table must have no enclosing border")
+        let nativeRowHeight = initialTable.rowHeight + initialTable.intercellSpacing.height
+        try require((0..<initialTable.numberOfRows).allSatisfy {
+            abs(initialTable.rect(ofRow: $0).height - nativeRowHeight) < 0.5
+        }, "Populated table rows must match the native empty stripe height")
+        try await clickRow(0)
+        try require(state.filter == .tag("dayline"), "Tag row must select its filter")
+        try require(accessibilityElement(named: "Clear statistics filter", in: content) == nil,
+                    "Selected filters must not add a pill above the chart")
+        try await clickRow(0, column: 1)
+        try require(state.filter == nil && (try breakdownTable()).selectedRow == -1,
+                    "Clicking the selected row's Time cell must deselect it")
+        try await clickRow(1)
+        try require(state.filter == .tag("coding"), "Another row must select its own filter")
+        try await clickRow(0)
+        try require(state.filter == .tag("dayline"), "Clicking a different row must replace the filter")
+        state.search = "no matching rows"
+        try await settle()
+        try require(state.filter == .tag("dayline") && (try breakdownTable()).numberOfRows == 0,
+                    "Search must not clear an active chart filter when its row is hidden")
+        state.search = ""
+        try await settle()
+        state.grouping = .tasks
+        try await settle()
+        try require(try breakdownTable().numberOfRows == 2 && state.filter == .tag("dayline"),
+                    "Changing grouping must show only the two tasks in the selected tag")
+        try capture("statistics-table-filtered")
+        let dayLabel = "Explore \(yesterday.formatted(date: .complete, time: .omitted)), 3h"
+        try pressAccessibleControl(named: dayLabel, in: content)
+        try await settle()
+        try require(state.period == .day && calendar.isDate(state.anchor, inSameDayAs: yesterday), "Day bar must open the session timeline")
+        state.grouping = .tags
+        try await settle()
+        try await clickRow(0)
+        try require(state.filter == nil, "Clicking the selected tag must restore all tracked time")
+        state.grouping = .tasks
+        try await settle()
+        let session = store.entries.first!
+        let task = store.task(id: session.taskID)!
+        let sessionLabel = "\(task.inputText), \(model.timeFormat.string(from: session.start))–\(model.timeFormat.string(from: session.end!)), 2h"
+        try pressAccessibleControl(named: sessionLabel, in: content)
+        try await settle()
+        try require(state.filter == .task(task.id), "Selecting a session must focus its task")
+        try await clickRow(breakdownTable().selectedRow)
+        try require(state.filter == nil, "Clicking the selected task must clear a chart-originated selection")
+        let searchField = descendants(content).compactMap { $0 as? NSSearchField }.first!
+        window.makeFirstResponder(searchField)
+        let searchEditor = searchField.currentEditor() as! NSTextView
+        searchEditor.selectAll(nil)
+        searchEditor.insertText("READ", replacementRange: searchEditor.selectedRange())
+        try await settle()
+        try require(state.search == "READ", "Native search field must filter while typing")
+        try require(try breakdownTable().numberOfRows == 1, "Search must narrow the native table to Reading")
+        state.search = ""
+        state.period = .month
+        try await settle()
+        try pressAccessibleControl(named: "Previous statistics period", in: content)
+        try await settle()
+        try require(state.anchor < yesterday, "Previous must move to an earlier month")
+        try pressAccessibleControl(named: "Current statistics period", in: content)
+        try await settle()
+        try require(calendar.isDate(state.anchor, equalTo: .now, toGranularity: .month), "This month must restore the current month")
+        func capture(_ name: String) throws {
+            guard ProcessInfo.processInfo.environment["LINE_SMOKE_CAPTURE"] == "1" else { return }
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+            process.arguments = ["-x", "-l", String(window.windowNumber), output.appendingPathComponent(name + ".png").path]
+            try process.run()
+            process.waitUntilExit()
+        }
+        window.setContentSize(NSSize(width: 900, height: 650))
+        state.period = .week
+        state.anchor = yesterday
+        state.grouping = .tags
+        try await settle()
+        try capture("statistics-week")
+        state.grouping = .tasks
+        try await settle()
+        try capture("statistics-week-tasks")
+        state.grouping = .tags
+        state.filter = .tag("dayline")
+        try await settle()
+        try capture("statistics-filtered")
+        state.filter = nil
+        state.period = .month
+        try await settle()
+        try capture("statistics-month")
+        state.showDay(yesterday)
+        try await settle()
+        try capture("statistics-day")
+        window.setContentSize(NSSize(width: 640, height: 600))
+        try await settle()
+        try require(accessibilityElement(named: "Search statistics", in: content) != nil, "Search must remain available at minimum width")
+        try capture("statistics-small")
+        let table = try breakdownTable()
+        let scroll = table.enclosingScrollView!
+        let tableFrame = scroll.convert(scroll.bounds, to: nil)
+        let periodPicker = descendants(content).compactMap { $0 as? NSPopUpButton }.first {
+            $0.itemTitles == ["Day", "Week", "Month"]
+        }!
+        let periodPickerFrame = periodPicker.convert(periodPicker.bounds, to: nil)
+        table.scrollRowToVisible(table.numberOfRows - 1)
+        try await settle()
+        try require(scroll.contentView.bounds.origin.y > 0, "Long breakdown must scroll independently")
+        try require(scroll.convert(scroll.bounds, to: nil) == tableFrame && periodPicker.convert(periodPicker.bounds, to: nil) == periodPickerFrame,
+                    "Scrolling rows must not move the table container or chart controls")
+        try capture("statistics-scrolled")
+        window.setContentSize(NSSize(width: 640, height: 420))
+        state.filter = .tag("dayline")
+        try await settle()
+        let smallest = try breakdownTable().enclosingScrollView!
+        try require(smallest.frame.height >= 55, "Minimum window height must retain a usable table")
+        let visibleTable = smallest.convert(smallest.bounds, to: content)
+        try require(content.bounds.insetBy(dx: -1, dy: -1).contains(visibleTable), "The whole table viewport must fit in the shortest window")
+        try capture("statistics-short")
+        state.period = .week
+        try await settle()
+        let shortWeek = try breakdownTable().enclosingScrollView!
+        try require(content.bounds.insetBy(dx: -1, dy: -1).contains(shortWeek.convert(shortWeek.bounds, to: content)),
+                    "The weekly chart must also leave the table inside the shortest window")
+        try capture("statistics-short-week")
+        state.period = .day
+        state.filter = nil
+        window.setContentSize(NSSize(width: 640, height: 600))
+        try await settle()
+        window.appearance = NSAppearance(named: .aqua)
+        try await settle()
+        try capture("statistics-light")
+        controller.present(page: .general)
+        try await settle()
+        controller.present(page: .statistics)
+        try await settle()
+        try require(state.period == .day && state.grouping == .tags, "Page navigation must preserve the explored period")
+        try require(store.entries == entries && store.tasks == tasks,
+                    "Statistics must preserve saved data and running entry identity")
+        window.close()
     }
 
     private static func checkInitialSliderThumb(_ slider: NSSlider, in window: NSWindow, output: URL) throws {
