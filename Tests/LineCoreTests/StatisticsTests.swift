@@ -203,7 +203,7 @@ struct StatisticsTests {
         #expect(report([later]).color(for: .tag("shared")) == .purple)
     }
 
-    @Test func stackedBarsPreserveTotalsAndShowFullSelectedTagTime() {
+    @Test func stackedBarsPreserveGeometryAndMuteUnselectedShares() {
         let build = TrackedTask(id: UUID(), name: "Build", color: .blue, tags: ["project", "coding"])
         let meeting = TrackedTask(id: UUID(), name: "Meeting", color: .orange, tags: ["project"])
         let reading = TrackedTask(id: UUID(), name: "Reading", color: .green)
@@ -227,14 +227,57 @@ struct StatisticsTests {
         #expect(tasks.first(where: { $0.id == .task(build.id) })?.duration == 7_200)
         let selected = report(.tag("project"))
         let selectedTags = selected.segments(in: range, grouping: .tags)
-        #expect(selectedTags.count == 1)
-        #expect(selectedTags.first?.duration == 10_800)
-        #expect(selected.segments(in: range, grouping: .tasks).map(\.name) == ["Build", "Meeting"])
-        #expect(selected.segments(in: range, grouping: .tasks).reduce(0) { $0 + $1.duration } == selected.selectedTotal)
+        #expect(selectedTags.map(\.id) == tags.map(\.id))
+        #expect(selectedTags.map(\.duration) == tags.map(\.duration))
+        #expect(selectedTags.first(where: { $0.id == .tag("project") })?.highlightedDuration == 7_200)
+        #expect(selectedTags.filter { $0.id != .tag("project") }.allSatisfy { $0.highlightedDuration == 0 })
+        #expect(selected.selectedTotal == 10_800) // Breakdown/header retain full matching time.
+        let selectedTasks = selected.segments(in: range, grouping: .tasks)
+        #expect(selectedTasks.map(\.id) == tasks.map(\.id))
+        #expect(selectedTasks.map(\.duration) == tasks.map(\.duration))
+        #expect(selectedTasks.first(where: { $0.id == .task(reading.id) })?.highlightedDuration == 0)
+        #expect(selectedTasks.reduce(0) { $0 + $1.highlightedDuration } == selected.selectedTotal)
         let taskTags = report(.task(build.id)).segments(in: range, grouping: .tags)
-        #expect(taskTags.count == 2 && taskTags.allSatisfy { $0.duration == 3_600 })
+        #expect(taskTags.map(\.id) == tags.map(\.id))
+        #expect(taskTags.map(\.duration) == tags.map(\.duration))
+        #expect(taskTags.first(where: { $0.id == .tag("project") })?.highlightedDuration == 3_600)
+        #expect(taskTags.first(where: { $0.id == .tag("coding") })?.highlightedDuration == 3_600)
+        #expect(taskTags.first(where: { $0.id == .untagged })?.highlightedDuration == 0)
         #expect(all.rows(grouping: .tags).first(where: { $0.id == .tag("project") })?.duration == 10_800)
         #expect(all.segments(in: DateInterval(start: range.end, duration: 3_600), grouping: .tags).isEmpty)
+    }
+
+    @Test(arguments: [StatisticsPeriod.week, .month])
+    func selectionsPreserveEveryDailyStack(period: StatisticsPeriod) {
+        let first = TrackedTask(id: UUID(), name: "First", color: .green, tags: ["shared", "coding"])
+        let second = TrackedTask(id: UUID(), name: "Second", color: .orange, tags: ["shared"])
+        let untagged = TrackedTask(id: UUID(), name: "Reading", color: .blue)
+        let start = date(2026, 10, 20, 12)
+        let range = period.interval(containing: start, calendar: calendar)
+        let entries = [entry(first, start, start + 7_200), entry(second, start + 7_200, start + 10_800),
+                       entry(untagged, start + 86_400, start + 90_000)]
+        func report(_ filter: StatisticsFilter? = nil) -> StatisticsReport {
+            StatisticsReport(tasks: [first, second, untagged], entries: entries, interval: range,
+                             now: range.end, filter: filter, calendar: calendar)
+        }
+        let original = report()
+        for grouping in StatisticsGrouping.allCases {
+            for filter in [StatisticsFilter.task(first.id), .task(second.id), .tag("shared"), .tag("coding"), .untagged, .tag("missing")] {
+                let selected = report(filter)
+                for day in original.days {
+                    let before = original.segments(in: day.interval, grouping: grouping)
+                    let after = selected.segments(in: day.interval, grouping: grouping)
+                    #expect(after.map(\.id) == before.map(\.id))
+                    #expect(after.map(\.duration) == before.map(\.duration))
+                    #expect(after.map(\.color) == before.map(\.color))
+                    #expect(after.reduce(0) { $0 + $1.duration } == day.total)
+                    #expect(after.allSatisfy { $0.highlightedDuration >= 0 && $0.highlightedDuration <= $0.duration })
+                    if filter.grouping == grouping {
+                        #expect(after.allSatisfy { $0.highlightedDuration == ($0.id == filter ? $0.duration : 0) })
+                    }
+                }
+            }
+        }
     }
 
     @Test func emptyDataAndCurrentTagMetadata() {

@@ -85,3 +85,7 @@ Day chart height: reduce the normal timeline from 165 to 116 points, matching th
 Day markers: show every three hours from 03:00 through 21:00, omitting midnight endpoints. Keep configured time formatting and centered labels. Native Statistics checks and release build passed; compact screenshot inspected.
 
 Day timeline corners: match the menu bar timeline with an 8-point track radius and 4-point entry radius. Release build passed.
+
+Stack selection refinement: keep every segment in the same order and at the same height when selecting a task or tag in week/month views. Gray out nonmatching shares in place, retaining separate segment outlines and outer corner rounding. Across groupings, highlight only the matching share within a segment. Keep full matching durations in the total and table. All 116 core tests passed, including stable geometry for both periods and overlapping tags; native Statistics checks and release build passed. Inspected filtered week/month screenshots and relaunched DayTape.
+
+Excluded segment styling: use the native tertiary label color for a darker, quieter gray in dark appearance, retaining stronger gray when Increase Contrast is enabled. Release build passed.

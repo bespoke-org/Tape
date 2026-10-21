@@ -738,10 +738,17 @@ enum SmokeCheck {
         state.filter = .tag("dayline")
         try await settle()
         try capture("statistics-filtered")
+        state.filter = .tag("coding")
+        try await settle()
+        try capture("statistics-middle-segment")
         state.filter = nil
         state.period = .month
         try await settle()
         try capture("statistics-month")
+        state.filter = .tag("coding")
+        try await settle()
+        try capture("statistics-month-filtered")
+        state.filter = nil
         state.showDay(yesterday)
         try await settle()
         try capture("statistics-day")

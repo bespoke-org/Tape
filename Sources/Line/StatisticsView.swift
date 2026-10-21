@@ -140,15 +140,22 @@ struct StatisticsView: View {
                         Button { selection.showDay(day.interval.start) } label: {
                             VStack(spacing: 8) {
                                 VStack(spacing: 0) {
-                                    if day.total > day.selected {
-                                        chartBlock(barShape(top: true, bottom: segments.isEmpty), color: .gray)
-                                            .frame(height: height * (day.total - day.selected) / maximum)
-                                    }
                                     ForEach(segments.reversed()) { segment in
-                                        chartBlock(barShape(top: segment.id == segments.last?.id && day.total <= day.selected,
-                                                            bottom: segment.id == segments.first?.id),
-                                                   color: segment.color?.displayColor ?? .gray)
-                                            .frame(height: height * segment.duration / maximum)
+                                        let muted = max(0, segment.duration - segment.highlightedDuration)
+                                        let top = segment.id == segments.last?.id
+                                        let bottom = segment.id == segments.first?.id
+                                        VStack(spacing: 0) {
+                                            if muted > 0 {
+                                                chartBlock(barShape(top: top, bottom: bottom && segment.highlightedDuration == 0),
+                                                           color: contrast == .increased ? .gray : Color(nsColor: .tertiaryLabelColor))
+                                                    .frame(height: height * muted / maximum)
+                                            }
+                                            if segment.highlightedDuration > 0 {
+                                                chartBlock(barShape(top: top && muted == 0, bottom: bottom),
+                                                           color: segment.color?.displayColor ?? .gray)
+                                                    .frame(height: height * segment.highlightedDuration / maximum)
+                                            }
+                                        }
                                     }
                                 }
                                 .frame(width: max(2, slot * 0.6))
@@ -182,10 +189,10 @@ struct StatisticsView: View {
                                topTrailingRadius: top ? 3 : 0)
     }
 
-    private func barDescription(_ day: StatisticsDay, segments: [StatisticsRow]) -> String {
+    private func barDescription(_ day: StatisticsDay, segments: [StatisticsSegment]) -> String {
         let heading = "\(day.interval.start.formatted(date: .abbreviated, time: .omitted)): \(Self.duration(day.selected))"
-        let shares = segments.map { "\(displayName($0)): \(Self.duration($0.duration))" }.joined(separator: "\n")
-        let note = selection.grouping == .tags && selection.filter?.grouping != .tags
+        let shares = segments.map { "\(displayName($0.id, name: $0.name)): \(Self.duration($0.duration))" }.joined(separator: "\n")
+        let note = selection.grouping == .tags
             ? "\nChart shares divide each session equally among its tags." : ""
         return heading + (shares.isEmpty ? "" : "\n" + shares + note)
     }
@@ -322,8 +329,12 @@ struct StatisticsView: View {
     }
 
     private func displayName(_ row: StatisticsRow) -> String {
-        if case .tag(let tag) = row.id { return tagDisplayName(tag) }
-        return row.name
+        displayName(row.id, name: row.name)
+    }
+
+    private func displayName(_ id: StatisticsFilter, name: String) -> String {
+        if case .tag(let tag) = id { return tagDisplayName(tag) }
+        return name
     }
 
     private func filterName(_ filter: StatisticsFilter) -> String {

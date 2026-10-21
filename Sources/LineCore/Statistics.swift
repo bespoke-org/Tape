@@ -55,6 +55,14 @@ public struct StatisticsRow: Identifiable, Sendable {
     public let duration: TimeInterval
 }
 
+public struct StatisticsSegment: Identifiable, Sendable {
+    public let id: StatisticsFilter
+    public let name: String
+    public let color: TaskColor?
+    public let duration: TimeInterval
+    public let highlightedDuration: TimeInterval
+}
+
 /// A read-only projection. Clip every session to the period and to now, then split
 /// it at the configured local day boundary; days need not contain exactly 24 hours.
 public struct StatisticsReport: Sendable {
@@ -118,30 +126,30 @@ public struct StatisticsReport: Sendable {
         colors[filter]
     }
 
-    /// Stack shares preserve elapsed time even when a task has several tags.
-    /// A selected tag receives its full matching time; other sessions remain
-    /// outside the colored stack. Breakdown rows still show full tag durations.
-    public func segments(in interval: DateInterval, grouping: StatisticsGrouping) -> [StatisticsRow] {
+    /// Keep the full stack and its order independent of selection. Tags share
+    /// elapsed time equally; selection only changes the highlighted portion.
+    public func segments(in interval: DateInterval, grouping: StatisticsGrouping) -> [StatisticsSegment] {
         var durations: [StatisticsFilter: TimeInterval] = [:]
-        for session in sessions where filter?.matches(session.task) ?? true {
+        var highlighted: [StatisticsFilter: TimeInterval] = [:]
+        for session in sessions {
             let start = max(session.interval.start, interval.start)
             let end = min(session.interval.end, interval.end)
             guard end > start else { continue }
-            let keys: [StatisticsFilter]
-            if let filter, filter.grouping == grouping {
-                keys = [filter]
-            } else if grouping == .tasks {
-                keys = [.task(session.task.id)]
-            } else {
-                keys = session.task.tags.isEmpty ? [.untagged] : session.task.tags.map { .tag($0) }
-            }
+            let keys: [StatisticsFilter] = grouping == .tasks ? [.task(session.task.id)] :
+                session.task.tags.isEmpty ? [.untagged] : session.task.tags.map { .tag($0) }
             let share = end.timeIntervalSince(start) / Double(keys.count)
-            for key in keys { durations[key, default: 0] += share }
+            for key in keys {
+                durations[key, default: 0] += share
+                let matches = filter.map { $0.grouping == grouping ? $0 == key : $0.matches(session.task) } ?? true
+                if matches { highlighted[key, default: 0] += share }
+            }
         }
-        // Use the breakdown order consistently across every day, independent of search.
-        return rows(grouping: grouping).compactMap { row in
+        // Use the unfiltered period's breakdown order on every day, even when
+        // switching grouping while a task or tag remains selected.
+        return rows(grouping: grouping, source: sessions, search: "").compactMap { row in
             guard let duration = durations[row.id] else { return nil }
-            return StatisticsRow(id: row.id, name: row.name, color: row.color, duration: duration)
+            return StatisticsSegment(id: row.id, name: row.name, color: row.color, duration: duration,
+                                     highlightedDuration: highlighted[row.id, default: 0])
         }
     }
 
@@ -149,6 +157,10 @@ public struct StatisticsReport: Sendable {
         // Retain sibling rows within the selected grouping. Switching grouping
         // reveals the tasks in a tag, or the tags on a task.
         let source = sessions.filter { filter?.grouping == grouping || (filter?.matches($0.task) ?? true) }
+        return rows(grouping: grouping, source: source, search: search)
+    }
+
+    private func rows(grouping: StatisticsGrouping, source: [StatisticsSession], search: String) -> [StatisticsRow] {
         var durations: [StatisticsFilter: TimeInterval] = [:]
         var metadata: [StatisticsFilter: (String, TaskColor?)] = [:]
         for session in source {
