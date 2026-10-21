@@ -267,11 +267,63 @@ enum SmokeCheck {
         try require(window.title == "DayTape" && window.styleMask.contains([.resizable, .miniaturizable, .closable]),
                     "Main window must use normal native controls")
         guard let split = window.contentViewController as? NSSplitViewController else { throw NSError(domain: "LineSmokeCheck", code: 12) }
-        try require(split.splitViewItems.count == 2 && !split.splitViewItems[0].canCollapse, "Settings sidebar must remain visible")
+        try require(split.splitViewItems.count == 2 && split.splitViewItems[0].canCollapse, "Settings sidebar must support collapsing")
         guard let sidebar = descendants(split.splitViewItems[0].viewController.view).compactMap({ $0 as? NSOutlineView }).first else {
             throw NSError(domain: "LineSmokeCheck", code: 12, userInfo: [NSLocalizedDescriptionKey: "Native sidebar is missing"])
         }
         try require(sidebar.numberOfRows == 3 && sidebar.selectedRow == 0, "Sidebar must show General, Statistics, About, initially selecting General")
+        guard let navigation = window.toolbar?.items.compactMap({ $0.view as? NSSegmentedControl }).first,
+              let heading = window.toolbar?.items.first(where: { $0.itemIdentifier.rawValue == "DayTape.SettingsTitle" })?.view as? NSTextField else {
+            throw NSError(domain: "LineSmokeCheck", code: 20)
+        }
+        try require(!navigation.isEnabled(forSegment: 0) && !navigation.isEnabled(forSegment: 1), "New window must have no page history")
+        func clickSidebarRow(_ row: Int) async throws {
+            let rect = sidebar.rect(ofRow: row)
+            let point = sidebar.convert(NSPoint(x: rect.midX, y: rect.midY), to: nil)
+            let down = NSEvent.mouseEvent(with: .leftMouseDown, location: point, modifierFlags: [],
+                                         timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+                                         context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!
+            let up = NSEvent.mouseEvent(with: .leftMouseUp, location: point, modifierFlags: [],
+                                       timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+                                       context: nil, eventNumber: 1, clickCount: 1, pressure: 0)!
+            NSApp.postEvent(up, atStart: true)
+            sidebar.mouseDown(with: down)
+            try await Task.sleep(for: .milliseconds(1_200))
+        }
+        try await clickSidebarRow(1)
+        try require(sidebar.selectedRow == 1 && window.firstResponder === sidebar,
+                    "Opening Statistics must keep keyboard focus in the sidebar after the page settles")
+        try await clickSidebarRow(2)
+        try require(sidebar.selectedRow == 2 && window.firstResponder === sidebar,
+                    "Clicking a sidebar page must keep keyboard focus in the sidebar (selected=\(sidebar.selectedRow), sidebar=\(sidebar), responder=\(String(describing: window.firstResponder)))")
+        try await clickSidebarRow(0)
+        guard let sidebarToggle = window.toolbar?.items.first(where: { $0.itemIdentifier == .toggleSidebar }),
+              let toggleAction = sidebarToggle.action else {
+            throw NSError(domain: "LineSmokeCheck", code: 12, userInfo: [NSLocalizedDescriptionKey: "Native sidebar toggle is missing"])
+        }
+        let expandedFrame = window.frame
+        let expandedSidebarWidth = split.splitViewItems[0].viewController.view.frame.width
+        try require(NSApp.sendAction(toggleAction, to: sidebarToggle.target, from: sidebarToggle), "Sidebar toggle must handle clicks")
+        try await settle()
+        try require(split.splitViewItems[0].isCollapsed && window.frame == expandedFrame,
+                    "Collapsing the sidebar must preserve the window frame")
+        try require(window.toolbar?.visibleItems?.contains(where: { $0.itemIdentifier == .toggleSidebar }) == true,
+                    "Sidebar toggle must remain visible when collapsed")
+        if ProcessInfo.processInfo.environment["LINE_SMOKE_CAPTURE"] == "1" {
+            let capture = Process()
+            capture.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+            capture.arguments = ["-x", "-l", String(window.windowNumber), output.appendingPathComponent("sidebar-collapsed.png").path]
+            try capture.run()
+            capture.waitUntilExit()
+        }
+        try require(NSApp.sendAction(toggleAction, to: sidebarToggle.target, from: sidebarToggle), "Collapsed sidebar toggle must handle clicks")
+        try await settle()
+        try require(!split.splitViewItems[0].isCollapsed && sidebar.selectedRow == 0
+                    && abs(split.splitViewItems[0].viewController.view.frame.width - expandedSidebarWidth) < 1,
+                    "Expanding the sidebar must restore its width and selected page")
+        try await Task.sleep(for: .milliseconds(600))
+        try require(window.firstResponder === sidebar,
+                    "Unfolding must restore sidebar focus after the animation (responder=\(String(describing: window.firstResponder)))")
         guard let slider = descendants(content).compactMap({ $0 as? NSSlider }).first else {
             throw NSError(domain: "LineSmokeCheck", code: 13, userInfo: [NSLocalizedDescriptionKey: "Native default zoom slider is missing"])
         }
@@ -376,7 +428,6 @@ enum SmokeCheck {
         func selectThreshold(_ seconds: Int) async throws {
             var choices = [0, 30, 60, 120, 300, 600, 900, 1800, 3600]
             if !choices.contains(model.shortBreakSeconds) { choices.append(model.shortBreakSeconds) }
-            choices.append(-1)
             let current = choices.firstIndex(of: model.shortBreakSeconds)!
             let target = choices.firstIndex(of: seconds)!
             let choose = Timer(timeInterval: 0.2, repeats: false) { _ in
@@ -409,26 +460,16 @@ enum SmokeCheck {
             try await selectThreshold(seconds)
             try require(model.shortBreakSeconds == seconds && model.settingsError == nil, "Threshold menu must save the selected duration: expected \(seconds), got \(model.shortBreakSeconds), items \(thresholdPicker.itemTitles)")
         }
-        try await selectThreshold(-1)
-        guard let sheet = window.attachedSheet, let sheetContent = sheet.contentView,
-              let field = descendants(sheetContent).compactMap({ $0 as? NSTextField }).first(where: \.isEditable) else {
-            throw NSError(domain: "LineSmokeCheck", code: 19, userInfo: [NSLocalizedDescriptionKey: "Custom threshold editor is missing"])
-        }
-        sheet.makeFirstResponder(field)
-        guard let editor = field.currentEditor() as? NSTextView else { throw NSError(domain: "LineSmokeCheck", code: 19) }
-        editor.selectAll(nil)
-        editor.insertText("45", replacementRange: editor.selectedRange())
+        try require(!thresholdPicker.itemTitles.contains(where: { $0.hasPrefix("Custom") }),
+                    "Threshold menu must not offer a custom dialog")
+        model.setShortBreakSeconds(45)
         try await settle()
-        try pressAccessibleControl(named: "Save", in: sheetContent)
-        try await settle()
-        try require(window.attachedSheet == nil && model.shortBreakSeconds == 45, "Custom threshold must save exact seconds")
-        try await selectThreshold(-1)
-        guard let cancelContent = window.attachedSheet?.contentView else { throw NSError(domain: "LineSmokeCheck", code: 19) }
-        try pressAccessibleControl(named: "Cancel", in: cancelContent)
-        try await settle()
-        try require(model.shortBreakSeconds == 45, "Cancelling a custom threshold must preserve its value")
+        // SwiftUI populates native menu items when the menu opens.
+        try await selectThreshold(45)
+        try require(thresholdPicker.titleOfSelectedItem == "45 seconds" && window.attachedSheet == nil,
+                    "Previously saved non-preset thresholds must remain available without a dialog")
         try await selectThreshold(30)
-        try require(model.shortBreakSeconds == 30, "Selecting 30 seconds after Custom must save 30 (actual=\(model.shortBreakSeconds), displayed=\(thresholdPicker.titleOfSelectedItem ?? "none"))")
+        try require(model.shortBreakSeconds == 30, "A preset must replace a previously saved non-preset threshold")
         guard let resumeSwitch = descendants(content).compactMap({ $0 as? NSSwitch }).first else {
             throw NSError(domain: "LineSmokeCheck", code: 18, userInfo: [NSLocalizedDescriptionKey: "Native automatic resume switch is missing"])
         }
@@ -468,11 +509,6 @@ enum SmokeCheck {
             try capture.run()
             capture.waitUntilExit()
         }
-        guard let navigation = window.toolbar?.items.compactMap({ $0.view as? NSSegmentedControl }).first,
-              let heading = window.toolbar?.items.first(where: { $0.itemIdentifier.rawValue == "DayTape.SettingsTitle" })?.view as? NSTextField else {
-            throw NSError(domain: "LineSmokeCheck", code: 20)
-        }
-        try require(!navigation.isEnabled(forSegment: 0) && !navigation.isEnabled(forSegment: 1), "New window must have no page history")
         let sidebarWidth = sidebar.enclosingScrollView?.frame.width
         try await enterCountdown("17", submit: false)
         sidebar.selectRowIndexes(IndexSet(integer: 2), byExtendingSelection: false)

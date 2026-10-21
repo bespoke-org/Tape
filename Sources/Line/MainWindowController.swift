@@ -22,13 +22,14 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSToolba
         aboutController = NSHostingController(rootView: AboutView(dataURL: model.dataURL))
         generalController.sizingOptions = []
         aboutController.sizingOptions = []
-        let split = NSSplitViewController()
+        let split = MainSplitViewController()
         let sidebarController = NSHostingController(rootView: MainSidebar(navigation: navigation))
         sidebarController.sizingOptions = []
         let sidebar = NSSplitViewItem(sidebarWithViewController: sidebarController)
         sidebar.minimumThickness = 200
         sidebar.maximumThickness = 260
-        sidebar.canCollapse = false
+        sidebar.canCollapse = true
+        sidebar.collapseBehavior = .preferResizingSiblingsWithFixedSplitView
         split.addSplitViewItem(sidebar)
         split.addSplitViewItem(NSSplitViewItem(viewController: generalController))
 
@@ -67,7 +68,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSToolba
     required init?(coder: NSCoder) { fatalError("Not used") }
 
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [Self.sidebarSeparator, Self.navigation, Self.settingsTitle, .flexibleSpace]
+        [.flexibleSpace, .toggleSidebar, Self.sidebarSeparator, Self.navigation, Self.settingsTitle, .flexibleSpace]
     }
 
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
@@ -118,7 +119,6 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSToolba
 
     private func showSelectedPage() {
         guard let window, let split = window.contentViewController as? NSSplitViewController else { return }
-        window.makeFirstResponder(nil)
         let controller: NSViewController = switch navigation.page {
         case .statistics: statisticsController
         case .general: generalController
@@ -165,6 +165,32 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSToolba
         NSApp.setActivationPolicy(.accessory)
     }
 
+}
+
+private final class MainSplitViewController: NSSplitViewController {
+    private weak var sidebarResponder: NSView?
+
+    override func toggleSidebar(_ sender: Any?) {
+        guard let sidebar = splitViewItems.first, let window = view.window else { return }
+        if !sidebar.isCollapsed {
+            let responder = window.firstResponder as? NSView
+            sidebarResponder = responder?.isDescendant(of: sidebar.viewController.view) == true ? responder : nil
+            super.toggleSidebar(sender)
+            return
+        }
+
+        let previousResponder = window.firstResponder
+        NSAnimationContext.runAnimationGroup { _ in
+            super.toggleSidebar(sender)
+        } completionHandler: { [weak self, weak window, weak previousResponder] in
+            guard let self, let window, !sidebar.isCollapsed,
+                  let responder = self.sidebarResponder else { return }
+            self.sidebarResponder = nil
+            // Restore focus only if the user hasn't focused another control while unfolding.
+            guard window.firstResponder === previousResponder, responder.window === window else { return }
+            window.makeFirstResponder(responder)
+        }
+    }
 }
 
 private struct MainSidebar: View {
@@ -393,11 +419,6 @@ private struct SettingsView: View {
 private struct ShortBreakPicker: View {
     let model: AppModel
     private static let presets = [0, 30, 60, 120, 300, 600, 900, 1_800, 3_600]
-    @State private var selection = 300
-    @State private var showsCustom = false
-    @State private var customSeconds = ""
-    @FocusState private var customIsFocused: Bool
-
     private static func label(_ seconds: Int) -> String {
         if seconds == 0 { return "Never" }
         if seconds == 60 { return "1 minute" }
@@ -405,76 +426,21 @@ private struct ShortBreakPicker: View {
         return seconds == 1 ? "1 second" : "\(seconds) seconds"
     }
 
-    private var customValue: Int? {
-        guard let value = Int(customSeconds), TrackingStore.shortBreakRange.contains(value) else { return nil }
-        return value
-    }
-
     var body: some View {
-        Picker("Short-break threshold", selection: Binding(get: { selection }, set: { value in
-            selection = value
-            if value == -1 {
-                customSeconds = String(model.shortBreakSeconds)
-                showsCustom = true
-            } else {
-                model.setShortBreakSeconds(value)
-                selection = model.shortBreakSeconds
-            }
-        })) {
+        Picker("Short-break threshold", selection: Binding(
+            get: { model.shortBreakSeconds },
+            set: { model.setShortBreakSeconds($0) }
+        )) {
             ForEach(Self.presets, id: \.self) { seconds in
                 Text(Self.label(seconds)).tag(seconds)
             }
             if !Self.presets.contains(model.shortBreakSeconds) {
                 Text(Self.label(model.shortBreakSeconds)).tag(model.shortBreakSeconds)
             }
-            Divider()
-            Text("Custom…").tag(-1)
         }
         .pickerStyle(.menu)
         .labelsHidden()
         .accessibilityLabel("Short-break threshold")
-        .onAppear { selection = model.shortBreakSeconds }
-        .onChange(of: model.shortBreakSeconds) { _, value in selection = value }
-        .onChange(of: showsCustom) { _, presented in
-            if !presented { selection = model.shortBreakSeconds }
-        }
-        .sheet(isPresented: $showsCustom) {
-            VStack(alignment: .leading, spacing: 16) {
-                Text("Short-break threshold").font(.headline)
-                HStack(spacing: 6) {
-                    TextField("", text: $customSeconds)
-                        .textFieldStyle(.roundedBorder)
-                        .multilineTextAlignment(.trailing)
-                        .frame(width: 80)
-                        .focused($customIsFocused)
-                        .accessibilityLabel("Custom short-break seconds")
-                        .onChange(of: customSeconds) { _, value in
-                            let digits = value.filter { $0 >= "0" && $0 <= "9" }
-                            if digits != value { customSeconds = digits }
-                        }
-                    Text("seconds").foregroundStyle(Color.primary)
-                }
-                Text("Enter 0–3600 seconds. Use 0 to always start a new entry.")
-                    .foregroundStyle(.secondary)
-                if let message = model.settingsError {
-                    Label(message, systemImage: "exclamationmark.triangle").foregroundStyle(.red)
-                }
-                HStack {
-                    Spacer()
-                    Button("Cancel") { showsCustom = false }.keyboardShortcut(.cancelAction)
-                    Button("Save") {
-                        guard let value = customValue else { return }
-                        model.setShortBreakSeconds(value)
-                        if model.settingsError == nil { showsCustom = false }
-                    }
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(customValue == nil)
-                }
-            }
-            .padding(24)
-            .frame(width: 380)
-            .onAppear { customIsFocused = true }
-        }
     }
 }
 
@@ -581,6 +547,8 @@ private final class ZoomPresetControl: NSView {
 
     func setHours(_ hours: Int) {
         slider.doubleValue = Double(TrackingStore.defaultZoomPresets.firstIndex(of: hours) ?? 3)
+        // Keep the native track unfilled on both sides of the selected preset.
+        slider.neutralValue = slider.doubleValue
         slider.setAccessibilityValueDescription(Self.label(for: hours))
     }
 

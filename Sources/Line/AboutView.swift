@@ -5,7 +5,6 @@ struct AboutView: View {
     let dataURL: URL
 
     private var version: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "Development" }
-    private var build: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—" }
     private var minimumSystem: String { Bundle.main.object(forInfoDictionaryKey: "LSMinimumSystemVersion") as? String ?? "26.0" }
 
     var body: some View {
@@ -22,12 +21,9 @@ struct AboutView: View {
                     }
                 }
                 .padding(.vertical, 4)
-                Text("A native time tracker that lives in your Mac’s menu bar. Track tasks on a continuous timeline, make corrections, and pick up where you left off after a break.")
-                    .fixedSize(horizontal: false, vertical: true)
             }
             Section("App information") {
                 LabeledContent("Version", value: version)
-                LabeledContent("Build", value: build)
                 LabeledContent("Requires", value: "macOS \(minimumSystem) or later")
                 LabeledContent("License", value: "GPL-2.0-only")
                 Link("Source Code", destination: URL(string: "https://github.com/mchernigin/daytape")!)

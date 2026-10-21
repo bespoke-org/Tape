@@ -33,7 +33,7 @@ Task order, in General’s Tracking section, controls suggestions when creating 
 
 Automatic resume in General → Tracking is on by default. Turn it off to keep tracking stopped after unlocking or waking. Turning it off cancels a pending offer; turning it back on waits for the next interruption. It does not stop a task that is currently running. The countdown and threshold controls are disabled while automatic resume is off, but keep their saved values.
 
-Short-break threshold sets how short a break must be to count as part of the same entry. The menu offers Never, 30 seconds, and 1, 2, 5, 10, 15, 30, or 60 minutes, initially 5 minutes. Custom opens a dialog for an exact duration from 0 to 3600 seconds; Save applies it and Cancel keeps the previous value. Existing saved minute values keep their duration. At exactly the threshold or above, resuming starts a new entry at return. Zero appears as Never and always starts a new entry. Changes apply to the next offer.
+Short-break threshold sets how short a break must be to count as part of the same entry. The menu offers Never, 30 seconds, and 1, 2, 5, 10, 15, 30, or 60 minutes, initially 5 minutes. Existing saved minute values keep their duration. At exactly the threshold or above, resuming starts a new entry at return. Zero appears as Never and always starts a new entry. Changes apply to the next offer.
 
 Launch at login in General → Startup uses the [macOS app service](https://developer.apple.com/documentation/servicemanagement/smappservice). It is off until enabled and reflects the actual system registration, including external changes when you return to DayTape. If approval is needed, use Open System Settings. Login launches remain idle in the menu bar without opening a window.
 
