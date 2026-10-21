@@ -272,6 +272,56 @@ struct TrackingStoreTests {
         #expect(store.entries == entries && store.runningTask?.name == "Keep tracking")
     }
 
+    @Test func statisticsDayStartPersistsWithoutChangingEntriesOrRecovery() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("tracking.json")
+        var now = Date(timeIntervalSince1970: 1_800_000_000)
+        let store = try TrackingStore(url: url, now: { now })
+        #expect(store.statisticsDayStartHour == 0)
+        try store.startTask(named: "Night work")
+        now += 5
+        try store.checkpoint()
+        let entries = store.entries
+        let tasks = store.tasks
+        now += 10
+        try store.setStatisticsDayStartHour(4)
+        #expect(store.entries == entries && store.tasks == tasks)
+        let reopened = try TrackingStore(url: url, now: { now })
+        #expect(reopened.statisticsDayStartHour == 4)
+        #expect(reopened.entries.first?.duration(at: now) == 5)
+        try store.setStatisticsDayStartHour(100)
+        #expect(store.statisticsDayStartHour == 23)
+        try store.setStatisticsDayStartHour(-1)
+        #expect(store.statisticsDayStartHour == 0)
+    }
+
+    @Test func oldStoresKeepMidnightUntilDayBoundaryIsChanged() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let url = directory.appendingPathComponent("tracking.json")
+        let data = Data(#"{"version":1,"tasks":[],"entries":[]}"#.utf8)
+        try data.write(to: url)
+        #expect(try TrackingStore(url: url).statisticsDayStartHour == 0)
+        #expect(try Data(contentsOf: url) == data)
+    }
+
+    @Test func failedDayBoundarySaveKeepsPreviousChoiceAndRecords() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("tracking.json")
+        let store = try TrackingStore(url: url)
+        try store.startTask(named: "Night work")
+        try store.setStatisticsDayStartHour(4)
+        let entries = store.entries
+        try FileManager.default.removeItem(at: url)
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        #expect(throws: (any Error).self) { try store.setStatisticsDayStartHour(6) }
+        #expect(store.statisticsDayStartHour == 4)
+        #expect(store.entries == entries && store.runningTask?.name == "Night work")
+    }
+
     @Test(arguments: TimeFormat.allCases)
     func timeFormatPersistsWithoutChangingTrackingOrRecovery(format: TimeFormat) throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)

@@ -3,8 +3,13 @@ import Foundation
 public enum StatisticsPeriod: String, CaseIterable, Sendable {
     case day, week, month
 
-    public func interval(containing date: Date, calendar: Calendar = .autoupdatingCurrent) -> DateInterval {
-        calendar.dateInterval(of: self == .day ? .day : self == .week ? .weekOfYear : .month, for: date)!
+    public func interval(containing date: Date, dayStartHour: Int = 0,
+                         calendar: Calendar = .autoupdatingCurrent) -> DateInterval {
+        let boundary = StatisticsDayBoundary(hour: dayStartHour)
+        let day = boundary.date(containing: date, calendar: calendar)
+        let period = calendar.dateInterval(of: self == .day ? .day : self == .week ? .weekOfYear : .month, for: day)!
+        return DateInterval(start: boundary.start(on: period.start, calendar: calendar),
+                            end: boundary.start(on: period.end, calendar: calendar))
     }
 }
 
@@ -51,7 +56,7 @@ public struct StatisticsRow: Identifiable, Sendable {
 }
 
 /// A read-only projection. Clip every session to the period and to now, then split
-/// it at local calendar midnights; days need not contain exactly 24 hours.
+/// it at the configured local day boundary; days need not contain exactly 24 hours.
 public struct StatisticsReport: Sendable {
     public let interval: DateInterval
     public let sessions: [StatisticsSession]
@@ -62,7 +67,8 @@ public struct StatisticsReport: Sendable {
     private let colors: [StatisticsFilter: TaskColor]
 
     public init(tasks: [TrackedTask], entries: [TimeEntry], interval: DateInterval,
-                now: Date, filter: StatisticsFilter? = nil, calendar: Calendar = .autoupdatingCurrent) {
+                now: Date, filter: StatisticsFilter? = nil, dayStartHour: Int = 0,
+                calendar: Calendar = .autoupdatingCurrent) {
         self.interval = interval
         self.filter = filter
         let lookup = Dictionary(uniqueKeysWithValues: tasks.map { ($0.id, $0) })
@@ -91,9 +97,10 @@ public struct StatisticsReport: Sendable {
         total = sessions.reduce(0) { $0 + $1.duration }
         selectedTotal = sessions.filter { filter?.matches($0.task) ?? true }.reduce(0) { $0 + $1.duration }
         var days: [StatisticsDay] = []
+        let boundary = StatisticsDayBoundary(hour: dayStartHour)
         var cursor = interval.start
         while cursor < interval.end {
-            let end = min(calendar.dateInterval(of: .day, for: cursor)!.end, interval.end)
+            let end = min(boundary.interval(containing: cursor, calendar: calendar).end, interval.end)
             var total: TimeInterval = 0
             var selected: TimeInterval = 0
             for session in sessions where session.interval.start < end && session.interval.end > cursor {

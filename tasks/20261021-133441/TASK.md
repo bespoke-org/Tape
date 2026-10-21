@@ -75,3 +75,13 @@ Selection refinement: remove the filter pill and secondary total above the chart
 Total heading: add a small regular-weight “Time tracked” label above the total, with one combined accessible description. Normal and compact screenshots inspected; release build passed. The first smoke run failed at the first row click; an instrumented repeat passed all native interactions with no behavior changes. Temporary logging removed; the intermittent click failure remains unexplained.
 
 Header spacing: top-align the period controls beside the Time tracked block, with the date directly beneath the controls. This removes the separate date row and frees chart/table space. Native Statistics checks passed, including normal and minimum layouts; screenshots inspected and release build passed.
+
+Period navigation: group previous/current/next actions in a native momentary segmented control with internal dividers. Keep regular sizing beside the period menu and disable forward navigation in the current period. Native mouse-click navigation and small-window smoke checks passed; normal and compact screenshots inspected; release build passed.
+
+Period controls: place navigation before the Day / Week / Month menu. Disable the center button while viewing the current period, and re-enable it after navigating away. Native navigation and minimum-window smoke checks passed; release build passed.
+
+Day chart height: reduce the normal timeline from 165 to 116 points, matching the menu bar timeline with a 64-point strip and 46-point entries. Preserve the shorter compact layout. Native Statistics smoke checks and release build passed; day screenshot inspected.
+
+Day markers: show every three hours from 03:00 through 21:00, omitting midnight endpoints. Keep configured time formatting and centered labels. Native Statistics checks and release build passed; compact screenshot inspected.
+
+Day timeline corners: match the menu bar timeline with an 8-point track radius and 4-point entry radius. Release build passed.

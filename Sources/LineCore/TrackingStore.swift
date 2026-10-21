@@ -13,6 +13,7 @@ public final class TrackingStore {
     public var entries: [TimeEntry] { snapshot.entries }
     public static let defaultZoomPresets = [1, 2, 4, 8, 12, 16, 24]
     public var defaultZoomHours: Int { Self.nearestZoomPreset(snapshot.defaultZoomHours ?? 8) }
+    public var statisticsDayStartHour: Int { StatisticsDayBoundary(hour: snapshot.statisticsDayStartHour ?? 0).hour }
     public var timeFormat: TimeFormat { snapshot.timeFormat ?? .system }
     public var taskOrder: TaskOrder { snapshot.taskOrder ?? .recentlyUsed }
     public static let resumeCountdownRange = 1...60
@@ -335,6 +336,14 @@ public final class TrackingStore {
         guard hours != defaultZoomHours else { return }
         var candidate = snapshot
         candidate.defaultZoomHours = hours
+        try commit(candidate)
+    }
+
+    public func setStatisticsDayStartHour(_ hour: Int) throws {
+        let hour = StatisticsDayBoundary(hour: hour).hour
+        guard hour != statisticsDayStartHour else { return }
+        var candidate = snapshot
+        candidate.statisticsDayStartHour = hour
         try commit(candidate)
     }
 

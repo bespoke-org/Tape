@@ -269,6 +269,14 @@ private struct SettingsView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    private func statisticsDayStartLabel(_ hour: Int) -> String {
+        // Use a fixed UTC date so a missing local DST hour still has a menu item.
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let date = calendar.date(from: DateComponents(year: 2001, month: 1, day: 1, hour: hour))!
+        return model.timeFormat.string(from: date, calendar: calendar)
+    }
+
     private var zoomSlider: some View {
         ZoomPresetSlider(model: model)
             .frame(minWidth: 180, maxWidth: .infinity)
@@ -290,6 +298,20 @@ private struct SettingsView: View {
                 }
                 .pickerStyle(.menu)
                 .accessibilityLabel("Time format")
+                .disabled(model.store == nil)
+            }
+            Section("Statistics") {
+                Picker(selection: Binding(get: { model.statisticsDayStartHour }, set: { model.setStatisticsDayStartHour($0) })) {
+                    ForEach(0..<24, id: \.self) { hour in
+                        Text(statisticsDayStartLabel(hour)).tag(hour)
+                    }
+                } label: {
+                    Text("Day starts at")
+                    Text("Earlier hours count toward the previous day in statistics.")
+                        .foregroundStyle(.secondary)
+                }
+                .pickerStyle(.menu)
+                .accessibilityLabel("Day starts at")
                 .disabled(model.store == nil)
             }
             Section("Tracking") {

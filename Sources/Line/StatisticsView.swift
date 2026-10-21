@@ -12,8 +12,8 @@ final class StatisticsSelection {
     var filter: StatisticsFilter?
     var search = ""
 
-    func move(_ direction: Int, now: Date = .now, calendar: Calendar = .autoupdatingCurrent) {
-        let range = period.interval(containing: anchor, calendar: calendar)
+    func move(_ direction: Int, now: Date = .now, dayStartHour: Int = 0, calendar: Calendar = .autoupdatingCurrent) {
+        let range = period.interval(containing: anchor, dayStartHour: dayStartHour, calendar: calendar)
         guard direction < 0 || range.end <= now else { return }
         anchor = direction < 0 ? range.start.addingTimeInterval(-1) : range.end
     }
@@ -37,8 +37,8 @@ struct StatisticsView: View {
     var body: some View {
         TimelineView(.periodic(from: .now, by: 10)) { context in
             let report = StatisticsReport(tasks: model.store?.tasks ?? [], entries: model.store?.entries ?? [],
-                                          interval: selection.period.interval(containing: selection.anchor),
-                                          now: context.date, filter: selection.filter)
+                                          interval: selection.period.interval(containing: selection.anchor, dayStartHour: model.statisticsDayStartHour),
+                                          now: context.date, filter: selection.filter, dayStartHour: model.statisticsDayStartHour)
             GeometryReader { geometry in
                 let compact = geometry.size.height < 520
                 VStack(spacing: compact ? 12 : 16) {
@@ -80,6 +80,15 @@ struct StatisticsView: View {
                 Spacer(minLength: 8)
                 VStack(alignment: .trailing, spacing: compact ? 4 : 6) {
                     HStack(spacing: 8) {
+                        StatisticsPeriodNavigation(
+                            currentLabel: selection.period == .day ? "Today" : selection.period == .week ? "This week" : "This month",
+                            canMoveForward: report.interval.end <= now,
+                            canReturnToCurrent: now < report.interval.start || now >= report.interval.end,
+                            previous: { selection.move(-1, dayStartHour: model.statisticsDayStartHour) },
+                            current: { selection.anchor = now },
+                            next: { selection.move(1, dayStartHour: model.statisticsDayStartHour) }
+                        )
+                        .fixedSize()
                         Picker("Period", selection: $selection.period) {
                             Text("Day").tag(StatisticsPeriod.day)
                             Text("Week").tag(StatisticsPeriod.week)
@@ -89,18 +98,6 @@ struct StatisticsView: View {
                         .pickerStyle(.menu)
                         .fixedSize()
                         .accessibilityLabel("Statistics period")
-                        HStack(spacing: 6) {
-                            Button { selection.move(-1) } label: { Text(Image(systemName: "chevron.left")) }
-                                .accessibilityLabel("Previous statistics period")
-                            Button(selection.period == .day ? "Today" : selection.period == .week ? "This week" : "This month") {
-                                selection.anchor = now
-                            }
-                            .accessibilityLabel("Current statistics period")
-                            Button { selection.move(1) } label: { Text(Image(systemName: "chevron.right")) }
-                                .disabled(report.interval.end > now)
-                                .accessibilityLabel("Next statistics period")
-                        }
-                        .fixedSize()
                     }
                     Text(periodLabel(report.interval))
                         .font(.callout).foregroundStyle(.secondary)
@@ -158,7 +155,7 @@ struct StatisticsView: View {
                                 .frame(height: height, alignment: .bottom)
                                 Text(dayLabel(day.interval.start))
                                     .font(.caption2)
-                                    .foregroundStyle(Calendar.autoupdatingCurrent.isDateInToday(day.interval.start) ? Color.blue : Color.secondary)
+                                    .foregroundStyle((day.interval.start <= now && now < day.interval.end) ? Color.blue : Color.secondary)
                                     .lineLimit(1)
                                     .frame(height: 16)
                             }
@@ -194,32 +191,31 @@ struct StatisticsView: View {
     }
 
     private func dayChart(_ report: StatisticsReport, compact: Bool) -> some View {
-        let trackY: CGFloat = compact ? 10 : 44
-        let trackHeight: CGFloat = compact ? 20 : 42
+        let trackY: CGFloat = compact ? 10 : 37
+        let trackHeight: CGFloat = compact ? 20 : 46
         return GeometryReader { geometry in
             let width = geometry.size.width
             let range = report.interval
-            let ticks = [0, 6, 12, 18].compactMap { hour in
-                Calendar.autoupdatingCurrent.date(bySettingHour: hour, minute: 0, second: 0, of: range.start)
-            } + [range.end]
+            let ticks = StatisticsDayBoundary(hour: model.statisticsDayStartHour).ticks(in: range)
             ZStack(alignment: .topLeading) {
-                ForEach(0..<5) { index in
-                    let time = ticks[index]
+                ForEach(ticks, id: \.self) { time in
                     let fraction = time.timeIntervalSince(range.start) / range.duration
                     Rectangle().fill(Color.primary.opacity(0.09))
-                        .frame(width: 1, height: compact ? 32 : 110).offset(x: width * fraction, y: 10)
+                        .frame(width: 1, height: compact ? 32 : 64)
+                        .offset(x: width * fraction, y: compact ? 10 : 28)
                     Text(model.timeFormat.string(from: time))
                         .font(.caption2).foregroundStyle(.secondary)
-                        .frame(width: 70, alignment: index == 0 ? .leading : index == 4 ? .trailing : .center)
-                        .position(x: index == 0 ? 35 : index == 4 ? width - 35 : width * fraction, y: compact ? 52 : 140)
+                        .lineLimit(1).minimumScaleFactor(0.75)
+                        .frame(width: width / 8)
+                        .position(x: width * fraction, y: compact ? 52 : 108)
                 }
-                RoundedRectangle(cornerRadius: 5).fill(Color.primary.opacity(0.05))
-                    .frame(height: trackHeight).offset(y: trackY)
+                RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.05))
+                    .frame(height: compact ? 20 : 64).offset(y: compact ? 10 : 28)
                 ForEach(report.sessions) { session in
                     let x = session.interval.start.timeIntervalSince(range.start) / range.duration * width
                     let length = session.duration / range.duration * width
                     Button { selection.select(.task(session.task.id)) } label: {
-                        chartBlock(RoundedRectangle(cornerRadius: 3), color: session.task.color.displayColor,
+                        chartBlock(RoundedRectangle(cornerRadius: 4), color: session.task.color.displayColor,
                                    isSelected: selection.filter == .task(session.task.id))
                             .opacity(selection.filter?.matches(session.task) ?? true ? 1 : 0.2)
                             .frame(width: max(1, length - 1), height: trackHeight)
@@ -236,7 +232,7 @@ struct StatisticsView: View {
                 }
             }
         }
-        .frame(height: compact ? 64 : 165)
+        .frame(height: compact ? 64 : 116)
     }
 
     private func chartBlock<S: InsettableShape>(_ shape: S, color: Color, isSelected: Bool = false) -> some View {
@@ -342,7 +338,9 @@ struct StatisticsView: View {
         if selection.period == .day { return interval.start.formatted(.dateTime.weekday(.wide).month(.abbreviated).day()) }
         if selection.period == .month { return interval.start.formatted(.dateTime.month(.wide).year()) }
         return interval.start.formatted(.dateTime.month(.abbreviated).day()) + " – " +
-            interval.end.addingTimeInterval(-1).formatted(.dateTime.month(.abbreviated).day().year())
+            StatisticsDayBoundary(hour: model.statisticsDayStartHour)
+                .date(containing: interval.end.addingTimeInterval(-1))
+                .formatted(.dateTime.month(.abbreviated).day().year())
     }
 
     private func dayLabel(_ date: Date) -> String {
@@ -353,6 +351,63 @@ struct StatisticsView: View {
 
     private func sessionDescription(_ session: StatisticsSession) -> String {
         "\(session.task.inputText), \(model.timeFormat.string(from: session.interval.start))–\(model.timeFormat.string(from: session.interval.end)), \(Self.duration(session.duration))"
+    }
+}
+
+private struct StatisticsPeriodNavigation: NSViewRepresentable {
+    var currentLabel: String
+    var canMoveForward: Bool
+    var canReturnToCurrent: Bool
+    var previous: () -> Void
+    var current: () -> Void
+    var next: () -> Void
+
+    func makeCoordinator() -> Coordinator { Coordinator(navigation: self) }
+
+    func makeNSView(context: Context) -> NSSegmentedControl {
+        let control = NSSegmentedControl()
+        control.segmentCount = 3
+        control.trackingMode = .momentary
+        control.segmentStyle = .automatic
+        control.controlSize = .regular
+        control.setAccessibilityLabel("Statistics navigation")
+        for (index, symbol, label) in [
+            (0, "chevron.left", "Previous statistics period"),
+            (2, "chevron.right", "Next statistics period")
+        ] {
+            control.setImage(NSImage(systemSymbolName: symbol, accessibilityDescription: label), forSegment: index)
+            control.setToolTip(label, forSegment: index)
+            control.setWidth(28, forSegment: index)
+        }
+        control.setToolTip("Current statistics period", forSegment: 1)
+        control.target = context.coordinator
+        control.action = #selector(Coordinator.navigate(_:))
+        return control
+    }
+
+    func updateNSView(_ control: NSSegmentedControl, context: Context) {
+        context.coordinator.navigation = self
+        control.setLabel(currentLabel, forSegment: 1)
+        control.setEnabled(canReturnToCurrent, forSegment: 1)
+        control.setEnabled(canMoveForward, forSegment: 2)
+        control.sizeToFit()
+        control.invalidateIntrinsicContentSize()
+    }
+
+    @MainActor
+    final class Coordinator: NSObject {
+        var navigation: StatisticsPeriodNavigation
+
+        init(navigation: StatisticsPeriodNavigation) { self.navigation = navigation }
+
+        @objc func navigate(_ control: NSSegmentedControl) {
+            switch control.selectedSegment {
+            case 0: navigation.previous()
+            case 1: navigation.current()
+            case 2: navigation.next()
+            default: break
+            }
+        }
     }
 }
 

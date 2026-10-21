@@ -238,6 +238,7 @@ enum SmokeCheck {
         try checkLoginItemSettings()
         let firstLaunch = model.defaultZoomHours == 8
         try require(model.defaultZoomHours == (firstLaunch ? 8 : 12), "Configured zoom must survive a fresh process")
+        try require(model.statisticsDayStartHour == (firstLaunch ? 0 : 4), "Statistics day start must survive a fresh process")
         try require(model.timeFormat == (firstLaunch ? .system : .twentyFourHour), "Time format must survive a fresh process")
         try require(model.resumeCountdownSeconds == (firstLaunch ? 9 : 15), "Resume countdown must survive a fresh process")
         try require(model.automaticResumeEnabled && model.shortBreakSeconds == (firstLaunch ? 300 : 30), "Resume preferences must survive a fresh process")
@@ -274,6 +275,8 @@ enum SmokeCheck {
         guard let slider = descendants(content).compactMap({ $0 as? NSSlider }).first else {
             throw NSError(domain: "LineSmokeCheck", code: 13, userInfo: [NSLocalizedDescriptionKey: "Native default zoom slider is missing"])
         }
+        window.setContentSize(NSSize(width: 900, height: 800))
+        try await settle()
         if ProcessInfo.processInfo.environment["LINE_SMOKE_CAPTURE"] == "1" {
             try checkInitialSliderThumb(slider, in: window, output: output)
         }
@@ -315,8 +318,15 @@ enum SmokeCheck {
             try require(model.store!.entries == entriesBeforeFormatChange, "Time format must preserve tracking records")
         }
         let settingsMenus = descendants(content).compactMap { $0 as? NSPopUpButton }
-        try require(settingsMenus.count == 3, "Time format, task order, and threshold must use native menus")
-        let taskOrderPicker = settingsMenus[1]
+        try require(settingsMenus.count == 4, "Time format, day start, task order, and threshold must use native menus")
+        let dayStartPicker = settingsMenus[1]
+        for hour in [6, 4] {
+            try await selectMenu(dayStartPicker, from: model.statisticsDayStartHour, to: hour)
+            try require(dayStartPicker.numberOfItems == 24, "Day start must offer every hour")
+            try require(model.statisticsDayStartHour == hour && model.settingsError == nil, "Day start must save immediately")
+            try require(model.store!.entries == entriesBeforeFormatChange, "Day start must preserve recorded entries")
+        }
+        let taskOrderPicker = settingsMenus[2]
         for order in [TaskOrder.alphabetical, .mostUsed, .recentlyUsed] {
             try await selectMenu(taskOrderPicker, from: TaskOrder.allCases.firstIndex(of: model.taskOrder)!,
                                  to: TaskOrder.allCases.firstIndex(of: order)!)
@@ -361,8 +371,8 @@ enum SmokeCheck {
         try require(model.resumeCountdownSeconds == 15 && model.settingsError == nil && model.store!.entries == entriesBeforeFormatChange,
                     "Leaving the field must save without changing tracking records")
         let menus = descendants(content).compactMap { $0 as? NSPopUpButton }
-        try require(menus.count == 3, "Time format, task order, and threshold must use native menus")
-        let thresholdPicker = menus[2]
+        try require(menus.count == 4, "Time format, day start, task order, and threshold must use native menus")
+        let thresholdPicker = menus[3]
         func selectThreshold(_ seconds: Int) async throws {
             var choices = [0, 30, 60, 120, 300, 600, 900, 1800, 3600]
             if !choices.contains(model.shortBreakSeconds) { choices.append(model.shortBreakSeconds) }
@@ -397,7 +407,7 @@ enum SmokeCheck {
         }
         for seconds in [0, 3600, 30] {
             try await selectThreshold(seconds)
-            try require(model.shortBreakSeconds == seconds && model.settingsError == nil, "Threshold menu must save the selected duration")
+            try require(model.shortBreakSeconds == seconds && model.settingsError == nil, "Threshold menu must save the selected duration: expected \(seconds), got \(model.shortBreakSeconds), items \(thresholdPicker.itemTitles)")
         }
         try await selectThreshold(-1)
         guard let sheet = window.attachedSheet, let sheetContent = sheet.contentView,
@@ -508,6 +518,8 @@ enum SmokeCheck {
         try require(model.store!.entries == entriesBeforeFormatChange, "About navigation must preserve tracking")
         try await enterCountdown("15")
         if ProcessInfo.processInfo.environment["LINE_SMOKE_CAPTURE"] == "1" {
+            window.setContentSize(NSSize(width: 900, height: 800))
+            try await settle()
             let returnedSlider = descendants(content).compactMap { $0 as? NSSlider }.first!
             try checkInitialSliderThumb(returnedSlider, in: window, output: output)
         }
@@ -680,12 +692,31 @@ enum SmokeCheck {
         state.search = ""
         state.period = .month
         try await settle()
-        try pressAccessibleControl(named: "Previous statistics period", in: content)
-        try await settle()
+        guard let periodNavigation = descendants(content).compactMap({ $0 as? NSSegmentedControl }).first(where: {
+            $0.segmentCount == 3 && $0.label(forSegment: 1) == "This month"
+        }) else {
+            throw NSError(domain: "LineSmokeCheck", code: 20,
+                          userInfo: [NSLocalizedDescriptionKey: "Statistics navigation is missing"])
+        }
+        try require(!periodNavigation.isEnabled(forSegment: 1), "Current period button must be disabled in the current period")
+        try require(!periodNavigation.isEnabled(forSegment: 2), "Next must be disabled in the current period")
+        func clickPeriodNavigation(at x: CGFloat) async throws {
+            let point = periodNavigation.convert(NSPoint(x: x, y: periodNavigation.bounds.midY), to: nil)
+            for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+                let event = NSEvent.mouseEvent(with: type, location: point, modifierFlags: [],
+                                              timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+                                              context: nil, eventNumber: 0, clickCount: 1, pressure: type == .leftMouseDown ? 1 : 0)!
+                NSApp.postEvent(event, atStart: false)
+            }
+            try await settle()
+        }
+        try await clickPeriodNavigation(at: 14)
         try require(state.anchor < yesterday, "Previous must move to an earlier month")
-        try pressAccessibleControl(named: "Current statistics period", in: content)
-        try await settle()
+        try require(periodNavigation.isEnabled(forSegment: 1), "Current period button must be enabled in a past period")
+        try require(periodNavigation.isEnabled(forSegment: 2), "Next must be enabled in a past period")
+        try await clickPeriodNavigation(at: periodNavigation.bounds.midX)
         try require(calendar.isDate(state.anchor, equalTo: .now, toGranularity: .month), "This month must restore the current month")
+        try require(!periodNavigation.isEnabled(forSegment: 1), "Returning to the current period must disable its button")
         func capture(_ name: String) throws {
             guard ProcessInfo.processInfo.environment["LINE_SMOKE_CAPTURE"] == "1" else { return }
             let process = Process()
@@ -714,6 +745,29 @@ enum SmokeCheck {
         state.showDay(yesterday)
         try await settle()
         try capture("statistics-day")
+        model.setStatisticsDayStartHour(4)
+        state.anchor = yesterday.addingTimeInterval(12 * 3_600)
+        try await settle()
+        let shiftedRange = StatisticsPeriod.day.interval(containing: state.anchor, dayStartHour: 4)
+        let shiftedTicks = StatisticsDayBoundary(hour: 4).ticks(in: shiftedRange)
+        try capture("statistics-shifted-day")
+        try require(shiftedTicks.allSatisfy { accessibilityElement(named: model.timeFormat.string(from: $0), in: content) != nil },
+                    "Changing day start must update the visible timeline marks across midnight")
+        try require(calendar.component(.day, from: shiftedTicks.last!) != calendar.component(.day, from: shiftedRange.start),
+                    "The shifted chart must include the next morning")
+        let navigationState = StatisticsSelection()
+        navigationState.period = .day
+        let beforeBoundary = calendar.date(bySettingHour: 2, minute: 0, second: 0, of: yesterday)!
+        navigationState.anchor = beforeBoundary
+        navigationState.move(1, now: beforeBoundary, dayStartHour: 4)
+        try require(navigationState.anchor == beforeBoundary, "Next must not leave the current statistics day before its boundary")
+        navigationState.move(-1, now: beforeBoundary, dayStartHour: 4)
+        navigationState.move(1, now: beforeBoundary, dayStartHour: 4)
+        try require(navigationState.anchor == StatisticsPeriod.day.interval(containing: beforeBoundary, dayStartHour: 4).start,
+                    "Previous and next must navigate between shifted boundaries")
+        model.setStatisticsDayStartHour(0)
+        state.anchor = yesterday
+        try await settle()
         window.setContentSize(NSSize(width: 640, height: 600))
         try await settle()
         try require(accessibilityElement(named: "Search statistics", in: content) != nil, "Search must remain available at minimum width")
@@ -1923,7 +1977,8 @@ enum SmokeCheck {
 
     private static func accessibilityElement(named name: String, in element: Any) -> NSObject? {
         guard let object = element as? NSObject else { return nil }
-        if attribute("accessibilityLabel", of: object) as? String == name || attribute("accessibilityTitle", of: object) as? String == name {
+        if attribute("accessibilityLabel", of: object) as? String == name || attribute("accessibilityTitle", of: object) as? String == name ||
+            attribute("accessibilityValue", of: object) as? String == name {
             return object
         }
         for child in attribute("accessibilityChildren", of: object) as? [Any] ?? [] {

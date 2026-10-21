@@ -11,6 +11,7 @@ final class AppModel {
     private var interruptionError: String?
     private(set) var settingsError: String?
     var defaultZoomHours: Int { store?.defaultZoomHours ?? 8 }
+    var statisticsDayStartHour: Int { store?.statisticsDayStartHour ?? 0 }
     var timeFormat: TimeFormat { store?.timeFormat ?? .system }
     var taskOrder: TaskOrder { store?.taskOrder ?? .recentlyUsed }
     var resumeCountdownSeconds: Int { store?.resumeCountdownSeconds ?? TrackingStore.defaultResumeCountdownSeconds }
@@ -335,6 +336,16 @@ final class AppModel {
         guard let store else { return }
         do {
             try store.setDefaultZoomHours(hours)
+            settingsError = nil
+        } catch {
+            settingsError = error.localizedDescription
+        }
+    }
+
+    func setStatisticsDayStartHour(_ hour: Int) {
+        guard let store else { return }
+        do {
+            try store.setStatisticsDayStartHour(hour)
             settingsError = nil
         } catch {
             settingsError = error.localizedDescription

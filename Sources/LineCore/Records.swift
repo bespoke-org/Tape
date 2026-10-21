@@ -63,6 +63,7 @@ struct TrackingSnapshot: Codable {
     var entries: [TimeEntry] = []
     var checkpoint: Date?
     var defaultZoomHours: Int?
+    var statisticsDayStartHour: Int?
     var timeFormat: TimeFormat?
     var taskOrder: TaskOrder?
     var resumeCountdownSeconds: Int?
