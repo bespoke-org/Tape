@@ -89,3 +89,11 @@ Day timeline corners: match the menu bar timeline with an 8-point track radius a
 Stack selection refinement: keep every segment in the same order and at the same height when selecting a task or tag in week/month views. Gray out nonmatching shares in place, retaining separate segment outlines and outer corner rounding. Across groupings, highlight only the matching share within a segment. Keep full matching durations in the total and table. All 116 core tests passed, including stable geometry for both periods and overlapping tags; native Statistics checks and release build passed. Inspected filtered week/month screenshots and relaunched DayTape.
 
 Excluded segment styling: use the native tertiary label color for a darker, quieter gray in dark appearance, retaining stronger gray when Increase Contrast is enabled. Release build passed.
+
+Settings ordering: place Statistics between Tracking and Startup in General. Order the sidebar and status menu General, Statistics, About. Native main-window checks passed across two launches, including settings controls, navigation history, direct menu actions, and preference persistence. Screenshot inspected; release build passed.
+
+Menu labels: remove the literal ellipses from General Settings and Statistics. List card: use the same native secondary background as the visualization, keeping the table’s native row drawing and scrolling. Release builds passed.
+
+Grouping order: put Tags first and Tasks second, retaining Tags as the initial selection. Release build passed.
+
+Table corners: clip the table viewport, including its header and scrolling rows, to an 8-point rounded rectangle inside the card. Native Statistics checks and release build passed; screenshot inspected.

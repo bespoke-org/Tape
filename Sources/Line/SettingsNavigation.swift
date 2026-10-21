@@ -1,7 +1,7 @@
 import Observation
 
 enum SettingsPage: String, CaseIterable, Hashable {
-    case statistics, general, about
+    case general, statistics, about
 
     var title: String {
         switch self {
@@ -19,8 +19,8 @@ enum SettingsPage: String, CaseIterable, Hashable {
     }
     var menuTitle: String {
         switch self {
-        case .statistics: "Statistics…"
-        case .general: "General Settings…"
+        case .statistics: "Statistics"
+        case .general: "General Settings"
         case .about: "About DayTape"
         }
     }

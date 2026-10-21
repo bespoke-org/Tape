@@ -271,7 +271,7 @@ enum SmokeCheck {
         guard let sidebar = descendants(split.splitViewItems[0].viewController.view).compactMap({ $0 as? NSOutlineView }).first else {
             throw NSError(domain: "LineSmokeCheck", code: 12, userInfo: [NSLocalizedDescriptionKey: "Native sidebar is missing"])
         }
-        try require(sidebar.numberOfRows == 3 && sidebar.selectedRow == 1, "Sidebar must show Statistics, General, About, initially selecting General")
+        try require(sidebar.numberOfRows == 3 && sidebar.selectedRow == 0, "Sidebar must show General, Statistics, About, initially selecting General")
         guard let slider = descendants(content).compactMap({ $0 as? NSSlider }).first else {
             throw NSError(domain: "LineSmokeCheck", code: 13, userInfo: [NSLocalizedDescriptionKey: "Native default zoom slider is missing"])
         }
@@ -318,15 +318,15 @@ enum SmokeCheck {
             try require(model.store!.entries == entriesBeforeFormatChange, "Time format must preserve tracking records")
         }
         let settingsMenus = descendants(content).compactMap { $0 as? NSPopUpButton }
-        try require(settingsMenus.count == 4, "Time format, day start, task order, and threshold must use native menus")
-        let dayStartPicker = settingsMenus[1]
+        try require(settingsMenus.count == 4, "Time format, task order, threshold, and day start must use native menus")
+        let dayStartPicker = settingsMenus[3]
         for hour in [6, 4] {
             try await selectMenu(dayStartPicker, from: model.statisticsDayStartHour, to: hour)
             try require(dayStartPicker.numberOfItems == 24, "Day start must offer every hour")
             try require(model.statisticsDayStartHour == hour && model.settingsError == nil, "Day start must save immediately")
             try require(model.store!.entries == entriesBeforeFormatChange, "Day start must preserve recorded entries")
         }
-        let taskOrderPicker = settingsMenus[2]
+        let taskOrderPicker = settingsMenus[1]
         for order in [TaskOrder.alphabetical, .mostUsed, .recentlyUsed] {
             try await selectMenu(taskOrderPicker, from: TaskOrder.allCases.firstIndex(of: model.taskOrder)!,
                                  to: TaskOrder.allCases.firstIndex(of: order)!)
@@ -371,8 +371,8 @@ enum SmokeCheck {
         try require(model.resumeCountdownSeconds == 15 && model.settingsError == nil && model.store!.entries == entriesBeforeFormatChange,
                     "Leaving the field must save without changing tracking records")
         let menus = descendants(content).compactMap { $0 as? NSPopUpButton }
-        try require(menus.count == 4, "Time format, day start, task order, and threshold must use native menus")
-        let thresholdPicker = menus[3]
+        try require(menus.count == 4, "Time format, task order, threshold, and day start must use native menus")
+        let thresholdPicker = menus[2]
         func selectThreshold(_ seconds: Int) async throws {
             var choices = [0, 30, 60, 120, 300, 600, 900, 1800, 3600]
             if !choices.contains(model.shortBreakSeconds) { choices.append(model.shortBreakSeconds) }
@@ -504,7 +504,7 @@ enum SmokeCheck {
             try await settle()
         }
         try await navigate(0)
-        try require(sidebar.selectedRow == 1 && heading.stringValue == "General" && navigation.isEnabled(forSegment: 1),
+        try require(sidebar.selectedRow == 0 && heading.stringValue == "General" && navigation.isEnabled(forSegment: 1),
                     "Back must restore General and enable Forward (row=\(sidebar.selectedRow), heading=\(heading.stringValue), forward=\(navigation.isEnabled(forSegment: 1)))")
         try await navigate(1)
         try require(sidebar.selectedRow == 2 && heading.stringValue == "About", "Forward must restore About")
@@ -512,7 +512,7 @@ enum SmokeCheck {
         sidebar.selectRowIndexes(IndexSet(integer: 2), byExtendingSelection: false)
         try await settle()
         try require(!navigation.isEnabled(forSegment: 1), "Selecting a page after Back must clear forward history")
-        sidebar.selectRowIndexes(IndexSet(integer: 1), byExtendingSelection: false)
+        sidebar.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
         try await settle()
         try require(sidebar.enclosingScrollView?.frame.width == sidebarWidth, "Page navigation must preserve sidebar width")
         try require(model.store!.entries == entriesBeforeFormatChange, "About navigation must preserve tracking")
@@ -537,9 +537,9 @@ enum SmokeCheck {
         try await settle()
         try require(window.isMiniaturized && NSApp.activationPolicy() == .regular, "Minimizing must keep Dock presence")
         let actions = delegate.makeActionsMenu()
-        try require(actions.items.map(\.title) == ["Statistics…", "General Settings…", "About DayTape", "", "Quit DayTape"] && actions.items[3].isSeparatorItem,
-                    "Status menu must order Statistics, General, About, then a separator and Quit")
-        let general = actions.item(withTitle: "General Settings…")!
+        try require(actions.items.map(\.title) == ["General Settings", "Statistics", "About DayTape", "", "Quit DayTape"] && actions.items[3].isSeparatorItem,
+                    "Status menu must order General, Statistics, About, then a separator and Quit")
+        let general = actions.item(withTitle: "General Settings")!
         let about = actions.item(withTitle: "About DayTape")!
         try require(NSApp.sendAction(about.action!, to: about.target, from: about), "Status menu must open About")
         try await settle()
@@ -548,7 +548,7 @@ enum SmokeCheck {
         try require(sidebar.selectedRow == 2 && heading.stringValue == "About", "About menu item must select About even when General was minimized")
         try require(NSApp.sendAction(general.action!, to: general.target, from: general), "Status menu must open General Settings")
         try await settle()
-        try require(sidebar.selectedRow == 1 && heading.stringValue == "General" && delegate.mainWindowController?.window === window,
+        try require(sidebar.selectedRow == 0 && heading.stringValue == "General" && delegate.mainWindowController?.window === window,
                     "General Settings must select General in the same window")
         _ = delegate.applicationShouldHandleReopen(NSApp, hasVisibleWindows: true)
         try await settle()
@@ -602,7 +602,7 @@ enum SmokeCheck {
         let entries = store.entries
         let tasks = store.tasks
         let delegate = NSApp.delegate as! AppDelegate
-        let item = delegate.makeActionsMenu().item(withTitle: "Statistics…")!
+        let item = delegate.makeActionsMenu().item(withTitle: "Statistics")!
         try require(item.image != nil, "Statistics menu item must have its sidebar icon")
         try require(NSApp.sendAction(item.action!, to: item.target, from: item), "Open Statistics from the status menu")
         try await settle()

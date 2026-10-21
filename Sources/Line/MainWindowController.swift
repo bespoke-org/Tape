@@ -300,20 +300,6 @@ private struct SettingsView: View {
                 .accessibilityLabel("Time format")
                 .disabled(model.store == nil)
             }
-            Section("Statistics") {
-                Picker(selection: Binding(get: { model.statisticsDayStartHour }, set: { model.setStatisticsDayStartHour($0) })) {
-                    ForEach(0..<24, id: \.self) { hour in
-                        Text(statisticsDayStartLabel(hour)).tag(hour)
-                    }
-                } label: {
-                    Text("Day starts at")
-                    Text("Earlier hours count toward the previous day in statistics.")
-                        .foregroundStyle(.secondary)
-                }
-                .pickerStyle(.menu)
-                .accessibilityLabel("Day starts at")
-                .disabled(model.store == nil)
-            }
             Section("Tracking") {
                 Picker(selection: Binding(get: { model.taskOrder }, set: { model.setTaskOrder($0) })) {
                     Text("Recently used").tag(TaskOrder.recentlyUsed)
@@ -352,6 +338,20 @@ private struct SettingsView: View {
                     Text("Include shorter breaks in the same entry. Choose Never to always start a new entry.")
                         .foregroundStyle(.secondary)
                 }
+            }
+            Section("Statistics") {
+                Picker(selection: Binding(get: { model.statisticsDayStartHour }, set: { model.setStatisticsDayStartHour($0) })) {
+                    ForEach(0..<24, id: \.self) { hour in
+                        Text(statisticsDayStartLabel(hour)).tag(hour)
+                    }
+                } label: {
+                    Text("Day starts at")
+                    Text("Earlier hours count toward the previous day in statistics.")
+                        .foregroundStyle(.secondary)
+                }
+                .pickerStyle(.menu)
+                .accessibilityLabel("Day starts at")
+                .disabled(model.store == nil)
             }
             Section("Startup") {
                 Toggle(isOn: Binding(get: { model.loginItem.isEnabled }, set: { model.loginItem.setEnabled($0) })) {

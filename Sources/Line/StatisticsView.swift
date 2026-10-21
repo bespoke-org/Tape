@@ -257,8 +257,8 @@ struct StatisticsView: View {
         return VStack(alignment: .leading, spacing: compact ? 8 : 12) {
             HStack {
                 Picker("Group by", selection: $selection.grouping) {
-                    Text("Tasks").tag(StatisticsGrouping.tasks)
                     Text("Tags").tag(StatisticsGrouping.tags)
+                    Text("Tasks").tag(StatisticsGrouping.tasks)
                 }
                 .labelsHidden().pickerStyle(.segmented).fixedSize()
                 .accessibilityLabel("Statistics grouping")
@@ -313,8 +313,9 @@ struct StatisticsView: View {
                 }
             }
             .frame(minHeight: 60, maxHeight: .infinity)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
         }
-        .statisticsCard(padding: compact ? 12 : 18, background: Color(nsColor: .controlBackgroundColor))
+        .statisticsCard(padding: compact ? 12 : 18, background: .background.secondary)
     }
 
     static func duration(_ seconds: TimeInterval) -> String {
