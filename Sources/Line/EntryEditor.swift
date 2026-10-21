@@ -7,14 +7,15 @@ struct EntryEditor: View {
     let store: TrackingStore
     let entry: TimeEntry
     @State private var taskName: String
-    @FocusState private var isTaskFocused: Bool
+    @State private var isTaskFocused = false
+    @State private var tagCompletion = TaskTagCompletion()
     @State private var confirmsDeletion = false
 
     init(model: AppModel, store: TrackingStore, entry: TimeEntry) {
         self.model = model
         self.store = store
         self.entry = entry
-        _taskName = State(initialValue: store.task(id: entry.taskID)?.name ?? "")
+        _taskName = State(initialValue: store.task(id: entry.taskID)?.inputText ?? "")
     }
 
     var body: some View {
@@ -24,11 +25,10 @@ struct EntryEditor: View {
                     TaskColorPicker(model: model, task: task)
                         .accessibilityLabel("Task color")
                 }
-                TextField("Name a new task", text: $taskName)
-                    .textFieldStyle(.plain)
-                    .focused($isTaskFocused)
-                    .onSubmit { chooseTask(taskName) }
-                    .accessibilityLabel("Entry task name or search")
+                TaskInputField(text: $taskName, isFocused: $isTaskFocused, tags: store.tags,
+                               completion: tagCompletion, accessibilityLabel: "Entry task name or search",
+                               submit: { chooseTask(taskName) }, cancel: { model.cancelEntry() })
+                    .frame(height: 22)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 3)
                     .overlay {
@@ -44,18 +44,16 @@ struct EntryEditor: View {
                 .help("Delete entry")
                 .accessibilityLabel("Delete entry")
             }
+            if isTaskFocused { TagCompletionList(completion: tagCompletion) }
             if isTaskFocused && !matches.isEmpty {
                 ScrollView {
                     LazyVStack(spacing: 2) {
                         ForEach(matches) { task in
-                            Button { chooseTask(task.name) } label: {
-                                HStack(spacing: 8) {
-                                    Circle().fill(task.color.displayColor).frame(width: 8, height: 8)
-                                    Text(task.name).lineLimit(1)
-                                    Spacer()
-                                }
-                                .padding(.horizontal, 8).padding(.vertical, 7)
-                                .contentShape(Rectangle())
+                            Button {
+                                taskName = task.inputText
+                                isTaskFocused = true
+                            } label: {
+                                TaskSuggestionLabel(task: task)
                             }
                             .buttonStyle(.borderless)
                             .accessibilityLabel("Use \(task.name)")
@@ -65,11 +63,8 @@ struct EntryEditor: View {
                 .frame(height: min(CGFloat(matches.count) * 32, 108))
             }
         }
-        .onChange(of: store.task(id: entry.taskID)?.name) { _, name in
-            if !isTaskFocused { taskName = name ?? "" }
-        }
-        .onChange(of: isTaskFocused) { _, focused in
-            if !focused { taskName = store.task(id: entry.taskID)?.name ?? "" }
+        .onChange(of: store.task(id: entry.taskID)?.inputText) { _, text in
+            if !isTaskFocused { taskName = text ?? "" }
         }
         .alert("Delete this entry?", isPresented: $confirmsDeletion) {
             Button("Cancel", role: .cancel) {}
@@ -81,14 +76,14 @@ struct EntryEditor: View {
     }
 
     private var matches: [TrackedTask] {
-        store.taskSuggestions(matching: taskName)
+        store.taskSuggestions(matching: tagCompletion.query(for: taskName))
     }
 
     private func chooseTask(_ name: String) {
-        guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        guard !TaskInput(name).name.isEmpty else { return }
         if model.reassignEntry(id: entry.id, taskName: name) {
             taskName = store.entries.first(where: { $0.id == entry.id })
-                .flatMap { store.task(id: $0.taskID)?.name } ?? name
+                .flatMap { store.task(id: $0.taskID)?.inputText } ?? name
             isTaskFocused = false
         }
     }

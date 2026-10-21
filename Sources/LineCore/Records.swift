@@ -23,6 +23,27 @@ public struct TrackedTask: Identifiable, Codable, Equatable, Sendable {
     public let id: UUID
     public let name: String
     public let color: TaskColor
+    public let tags: [String]
+
+    public init(id: UUID, name: String, color: TaskColor, tags: [String] = []) {
+        self.id = id
+        self.name = name
+        self.color = color
+        self.tags = TaskInput.normalizedTags(tags)
+    }
+
+    private enum CodingKeys: String, CodingKey { case id, name, color, tags }
+
+    public init(from decoder: any Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(id: try values.decode(UUID.self, forKey: .id),
+                  name: try values.decode(String.self, forKey: .name),
+                  color: try values.decode(TaskColor.self, forKey: .color),
+                  tags: try values.decodeIfPresent([String].self, forKey: .tags) ?? [])
+    }
+
+    public var inputText: String { TaskInput.text(name: name, tags: tags) }
+    public var tagText: String { tags.map { ":" + $0 }.joined(separator: " ") }
 }
 
 public struct TimeEntry: Identifiable, Codable, Equatable, Sendable {

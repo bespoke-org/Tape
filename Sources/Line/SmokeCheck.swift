@@ -20,6 +20,13 @@ enum SmokeCheck {
             try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
             try require(NSApp.activationPolicy() == .accessory, "App must have no Dock icon")
             try require(button.image != nil, "Status item must have an icon")
+            if ProcessInfo.processInfo.environment["LINE_SMOKE_TAGS"] == "1" {
+                try await checkTags(button: button, popover: popover, model: model, output: output)
+                try Data("PASS: inline tags, native completion keys, search, editing, cleanup, and tracking continuity.\n".utf8)
+                    .write(to: output.appendingPathComponent("result.txt"))
+                NSApp.terminate(nil)
+                return
+            }
             if ProcessInfo.processInfo.environment["LINE_SMOKE_MAIN_WINDOW"] == "1" {
                 try await checkMainWindow(button: button, popover: popover, model: model, output: output)
                 try Data("PASS: explicit single-window opening, native slider, default zoom, draft dismissal, frame restoration, minimize/reopen, Command-comma/Command-W, Dock policy, and tracking continuity.\n".utf8)
@@ -722,22 +729,24 @@ enum SmokeCheck {
         try require(model.editingEntryID == nil && store.entries == beforeDeselect && store.runningEntry?.id == running.id,
                     "Clicking empty timeline space must deselect without changing entries or stopping tracking")
         try store.updateEntry(id: original.id, taskID: original.taskID, start: original.start, end: completed.start)
-        try clickEntry(completed.start)
-        try require(model.editingEntryID == completed.id, "A shared boundary must select the later entry")
+        // Pick one pixel inside the later entry to avoid a float round-trip landing before the boundary.
+        try clickEntry(completed.start + model.timeline.span / width)
+        try require(model.editingEntryID == completed.id, "The right side of a shared boundary must select the later entry")
         model.cancelEntry()
         let sharedBoundary = model.timeline.fraction(for: completed.start, now: .now)
         hover(completed.start - model.timeline.span / width)
         try require(NSCursor.current == EntryResizeCursor.end, "Left of a shared boundary must target the earlier entry's end")
         hover(completed.start + model.timeline.span / width)
         try require(NSCursor.current == EntryResizeCursor.start, "Right of a shared boundary must target the later entry's start")
-        let resizeTo = model.timeline.fraction(for: completed.start + 120, now: .now)
+        // At the default eight-hour zoom, two minutes is below the three-pixel drag threshold.
+        let resizeTo = model.timeline.fraction(for: completed.start + 300, now: .now)
         try draw(sharedBoundary + 1 / width, resizeTo, in: popover, finish: false)
         hover(original.start)
         try require(NSCursor.current == EntryResizeCursor.start && model.resizingEntryID == completed.id,
-                    "The chosen bracket must stay attached to its entry during dragging")
+                    "The chosen bracket must stay attached to its entry during dragging (startCursor=\(NSCursor.current == EntryResizeCursor.start), expectedEntry=\(model.resizingEntryID == completed.id), drawing=\(model.isDrawing))")
         let releasePoint = hoverInput.convert(NSPoint(x: hoverInput.bounds.width * resizeTo, y: 60), to: nil)
         _ = hoverInput.handle(TimelineTestEvent(type: .leftMouseUp, window: hoverInput.window!, location: releasePoint))
-        try require(store.entries[1].start == completed.start + 120 && store.entries[0].end == completed.start,
+        try require(store.entries[1].start == completed.start + 300 && store.entries[0].end == completed.start,
                     "Dragging inside the later entry must resize its start at a shared boundary")
         try store.updateEntry(id: completed.id, taskID: completed.taskID, start: completed.start, end: completed.end)
         try store.updateEntry(id: original.id, taskID: original.taskID, start: original.start, end: original.end)
@@ -809,7 +818,7 @@ enum SmokeCheck {
                     "Choosing a swatch must save the task color immediately")
         let colorFrame = colorPicker.convert(colorPicker.bounds, to: nil)
         guard let searchField = descendants(try contentView(popover)).compactMap({ $0 as? NSTextField })
-            .first(where: { $0.placeholderString == "Name a new task" }) else {
+            .first(where: { $0.accessibilityLabel() == "Entry task name or search" }) else {
             throw NSError(domain: "LineSmokeCheck", code: 16, userInfo: [NSLocalizedDescriptionKey: "Entry task search is missing"])
         }
         let searchFrame = searchField.convert(searchField.bounds, to: nil)
@@ -845,17 +854,17 @@ enum SmokeCheck {
         try require(store.entries.count == 2 && store.task(id: original.taskID) == nil, "Confirmed deletion must prune the unused task")
 
         let from = model.timeline.fraction(for: completed.start, now: .now)
-        let to = model.timeline.fraction(for: base - 1_920, now: .now)
+        let to = model.timeline.fraction(for: base - 2_100, now: .now)
         try draw(from, to, in: popover)
         try await settle()
-        try require(store.entries[0].start == base - 1_920, "Dragging a completed edge must resize it")
+        try require(store.entries[0].start == base - 2_100, "Dragging a completed edge must resize it")
         try require(store.runningEntry?.id == running.id, "Resizing history must leave tracking alone")
 
         try clickEntry(base - 300)
         try await settle()
         try require(model.editingEntryID == running.id, "Running entries must be editable")
         guard let taskSearch = descendants(try contentView(popover)).compactMap({ $0 as? NSTextField })
-            .first(where: { $0.placeholderString == "Name a new task" }) else {
+            .first(where: { $0.accessibilityLabel() == "Entry task name or search" }) else {
             throw NSError(domain: "LineSmokeCheck", code: 17, userInfo: [NSLocalizedDescriptionKey: "Running entry task search is missing"])
         }
         _ = taskSearch.window?.makeFirstResponder(taskSearch)
@@ -873,8 +882,11 @@ enum SmokeCheck {
         try await settle()
         try pressAccessibleControl(named: "Use Keep", in: contentView(popover))
         try await settle()
+        try require(store.runningTask?.name == "New assignment", "Choosing an editor suggestion must wait for Return")
+        try enterTaskName("Keep", in: popover)
+        try await settle()
         try require(store.runningEntry?.taskID == completed.taskID && store.tasks.count == 1,
-                    "Choosing a suggestion must reuse its task and prune the abandoned task")
+                    "Confirming a suggestion must reuse its task and prune the abandoned task")
         try requireAnchored(popover, to: button)
         try clickEntry(base - 300)
         try await settle()
@@ -894,7 +906,7 @@ enum SmokeCheck {
         try await settle()
         try require(store.runningEntry?.id == remaining.id && store.runningEntry?.start == remaining.start && store.entries.count == 1,
                     "Releasing a resized end at Now must continue the same entry")
-        let movedStart = remaining.start + 120
+        let movedStart = remaining.start + 300
         try draw(model.timeline.fraction(for: remaining.start, now: .now),
                  model.timeline.fraction(for: movedStart, now: .now), in: popover)
         try require(store.runningEntry?.id == remaining.id && store.runningEntry?.start == movedStart,
@@ -1532,6 +1544,144 @@ enum SmokeCheck {
             throw NSError(domain: "LineSmokeCheck", code: 2, userInfo: [NSLocalizedDescriptionKey: "Popover has no content"])
         }
         return view
+    }
+
+    private static func checkTags(button: NSStatusBarButton, popover: NSPopover, model: AppModel, output: URL) async throws {
+        try await settle()
+        let store = model.store!
+        let base = Date.now
+        try store.createEntry(named: "Study :Универ :deepwork", selection: store.prepareEntry(from: base - 1_200, to: base - 900))
+        try store.createEntry(named: "Coding :coding", selection: store.prepareEntry(from: base - 600, to: base - 300))
+        try clickStatusItem(button)
+        try await settle()
+        try await openPicker(named: "Start task", in: popover)
+
+        func field() throws -> NSTextField {
+            guard let field = descendants(try contentView(popover)).compactMap({ $0 as? NSTextField }).first(where: \.isEditable) else {
+                throw NSError(domain: "LineSmokeCheck", code: 30)
+            }
+            return field
+        }
+        func key(_ characters: String, _ code: UInt16) throws {
+            let window = try field().window!
+            window.sendEvent(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [],
+                timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber, context: nil,
+                characters: characters, charactersIgnoringModifiers: characters, isARepeat: false, keyCode: code)!)
+        }
+
+        try enterTaskName("Building :de DayLine", in: popover, submit: false)
+        let middleEditor = try field().currentEditor() as! NSTextView
+        middleEditor.setSelectedRange(NSRange(location: ("Building :de" as NSString).length, length: 0))
+        try await settle()
+        try pressAccessibleControl(named: "Insert tag :deepwork", in: contentView(popover))
+        try await settle()
+        try require(TaskInput(try field().stringValue) == TaskInput("Building DayLine :deepwork"),
+                    "Clicking a completion at the caret must preserve the surrounding name")
+        try require(store.runningEntry == nil, "Clicking a completion must not submit the task")
+        try enterTaskName("Building DayLine :dayline :coding :deep", in: popover, submit: false)
+        try await settle()
+        try require(accessibilityElement(named: "Insert tag :deepwork", in: contentView(popover)) != nil, "Tag prefix must offer saved tags")
+        try key("", 125)
+        try key("\t", 48)
+        try await settle()
+        try require(try field().stringValue == "Building DayLine :dayline :coding :deepwork ", "Tab must insert a selected tag as plain text")
+        try require(store.runningEntry == nil, "Accepting a completion must not start tracking")
+        try key("\r", 36)
+        try await settle()
+        try require(store.runningTask?.name == "Building DayLine" && store.runningTask?.tags == ["dayline", "coding", "deepwork"],
+                    "Return must save separate task tags")
+        let running = store.runningEntry!
+
+        try await openPicker(named: "Switch task", in: popover)
+        try enterTaskName("Building DayLine :Ун", in: popover, submit: false)
+        try await settle()
+        try require(accessibilityElement(named: "Insert tag :универ", in: contentView(popover)) != nil, "Cyrillic completion must ignore case")
+        try key("", 125)
+        try key("\r", 36)
+        try await settle()
+        try require(try field().stringValue.hasSuffix(":универ "), "Return with a selection must only complete the tag")
+        try require(store.runningEntry == running, "Completion must preserve tracking")
+        try key("\r", 36)
+        try await settle()
+        try require(store.runningEntry == running && store.runningTask!.tags.contains("универ"), "Adding tags must not split a running entry")
+
+        try await openPicker(named: "Switch task", in: popover)
+        try enterTaskName(":coding ", in: popover, submit: false)
+        try await settle()
+        try require(accessibilityElement(named: "Switch to Study", in: contentView(popover)) == nil, "Completed tags must filter tasks")
+        try require(accessibilityElement(named: "Switch to Building DayLine", in: contentView(popover)) != nil, "Tag search must find matching tasks")
+        try key("\r", 36)
+        try await settle()
+        try require(store.runningEntry == running && store.tasks.count == 3, "Tag-only input must not create a task")
+
+        try enterTaskName("Building DayLine :co", in: popover, submit: false)
+        try await settle()
+        try key("\u{1b}", 53)
+        try await settle()
+        try require(accessibilityElement(named: "Insert tag :coding", in: contentView(popover)) == nil, "Escape must dismiss completion")
+        try require(try field().stringValue == "Building DayLine :co", "First Escape must preserve the draft")
+        try key("\u{1b}", 53)
+        try await settle()
+        try requirePickerHidden(popover)
+
+        try await openPicker(named: "Switch task", in: popover)
+        try enterTaskName("Building DayLine :co", in: popover, submit: false)
+        try await settle()
+        try key("\r", 36)
+        try await settle()
+        try require(store.runningTask!.tags.contains("co") && store.runningEntry == running, "Return without a selected suggestion must submit the typed tag")
+
+        try await openPicker(named: "Switch task", in: popover)
+        try enterTaskName("Building :newtag", in: popover, submit: false)
+        try await settle()
+        try pressAccessibleControl(named: "Switch to Building DayLine", in: contentView(popover))
+        try await settle()
+        try require(store.runningEntry == running && store.runningTask!.tags.contains("newtag"), "Choosing a task must retain typed tags")
+
+        model.editEntry(id: running.id)
+        try await settle()
+        try require(try field().stringValue == store.runningTask!.inputText, "Editor must include saved tags")
+        try enterTaskName("Building DayLine :co", in: popover, submit: false)
+        try await settle()
+        try key("\u{1b}", 53)
+        try await settle()
+        try require(model.editingEntryID == running.id && store.runningTask!.tags.contains("newtag"),
+                    "First Escape in the editor must dismiss completion without canceling or saving the draft")
+        try key("\u{1b}", 53)
+        try await settle()
+        try require(model.editingEntryID == nil && store.runningTask!.tags.contains("newtag"),
+                    "Second Escape must discard the edited tag draft")
+        model.editEntry(id: running.id)
+        try await settle()
+        try enterTaskName("Building DayLine :research", in: popover)
+        try await settle()
+        try require(store.runningEntry == running && store.runningTask?.tags == ["research"], "Editing replaces task tags without changing entry time")
+        try require(!store.tags.contains("newtag") && !store.tags.contains("co"), "Unused tags must disappear")
+        try enterTaskName("Study", in: popover, submit: false)
+        try await settle()
+        try pressAccessibleControl(named: "Use Study", in: contentView(popover))
+        try await settle()
+        try require(store.runningTask?.name == "Building DayLine", "Selecting another task must wait for confirmation")
+        try require(try field().stringValue == "Study :универ :deepwork", "Selection must load destination tags without source tags")
+        try key("\r", 36)
+        try await settle()
+        try require(store.runningTask?.name == "Study" && store.runningTask?.tags == ["универ", "deepwork"], "Return must confirm the destination tags")
+        try require(!store.tags.contains("research"), "Removing the last source entry must prune its tags")
+        if ProcessInfo.processInfo.environment["LINE_SMOKE_CAPTURE"] == "1", let window = popover.contentViewController?.view.window {
+            let capture = Process()
+            capture.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+            capture.arguments = ["-x", "-o", "-l", String(window.windowNumber), output.appendingPathComponent("tag-editor.png").path]
+            try capture.run()
+            capture.waitUntilExit()
+        }
+        try enterTaskName("Study", in: popover)
+        try await settle()
+        try require(store.runningTask?.tags.isEmpty == true && store.tags == ["coding"], "Removing tags must clear all entries for the task")
+        try enterTaskName("Study :discarded", in: popover, submit: false)
+        try key("\u{1b}", 53)
+        try await settle()
+        try require(store.runningTask?.tags.isEmpty == true, "Cancel must discard tag edits")
+        try requireAnchored(popover, to: button)
     }
 
     private static func enterTaskName(_ name: String, in popover: NSPopover, submit: Bool = true) throws {

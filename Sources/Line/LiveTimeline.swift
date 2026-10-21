@@ -228,6 +228,6 @@ struct LiveTimeline: View {
     private func entryDescription(_ entry: TimeEntry, task: TrackedTask) -> String {
         let start = model.timeFormat.string(from: entry.start, includeDate: true)
         let end = entry.end.map { model.timeFormat.string(from: $0, includeDate: true) } ?? "now, tracking"
-        return "\(task.name), \(start) to \(end)"
+        return "\(task.inputText), \(start) to \(end)"
     }
 }

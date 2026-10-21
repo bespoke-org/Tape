@@ -59,9 +59,30 @@ public final class TrackingStore {
     }
 
     public func taskSuggestions(matching query: String) -> [TrackedTask] {
-        let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        let matches = tasks.filter { query.isEmpty || $0.name.localizedCaseInsensitiveContains(query) }
+        let input = TaskInput(query)
+        let matches = tasks.filter { task in
+            (input.name.isEmpty || task.name.localizedCaseInsensitiveContains(input.name))
+                && input.tags.allSatisfy { task.tags.contains($0) }
+        }
         return taskOrder.sorted(matches, entries: entries)
+    }
+
+    public var tags: [String] {
+        Set(tasks.flatMap(\.tags)).sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+    }
+
+    private func resolveTask(_ input: TaskInput, replacingTags: Bool = false,
+                             in candidate: inout TrackingSnapshot) -> TrackedTask {
+        if let index = candidate.tasks.firstIndex(where: { $0.name.caseInsensitiveCompare(input.name) == .orderedSame }) {
+            let existing = candidate.tasks[index]
+            let task = TrackedTask(id: existing.id, name: existing.name, color: existing.color,
+                                   tags: replacingTags ? input.tags : existing.tags + input.tags)
+            candidate.tasks[index] = task
+            return task
+        }
+        let task = TrackedTask(id: UUID(), name: input.name, color: initialColor(in: candidate), tags: input.tags)
+        candidate.tasks.append(task)
+        return task
     }
 
     public func entries(overlapping range: DateInterval, now: Date) -> ArraySlice<TimeEntry> {
@@ -80,17 +101,17 @@ public final class TrackingStore {
     }
 
     public func startTask(named rawName: String) throws {
-        let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !name.isEmpty else { throw TrackingError.emptyTaskName }
+        let input = TaskInput(rawName)
+        guard !input.name.isEmpty else { throw TrackingError.emptyTaskName }
         var candidate = snapshot
-        let existingTask = candidate.tasks.first { $0.name.caseInsensitiveCompare(name) == .orderedSame }
-        if let existingTask, runningTask?.id == existingTask.id { return }
+        if let runningTask, runningTask.name.caseInsensitiveCompare(input.name) == .orderedSame {
+            let task = resolveTask(input, in: &candidate)
+            if runningTask.tags != task.tags { try commit(candidate) }
+            return
+        }
         let instant = try checkedInstant()
         finishRunning(in: &candidate, at: instant)
-        let task = existingTask ?? TrackedTask(id: UUID(), name: name, color: initialColor(in: candidate))
-        if !candidate.tasks.contains(where: { $0.id == task.id }) {
-            candidate.tasks.append(task)
-        }
+        let task = resolveTask(input, in: &candidate)
         candidate.entries.append(TimeEntry(id: UUID(), taskID: task.id, start: instant, end: nil))
         candidate.checkpoint = instant
         try commit(candidate)
@@ -137,15 +158,13 @@ public final class TrackingStore {
     }
 
     public func createEntry(named rawName: String, selection: EntrySelection) throws {
-        let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !name.isEmpty else { throw TrackingError.emptyTaskName }
+        let input = TaskInput(rawName)
+        guard !input.name.isEmpty else { throw TrackingError.emptyTaskName }
         let instant = try checkedInstant()
         try validate(selection, at: instant)
         var candidate = snapshot
         if selection.overwritesExisting { removeOverlaps(with: selection, from: &candidate, at: instant) }
-        let task = candidate.tasks.first { $0.name.caseInsensitiveCompare(name) == .orderedSame }
-            ?? TrackedTask(id: UUID(), name: name, color: initialColor(in: candidate))
-        if !candidate.tasks.contains(where: { $0.id == task.id }) { candidate.tasks.append(task) }
+        let task = resolveTask(input, in: &candidate)
         let entry = TimeEntry(id: UUID(), taskID: task.id, start: selection.start, end: selection.end)
         let index = candidate.entries.firstIndex { $0.start >= entry.start } ?? candidate.entries.endIndex
         candidate.entries.insert(entry, at: index)
@@ -250,20 +269,18 @@ public final class TrackingStore {
     public func setTaskColor(id: UUID, color: TaskColor) throws {
         guard let index = tasks.firstIndex(where: { $0.id == id }) else { throw TrackingError.missingTask }
         var candidate = snapshot
-        candidate.tasks[index] = TrackedTask(id: id, name: tasks[index].name, color: color)
+        candidate.tasks[index] = TrackedTask(id: id, name: tasks[index].name, color: color, tags: tasks[index].tags)
         try commit(candidate)
     }
 
     public func reassignEntry(id: UUID, taskName rawName: String) throws {
-        let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !name.isEmpty else { throw TrackingError.emptyTaskName }
+        let input = TaskInput(rawName)
+        guard !input.name.isEmpty else { throw TrackingError.emptyTaskName }
         guard let index = entries.firstIndex(where: { $0.id == id }) else { throw TrackingError.missingEntry }
         var candidate = snapshot
-        let task = tasks.first { $0.name.caseInsensitiveCompare(name) == .orderedSame }
-            ?? TrackedTask(id: UUID(), name: name, color: initialColor(in: candidate))
+        let task = resolveTask(input, replacingTags: true, in: &candidate)
         let entry = entries[index]
-        guard task.id != entry.taskID else { return }
-        if !candidate.tasks.contains(where: { $0.id == task.id }) { candidate.tasks.append(task) }
+        if task.id == entry.taskID && task == self.task(id: entry.taskID) { return }
         candidate.entries[index] = TimeEntry(id: entry.id, taskID: task.id, start: entry.start, end: entry.end)
         try commit(candidate)
     }

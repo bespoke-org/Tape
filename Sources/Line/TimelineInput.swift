@@ -158,7 +158,11 @@ final class TimelineInputView: NSView {
         }
         if event.type == .keyDown {
             guard event.keyCode == 53, window.attachedSheet == nil, NSApp.modalWindow == nil else { return false }
-            guard isDrawing || isResizing else { return cancelEdit() }
+            guard isDrawing || isResizing else {
+                // The task field dismisses tag completion before canceling its draft.
+                if (window.firstResponder as? NSTextView)?.isFieldEditor == true { return false }
+                return cancelEdit()
+            }
             dragOrigin = nil
             isDrawing = false
             draggingEdge = nil

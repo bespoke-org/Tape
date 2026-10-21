@@ -8,12 +8,13 @@ struct TrackingPopover: View {
     let contentSizeDidChange: (CGSize) -> Void
     @State private var taskName = ""
     @State private var isTaskPickerShown = false
-    @FocusState private var isTaskFieldFocused: Bool
+    @State private var isTaskFieldFocused = false
+    @State private var tagCompletion = TaskTagCompletion()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var trimmedName: String { taskName.trimmingCharacters(in: .whitespacesAndNewlines) }
     private var matches: [TrackedTask] {
-        model.store?.taskSuggestions(matching: taskName) ?? []
+        model.store?.taskSuggestions(matching: tagCompletion.query(for: taskName)) ?? []
     }
     private var taskListBottomInset: CGFloat {
         isTaskPickerShown && !matches.isEmpty && model.entryError == nil && model.errorMessage == nil ? 20 : 0
@@ -177,11 +178,10 @@ struct TrackingPopover: View {
     private func taskPicker(store: TrackingStore) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                TextField("Name a new task", text: $taskName)
-                    .textFieldStyle(.plain)
-                    .focused($isTaskFieldFocused)
-                    .onSubmit { start(trimmedName) }
-                    .accessibilityLabel("Task name or search")
+                TaskInputField(text: $taskName, isFocused: $isTaskFieldFocused, tags: store.tags,
+                               completion: tagCompletion, accessibilityLabel: "Task name or search",
+                               submit: { start(trimmedName) }, cancel: { closeTaskPicker() })
+                    .frame(height: 22)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 3)
                     .overlay {
@@ -191,20 +191,15 @@ struct TrackingPopover: View {
                     }
                 Button(pickerAction(store: store)) { start(trimmedName) }
                     .buttonStyle(.glassProminent)
-                    .disabled(trimmedName.isEmpty)
+                    .disabled(TaskInput(taskName).name.isEmpty)
             }
+            if isTaskFieldFocused { TagCompletionList(completion: tagCompletion) }
             if !matches.isEmpty {
                 ScrollView {
                     LazyVStack(spacing: 2) {
                         ForEach(matches) { task in
-                            Button { start(task.name) } label: {
-                                HStack(spacing: 8) {
-                                    Circle().fill(task.color.displayColor).frame(width: 8, height: 8)
-                                    Text(task.name).lineLimit(1)
-                                    Spacer()
-                                }
-                                .padding(.horizontal, 8).padding(.vertical, 7)
-                                .contentShape(Rectangle())
+                            Button { start(TaskInput.text(name: task.name, tags: TaskInput(taskName).tags)) } label: {
+                                TaskSuggestionLabel(task: task)
                             }
                             .buttonStyle(.borderless)
                             .accessibilityLabel("\(model.entrySelection != nil ? "Use" : store.runningTask == nil ? "Start" : "Switch to") \(task.name)")
@@ -218,7 +213,7 @@ struct TrackingPopover: View {
     }
 
     private func start(_ name: String) {
-        guard !name.isEmpty else { return }
+        guard !TaskInput(name).name.isEmpty else { return }
         let saved = model.entrySelection != nil ? model.createSelectedEntry(named: name) : model.start(name)
         if saved { closeTaskPicker() }
     }
