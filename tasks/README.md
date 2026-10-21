@@ -6,6 +6,7 @@ See [task tracking](../docs/issue-tracker.md) for the workflow and commands.
 
 ## Current additions
 
+- [Task picker ordering](20261021-103152/TASK.md)
 - [Settings sections in the menu bar menu](20261021-074432/TASK.md)
 - [About page](20261021-073630/TASK.md)
 - [Login startup, automatic resume, and short breaks](20261021-065508/TASK.md)

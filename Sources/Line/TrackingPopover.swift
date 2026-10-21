@@ -13,9 +13,7 @@ struct TrackingPopover: View {
 
     private var trimmedName: String { taskName.trimmingCharacters(in: .whitespacesAndNewlines) }
     private var matches: [TrackedTask] {
-        (model.store?.tasks ?? []).filter {
-            trimmedName.isEmpty || $0.name.localizedCaseInsensitiveContains(trimmedName)
-        }.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        model.store?.taskSuggestions(matching: taskName) ?? []
     }
     private var taskListBottomInset: CGFloat {
         isTaskPickerShown && !matches.isEmpty && model.entryError == nil && model.errorMessage == nil ? 20 : 0

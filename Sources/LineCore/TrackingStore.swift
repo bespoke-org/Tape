@@ -14,6 +14,7 @@ public final class TrackingStore {
     public static let defaultZoomPresets = [1, 2, 4, 8, 12, 16, 24]
     public var defaultZoomHours: Int { Self.nearestZoomPreset(snapshot.defaultZoomHours ?? 8) }
     public var timeFormat: TimeFormat { snapshot.timeFormat ?? .system }
+    public var taskOrder: TaskOrder { snapshot.taskOrder ?? .recentlyUsed }
     public static let resumeCountdownRange = 1...60
     public static let defaultResumeCountdownSeconds = 9
     public var resumeCountdownSeconds: Int {
@@ -55,6 +56,12 @@ public final class TrackingStore {
 
     public func task(id: UUID) -> TrackedTask? {
         tasks.first { $0.id == id }
+    }
+
+    public func taskSuggestions(matching query: String) -> [TrackedTask] {
+        let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        let matches = tasks.filter { query.isEmpty || $0.name.localizedCaseInsensitiveContains(query) }
+        return taskOrder.sorted(matches, entries: entries)
     }
 
     public func entries(overlapping range: DateInterval, now: Date) -> ArraySlice<TimeEntry> {
@@ -318,6 +325,13 @@ public final class TrackingStore {
         guard format != timeFormat else { return }
         var candidate = snapshot
         candidate.timeFormat = format
+        try commit(candidate)
+    }
+
+    public func setTaskOrder(_ order: TaskOrder) throws {
+        guard order != taskOrder else { return }
+        var candidate = snapshot
+        candidate.taskOrder = order
         try commit(candidate)
     }
 

@@ -12,6 +12,7 @@ final class AppModel {
     private(set) var settingsError: String?
     var defaultZoomHours: Int { store?.defaultZoomHours ?? 8 }
     var timeFormat: TimeFormat { store?.timeFormat ?? .system }
+    var taskOrder: TaskOrder { store?.taskOrder ?? .recentlyUsed }
     var resumeCountdownSeconds: Int { store?.resumeCountdownSeconds ?? TrackingStore.defaultResumeCountdownSeconds }
     var automaticResumeEnabled: Bool { store?.automaticResumeEnabled ?? true }
     var shortBreakSeconds: Int { store?.shortBreakSeconds ?? 300 }
@@ -344,6 +345,16 @@ final class AppModel {
         guard let store else { return }
         do {
             try store.setTimeFormat(format)
+            settingsError = nil
+        } catch {
+            settingsError = error.localizedDescription
+        }
+    }
+
+    func setTaskOrder(_ order: TaskOrder) {
+        guard let store else { return }
+        do {
+            try store.setTaskOrder(order)
             settingsError = nil
         } catch {
             settingsError = error.localizedDescription

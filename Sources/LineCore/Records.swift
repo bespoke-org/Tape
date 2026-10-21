@@ -43,6 +43,7 @@ struct TrackingSnapshot: Codable {
     var checkpoint: Date?
     var defaultZoomHours: Int?
     var timeFormat: TimeFormat?
+    var taskOrder: TaskOrder?
     var resumeCountdownSeconds: Int?
     var automaticResumeEnabled: Bool?
     var shortBreakMinutes: Int?

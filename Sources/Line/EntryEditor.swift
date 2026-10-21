@@ -81,9 +81,7 @@ struct EntryEditor: View {
     }
 
     private var matches: [TrackedTask] {
-        let query = taskName.trimmingCharacters(in: .whitespacesAndNewlines)
-        return store.tasks.filter { query.isEmpty || $0.name.localizedCaseInsensitiveContains(query) }
-            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        store.taskSuggestions(matching: taskName)
     }
 
     private func chooseTask(_ name: String) {

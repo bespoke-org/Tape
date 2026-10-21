@@ -267,9 +267,7 @@ enum SmokeCheck {
             throw NSError(domain: "LineSmokeCheck", code: 16, userInfo: [NSLocalizedDescriptionKey: "Native time format menu is missing"])
         }
         let entriesBeforeFormatChange = model.store!.entries
-        for format in [TimeFormat.twelveHour, .system, .twentyFourHour] {
-            let current = TimeFormat.allCases.firstIndex(of: model.timeFormat)!
-            let target = TimeFormat.allCases.firstIndex(of: format)!
+        func selectMenu(_ picker: NSPopUpButton, from current: Int, to target: Int) async throws {
             let choose = Timer(timeInterval: 0.2, repeats: false) { _ in
                 MainActor.assumeIsolated {
                     let arrow = target > current ? "\u{F701}" : "\u{F700}"
@@ -287,16 +285,29 @@ enum SmokeCheck {
             RunLoop.main.add(choose, forMode: .common)
             RunLoop.main.add(choose, forMode: .eventTracking)
             defer { choose.invalidate() }
-            let location = timeFormatPicker.convert(NSPoint(x: timeFormatPicker.bounds.midX, y: timeFormatPicker.bounds.midY), to: nil)
+            let location = picker.convert(NSPoint(x: picker.bounds.midX, y: picker.bounds.midY), to: nil)
             let down = NSEvent.mouseEvent(with: .leftMouseDown, location: location, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
                                           windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!
             let up = NSEvent.mouseEvent(with: .leftMouseUp, location: location, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
                                         windowNumber: window.windowNumber, context: nil, eventNumber: 1, clickCount: 1, pressure: 0)!
             NSApp.postEvent(up, atStart: true)
-            timeFormatPicker.mouseDown(with: down)
+            picker.mouseDown(with: down)
             try await settle()
+        }
+        for format in [TimeFormat.twelveHour, .system, .twentyFourHour] {
+            try await selectMenu(timeFormatPicker, from: TimeFormat.allCases.firstIndex(of: model.timeFormat)!,
+                                 to: TimeFormat.allCases.firstIndex(of: format)!)
             try require(model.timeFormat == format && model.settingsError == nil, "Time format must save immediately")
             try require(model.store!.entries == entriesBeforeFormatChange, "Time format must preserve tracking records")
+        }
+        let settingsMenus = descendants(content).compactMap { $0 as? NSPopUpButton }
+        try require(settingsMenus.count == 3, "Time format, task order, and threshold must use native menus")
+        let taskOrderPicker = settingsMenus[1]
+        for order in [TaskOrder.alphabetical, .mostUsed, .recentlyUsed] {
+            try await selectMenu(taskOrderPicker, from: TaskOrder.allCases.firstIndex(of: model.taskOrder)!,
+                                 to: TaskOrder.allCases.firstIndex(of: order)!)
+            try require(model.taskOrder == order && model.settingsError == nil, "Task order must save immediately")
+            try require(model.store!.entries == entriesBeforeFormatChange, "Task order must preserve tracking records")
         }
         guard let countdownField = descendants(content).compactMap({ $0 as? NSTextField }).first(where: \.isEditable) else {
             throw NSError(domain: "LineSmokeCheck", code: 17, userInfo: [NSLocalizedDescriptionKey: "Native resume countdown field is missing"])
@@ -336,8 +347,8 @@ enum SmokeCheck {
         try require(model.resumeCountdownSeconds == 15 && model.settingsError == nil && model.store!.entries == entriesBeforeFormatChange,
                     "Leaving the field must save without changing tracking records")
         let menus = descendants(content).compactMap { $0 as? NSPopUpButton }
-        try require(menus.count == 2, "Time format and threshold must use native menus")
-        let thresholdPicker = menus[1]
+        try require(menus.count == 3, "Time format, task order, and threshold must use native menus")
+        let thresholdPicker = menus[2]
         func selectThreshold(_ seconds: Int) async throws {
             var choices = [0, 30, 60, 120, 300, 600, 900, 1800, 3600]
             if !choices.contains(model.shortBreakSeconds) { choices.append(model.shortBreakSeconds) }

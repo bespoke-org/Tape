@@ -54,6 +54,7 @@ with tempfile.TemporaryDirectory(prefix='line-smoke-') as data:
         if args.main_window:
             assert records['defaultZoomHours'] == 12
             assert records['timeFormat'] == 'twentyFourHour'
+            assert records['taskOrder'] == 'recentlyUsed'
             assert records['resumeCountdownSeconds'] == 15
             assert records['automaticResumeEnabled'] is True
             assert records['shortBreakSeconds'] == 30

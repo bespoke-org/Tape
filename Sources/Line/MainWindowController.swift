@@ -243,6 +243,19 @@ private struct SettingsView: View {
                 .disabled(model.store == nil)
             }
             Section("Tracking") {
+                Picker(selection: Binding(get: { model.taskOrder }, set: { model.setTaskOrder($0) })) {
+                    Text("Recently used").tag(TaskOrder.recentlyUsed)
+                    Text("Alphabetical").tag(TaskOrder.alphabetical)
+                    Text("Most used").tag(TaskOrder.mostUsed)
+                } label: {
+                    Text("Task order")
+                    Text("Order of task suggestions when creating or editing entries.")
+                        .foregroundStyle(.secondary)
+                }
+                .pickerStyle(.menu)
+                .accessibilityLabel("Task order")
+                .help("Order task suggestions when creating or editing entries. Most used counts entries.")
+                .disabled(model.store == nil)
                 Toggle(isOn: Binding(get: { model.automaticResumeEnabled }, set: { model.setAutomaticResumeEnabled($0) })) {
                     Text("Automatic resume")
                     Text("Resume the interrupted task after unlocking or waking.")
