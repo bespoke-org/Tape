@@ -7,19 +7,26 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSToolba
     private static let sidebarSeparator = NSToolbarItem.Identifier("DayTape.SidebarSeparator")
     private static let navigation = NSToolbarItem.Identifier("DayTape.Navigation")
     private static let settingsTitle = NSToolbarItem.Identifier("DayTape.SettingsTitle")
+    private let navigation = SettingsNavigation()
+    private let generalController: SettingsHostingController
+    private let aboutController: NSHostingController<AboutView>
+    private weak var navigationControl: NSSegmentedControl?
+    private weak var pageTitle: NSTextField?
 
     init(model: AppModel) {
+        generalController = SettingsHostingController(rootView: SettingsView(model: model))
+        aboutController = NSHostingController(rootView: AboutView(dataURL: model.dataURL))
+        generalController.sizingOptions = []
+        aboutController.sizingOptions = []
         let split = NSSplitViewController()
-        let sidebarController = NSHostingController(rootView: MainSidebar())
+        let sidebarController = NSHostingController(rootView: MainSidebar(navigation: navigation))
         sidebarController.sizingOptions = []
-        let settingsController = SettingsHostingController(rootView: SettingsView(model: model))
-        settingsController.sizingOptions = []
         let sidebar = NSSplitViewItem(sidebarWithViewController: sidebarController)
         sidebar.minimumThickness = 200
         sidebar.maximumThickness = 260
         sidebar.canCollapse = false
         split.addSplitViewItem(sidebar)
-        split.addSplitViewItem(NSSplitViewItem(viewController: settingsController))
+        split.addSplitViewItem(NSSplitViewItem(viewController: generalController))
 
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 900, height: 600),
                               styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
@@ -41,6 +48,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSToolba
         let suffix = ProcessInfo.processInfo.environment["LINE_DATA_DIRECTORY"].map { ".\($0)" } ?? ""
         let frameName = "DayTape.MainWindow\(suffix)"
         super.init(window: window)
+        navigation.onChange = { [weak self] in self?.showSelectedPage() }
         shouldCascadeWindows = false
         windowFrameAutosaveName = frameName
         window.setFrameUsingName(frameName)
@@ -78,10 +86,13 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSToolba
                 control.setImage(NSImage(systemSymbolName: direction.1, accessibilityDescription: direction.0), forSegment: index)
                 control.setToolTip(direction.0, forSegment: index)
                 control.setWidth(32, forSegment: index)
-                // General is the only page, so there is no navigation history yet.
                 control.setEnabled(false, forSegment: index)
             }
             control.sizeToFit()
+            control.target = self
+            control.action = #selector(navigate(_:))
+            navigationControl = control
+            updateNavigationControls()
             item.view = control
             item.label = "Back and Forward"
             item.isBordered = false
@@ -90,14 +101,38 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSToolba
         }
         if identifier == Self.settingsTitle {
             let item = NSToolbarItem(itemIdentifier: identifier)
-            let title = NSTextField(labelWithString: "General")
+            let title = NSTextField(labelWithString: navigation.page.title)
             title.font = .systemFont(ofSize: 15, weight: .semibold)
             item.view = title
-            item.label = "General"
+            item.label = navigation.page.title
+            pageTitle = title
             item.isBordered = false
             return item
         }
         return nil
+    }
+
+    private func showSelectedPage() {
+        guard let window, let split = window.contentViewController as? NSSplitViewController else { return }
+        window.makeFirstResponder(nil)
+        let controller: NSViewController = navigation.page == .general ? generalController : aboutController
+        if let current = split.splitViewItems.last, current.viewController !== controller {
+            split.removeSplitViewItem(current)
+            split.addSplitViewItem(NSSplitViewItem(viewController: controller))
+        }
+        pageTitle?.stringValue = navigation.page.title
+        pageTitle?.sizeToFit()
+        updateNavigationControls()
+    }
+
+    private func updateNavigationControls() {
+        navigationControl?.setEnabled(navigation.canGoBack, forSegment: 0)
+        navigationControl?.setEnabled(navigation.canGoForward, forSegment: 1)
+    }
+
+    @objc private func navigate(_ sender: NSSegmentedControl) {
+        if sender.selectedSegment == 0 { navigation.goBack() }
+        else if sender.selectedSegment == 1 { navigation.goForward() }
     }
 
     func present() {
@@ -124,10 +159,16 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSToolba
 }
 
 private struct MainSidebar: View {
+    @Bindable var navigation: SettingsNavigation
+
     var body: some View {
-        List(selection: .constant("general")) {
-            Label("General", systemImage: "gearshape")
-                .tag("general")
+        List(selection: Binding<SettingsPage?>(get: { navigation.page }, set: { page in
+            if let page { navigation.select(page) }
+        })) {
+            ForEach(SettingsPage.allCases, id: \.self) { page in
+                Label(page.title, systemImage: page.symbol)
+                    .tag(page)
+            }
         }
         .listStyle(.sidebar)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -379,6 +420,7 @@ private struct ResumeCountdownField: View {
         }
         .fixedSize()
         .onAppear { text = String(model.resumeCountdownSeconds) }
+        .onDisappear { save() }
         .onChange(of: model.resumeCountdownSeconds) { _, value in
             if !isFocused { text = String(value) }
         }

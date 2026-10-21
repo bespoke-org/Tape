@@ -2,6 +2,7 @@
 import AppKit
 import LineCore
 import ServiceManagement
+import SwiftUI
 
 /// Bounded, opt-in verification of the actual packaged app, using an isolated data directory.
 /// Drives its own native field editor without requiring system-wide Accessibility permission.
@@ -255,7 +256,7 @@ enum SmokeCheck {
         guard let sidebar = descendants(split.splitViewItems[0].viewController.view).compactMap({ $0 as? NSOutlineView }).first else {
             throw NSError(domain: "LineSmokeCheck", code: 12, userInfo: [NSLocalizedDescriptionKey: "Native sidebar is missing"])
         }
-        try require(sidebar.numberOfRows == 1 && sidebar.selectedRow == 0, "Settings must be the only selected sidebar row")
+        try require(sidebar.numberOfRows == 2 && sidebar.selectedRow == 0, "Sidebar must show General followed by About, initially selecting General")
         guard let slider = descendants(content).compactMap({ $0 as? NSSlider }).first else {
             throw NSError(domain: "LineSmokeCheck", code: 13, userInfo: [NSLocalizedDescriptionKey: "Native default zoom slider is missing"])
         }
@@ -301,6 +302,9 @@ enum SmokeCheck {
             throw NSError(domain: "LineSmokeCheck", code: 17, userInfo: [NSLocalizedDescriptionKey: "Native resume countdown field is missing"])
         }
         func enterCountdown(_ value: String, submit: Bool = true) async throws {
+            guard let countdownField = descendants(content).compactMap({ $0 as? NSTextField }).first(where: \.isEditable) else {
+                throw NSError(domain: "LineSmokeCheck", code: 17)
+            }
             window.makeFirstResponder(countdownField)
             guard let editor = countdownField.currentEditor() as? NSTextView else {
                 throw NSError(domain: "LineSmokeCheck", code: 17)
@@ -428,6 +432,59 @@ enum SmokeCheck {
             capture.arguments = ["-x", "-l", String(window.windowNumber), output.appendingPathComponent("settings-window.png").path]
             try capture.run()
             capture.waitUntilExit()
+        }
+        guard let navigation = window.toolbar?.items.compactMap({ $0.view as? NSSegmentedControl }).first,
+              let heading = window.toolbar?.items.first(where: { $0.itemIdentifier.rawValue == "DayTape.SettingsTitle" })?.view as? NSTextField else {
+            throw NSError(domain: "LineSmokeCheck", code: 20)
+        }
+        try require(!navigation.isEnabled(forSegment: 0) && !navigation.isEnabled(forSegment: 1), "New window must have no page history")
+        let sidebarWidth = sidebar.enclosingScrollView?.frame.width
+        try await enterCountdown("17", submit: false)
+        sidebar.selectRowIndexes(IndexSet(integer: 1), byExtendingSelection: false)
+        try await settle()
+        try require(heading.stringValue == "About" && split.splitViewItems.last?.viewController is NSHostingController<AboutView>,
+                    "Selecting About must update the detail and toolbar title")
+        try require(model.resumeCountdownSeconds == 17, "Leaving General must commit the edited countdown")
+        try require(navigation.isEnabled(forSegment: 0) && !navigation.isEnabled(forSegment: 1), "About must enable Back")
+        let aboutContent = split.splitViewItems.last!.viewController.view
+        try require(accessibilityElement(named: "Source Code", in: aboutContent) != nil &&
+                    accessibilityElement(named: "Show Data in Finder", in: aboutContent) != nil,
+                    "About must expose source and local-data actions")
+        if ProcessInfo.processInfo.environment["LINE_SMOKE_CAPTURE"] == "1" {
+            let capture = Process()
+            capture.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+            capture.arguments = ["-x", "-l", String(window.windowNumber), output.appendingPathComponent("about-window.png").path]
+            try capture.run()
+            capture.waitUntilExit()
+        }
+        func navigate(_ segment: Int) async throws {
+            let point = NSPoint(x: navigation.bounds.width * (CGFloat(segment) + 0.5) / 2, y: navigation.bounds.midY)
+            let location = navigation.convert(point, to: nil)
+            let down = NSEvent.mouseEvent(with: .leftMouseDown, location: location, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                          windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1)!
+            let up = NSEvent.mouseEvent(with: .leftMouseUp, location: location, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                        windowNumber: window.windowNumber, context: nil, eventNumber: 1, clickCount: 1, pressure: 0)!
+            NSApp.postEvent(up, atStart: true)
+            navigation.mouseDown(with: down)
+            try await settle()
+        }
+        try await navigate(0)
+        try require(sidebar.selectedRow == 0 && heading.stringValue == "General" && navigation.isEnabled(forSegment: 1),
+                    "Back must restore General and enable Forward (row=\(sidebar.selectedRow), heading=\(heading.stringValue), forward=\(navigation.isEnabled(forSegment: 1)))")
+        try await navigate(1)
+        try require(sidebar.selectedRow == 1 && heading.stringValue == "About", "Forward must restore About")
+        try await navigate(0)
+        sidebar.selectRowIndexes(IndexSet(integer: 1), byExtendingSelection: false)
+        try await settle()
+        try require(!navigation.isEnabled(forSegment: 1), "Selecting a page after Back must clear forward history")
+        sidebar.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
+        try await settle()
+        try require(sidebar.enclosingScrollView?.frame.width == sidebarWidth, "Page navigation must preserve sidebar width")
+        try require(model.store!.entries == entriesBeforeFormatChange, "About navigation must preserve tracking")
+        try await enterCountdown("15")
+        if ProcessInfo.processInfo.environment["LINE_SMOKE_CAPTURE"] == "1" {
+            let returnedSlider = descendants(content).compactMap { $0 as? NSSlider }.first!
+            try checkInitialSliderThumb(returnedSlider, in: window, output: output)
         }
         func command(_ character: String, keyCode: UInt16) throws {
             let event = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: .command,

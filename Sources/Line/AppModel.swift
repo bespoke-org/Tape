@@ -30,6 +30,7 @@ final class AppModel {
     private var drawingStart: Date?
     var isDrawing: Bool { drawingStart != nil }
     private let storeURL: URL
+    var dataURL: URL { storeURL }
     var onChange: (() -> Void)?
 
     init(storeURL: URL) {
