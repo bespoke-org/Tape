@@ -658,8 +658,9 @@ enum SmokeCheck {
                     "Search must not clear an active chart filter when its row is hidden")
         state.search = ""
         try await settle()
-        state.grouping = .tasks
+        try pressAccessibleControl(named: "Show tasks", in: content)
         try await settle()
+        try require(state.grouping == .tasks, "The glass control must switch to tasks")
         try require(try breakdownTable().numberOfRows == 2 && state.filter == .tag("dayline"),
                     "Changing grouping must show only the two tasks in the selected tag")
         try capture("statistics-table-filtered")
@@ -667,8 +668,9 @@ enum SmokeCheck {
         try pressAccessibleControl(named: dayLabel, in: content)
         try await settle()
         try require(state.period == .day && calendar.isDate(state.anchor, inSameDayAs: yesterday), "Day bar must open the session timeline")
-        state.grouping = .tags
+        try pressAccessibleControl(named: "Show tags", in: content)
         try await settle()
+        try require(state.grouping == .tags, "The glass control must switch back to tags")
         try await clickRow(0)
         try require(state.filter == nil, "Clicking the selected tag must restore all tracked time")
         state.grouping = .tasks

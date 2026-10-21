@@ -256,12 +256,7 @@ struct StatisticsView: View {
             (selection.filter.map { $0.grouping != selection.grouping ? " in " + filterName($0) : "" } ?? "")
         return VStack(alignment: .leading, spacing: compact ? 8 : 12) {
             HStack {
-                Picker("Group by", selection: $selection.grouping) {
-                    Text("Tags").tag(StatisticsGrouping.tags)
-                    Text("Tasks").tag(StatisticsGrouping.tasks)
-                }
-                .labelsHidden().pickerStyle(.segmented).fixedSize()
-                .accessibilityLabel("Statistics grouping")
+                StatisticsGroupingPicker(selection: $selection.grouping)
                 Spacer(minLength: 12)
                 StatisticsSearchField(text: $selection.search)
                     .frame(maxWidth: 180)
@@ -363,6 +358,61 @@ struct StatisticsView: View {
 
     private func sessionDescription(_ session: StatisticsSession) -> String {
         "\(session.task.inputText), \(model.timeFormat.string(from: session.interval.start))–\(model.timeFormat.string(from: session.interval.end)), \(Self.duration(session.duration))"
+    }
+}
+
+private struct StatisticsGroupingPicker: View {
+    private static let controlHeight = NSSearchField().intrinsicContentSize.height
+
+    @Binding var selection: StatisticsGrouping
+    @FocusState private var focusedGrouping: StatisticsGrouping?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorSchemeContrast) private var contrast
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach([StatisticsGrouping.tags, .tasks], id: \.self) { grouping in
+                Button {
+                    selection = grouping
+                } label: {
+                    Text(grouping == .tags ? "Tags" : "Tasks")
+                        .font(.body.weight(.medium))
+                        .foregroundStyle(selection == grouping ? .primary : .secondary)
+                        .frame(minWidth: 56, minHeight: Self.controlHeight - 6)
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .focused($focusedGrouping, equals: grouping)
+                .accessibilityLabel(grouping == .tags ? "Show tags" : "Show tasks")
+                .accessibilityAddTraits(selection == grouping ? .isSelected : [])
+            }
+        }
+        .background {
+            // Keep one highlight alive across clicks. Per-button backgrounds also
+            // fade in and out during native button updates, duplicating the slide.
+            GeometryReader { geometry in
+                Capsule()
+                    .fill(Color.primary.opacity(contrast == .increased ? 0.25 : 0.14))
+                    .frame(width: geometry.size.width / 2)
+                    .offset(x: selection == .tags ? 0 : geometry.size.width / 2)
+                    .animation(reduceMotion ? nil : .smooth(duration: 0.2), value: selection)
+            }
+            .allowsHitTesting(false)
+        }
+        .padding(3)
+        .glassEffect(.regular.interactive(), in: .capsule)
+        .fixedSize()
+        .onMoveCommand { direction in
+            switch direction {
+            case .left: selection = .tags
+            case .right: selection = .tasks
+            default: return
+            }
+            focusedGrouping = selection
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Statistics grouping")
+        .accessibilityValue(selection == .tags ? "Tags" : "Tasks")
     }
 }
 

@@ -97,3 +97,9 @@ Menu labels: remove the literal ellipses from General Settings and Statistics. L
 Grouping order: put Tags first and Tasks second, retaining Tags as the initial selection. Release build passed.
 
 Table corners: clip the table viewport, including its header and scrolling rows, to an 8-point rounded rectangle inside the card. Native Statistics checks and release build passed; screenshot inspected.
+
+Grouping style: replace the standard segmented picker with a capsule using native Liquid Glass, a neutral animated selection highlight, and Tags first. Retain button accessibility, selected-state announcements, arrow-key navigation, and reduced-motion support. Native Statistics checks exercise both grouping buttons and passed; dark/light screenshots inspected; release build passed.
+
+Grouping transition fix: reproduced duplicate sliding and appearing highlights with real mouse clicks in an isolated native picker, using slowed animation captures in both directions. Replace conditional matched-geometry button backgrounds with one persistent background capsule, animating only its offset. The same click captures now show one moving highlight; native Statistics checks and release build passed.
+
+Grouping control height: size the glass picker to the native regular search field height, accounting for its selection padding. Screenshot inspected; release build passed. Native Statistics checks passed on retry after an intermittent table-row selection failure.
