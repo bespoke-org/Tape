@@ -48,6 +48,8 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSToolba
         // AeroSpace recognizes this native window behavior and floats it automatically.
         window.collectionBehavior = [.fullScreenNone]
         window.toolbarStyle = .unified
+        window.titlebarAppearsTransparent = true
+        window.titlebarSeparatorStyle = .none
         window.center()
         // Development sessions must not overwrite the personal window position.
         let suffix = ProcessInfo.processInfo.environment["LINE_DATA_DIRECTORY"].map { ".\($0)" } ?? ""
