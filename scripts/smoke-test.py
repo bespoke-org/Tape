@@ -19,7 +19,7 @@ modes.add_argument('--overwrite', action='store_true', help='Verify Command-drag
 modes.add_argument('--dismissal', action='store_true', help='Verify outside-click dismissal after color menu use')
 modes.add_argument('--editing', action='store_true', help='Verify inline entry correction, resizing, and deletion')
 args = parser.parse_args()
-run_timeout = 50 if args.continuation else 40 if args.editing or args.main_window else 20
+run_timeout = 50 if args.continuation or args.main_window else 40 if args.editing else 20
 root = Path(__file__).resolve().parent.parent
 app = root / 'build/smoke/DayTape.app'
 subprocess.run([str(root / 'scripts/build-app.sh'), 'debug'], cwd=root,

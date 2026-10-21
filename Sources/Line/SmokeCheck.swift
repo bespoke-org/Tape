@@ -500,11 +500,19 @@ enum SmokeCheck {
         try await settle()
         try require(window.isMiniaturized && NSApp.activationPolicy() == .regular, "Minimizing must keep Dock presence")
         let actions = delegate.makeActionsMenu()
-        let open = actions.item(withTitle: "Open DayTape")!
-        try require(NSApp.sendAction(open.action!, to: open.target, from: open), "Status menu must open DayTape")
+        try require(actions.items.map(\.title) == ["General Settings…", "About DayTape", "", "Quit DayTape"] && actions.items[2].isSeparatorItem,
+                    "Status menu must order General, About, then a separator and Quit")
+        let general = actions.item(withTitle: "General Settings…")!
+        let about = actions.item(withTitle: "About DayTape")!
+        try require(NSApp.sendAction(about.action!, to: about.target, from: about), "Status menu must open About")
         try await settle()
         try require(!window.isMiniaturized && window.isKeyWindow && delegate.mainWindowController?.window === window,
                     "Opening a minimized window must restore and focus it (minimized=\(window.isMiniaturized), key=\(window.isKeyWindow), active=\(NSApp.isActive), front=\(NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "unknown"))")
+        try require(sidebar.selectedRow == 1 && heading.stringValue == "About", "About menu item must select About even when General was minimized")
+        try require(NSApp.sendAction(general.action!, to: general.target, from: general), "Status menu must open General Settings")
+        try await settle()
+        try require(sidebar.selectedRow == 0 && heading.stringValue == "General" && delegate.mainWindowController?.window === window,
+                    "General Settings must select General in the same window")
         _ = delegate.applicationShouldHandleReopen(NSApp, hasVisibleWindows: true)
         try await settle()
         try require(window.isKeyWindow && delegate.mainWindowController?.window === window,
@@ -513,6 +521,14 @@ enum SmokeCheck {
         try await settle()
         try require(!window.isVisible && NSApp.activationPolicy() == .accessory, "Closing must restore menu-bar-only operation")
         try require(model.store?.runningEntry?.id == runningID, "Closing must keep tracking")
+        try require(NSApp.sendAction(about.action!, to: about.target, from: about), "About must reopen a closed window")
+        try await settle()
+        try require(window.isKeyWindow && sidebar.selectedRow == 1 && heading.stringValue == "About" && NSApp.activationPolicy() == .regular,
+                    "About must directly select its page when reopening from menu-bar-only operation")
+        try require(model.store?.runningEntry?.id == runningID && delegate.mainWindowController?.window === window,
+                    "Section menu actions must preserve tracking and reuse the window")
+        window.close()
+        try await settle()
         try clickStatusItem(button)
         try await settle()
         try require(model.timeline.span == 12 * 3_600 && model.timeline.isFollowingNow, "Reopening the timeline must use the configured default")

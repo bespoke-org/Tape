@@ -135,7 +135,8 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSToolba
         else if sender.selectedSegment == 1 { navigation.goForward() }
     }
 
-    func present() {
+    func present(page: SettingsPage? = nil) {
+        if let page { navigation.select(page) }
         guard let window else { return }
         if NSApp.activationPolicy() != .regular {
             NSApp.setActivationPolicy(.regular)

@@ -182,8 +182,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
     func makeActionsMenu() -> NSMenu {
         let menu = NSMenu()
-        let open = menu.addItem(withTitle: "Open DayTape", action: #selector(openMainWindow(_:)), keyEquivalent: "")
-        open.target = self
+        for page in SettingsPage.allCases {
+            let item = menu.addItem(withTitle: page.menuTitle, action: #selector(openSettingsPage(_:)), keyEquivalent: "")
+            item.image = NSImage(systemSymbolName: page.symbol, accessibilityDescription: nil)
+            item.representedObject = page.rawValue
+            item.target = self
+        }
         menu.addItem(.separator())
         let quit = NSMenuItem(title: "Quit DayTape", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         quit.target = NSApplication.shared
@@ -193,6 +197,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     }
 
     @objc func openMainWindow(_ sender: Any?) {
+        presentMainWindow()
+    }
+
+    @objc private func openSettingsPage(_ sender: NSMenuItem) {
+        guard let rawValue = sender.representedObject as? String, let page = SettingsPage(rawValue: rawValue) else { return }
+        presentMainWindow(page: page)
+    }
+
+    private func presentMainWindow(page: SettingsPage? = nil) {
         model.acceptContinuation()
         continuationPanel?.dismiss()
         popover.close()
@@ -200,7 +213,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         if mainWindowController == nil {
             mainWindowController = MainWindowController(model: model)
         }
-        mainWindowController?.present()
+        mainWindowController?.present(page: page)
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {

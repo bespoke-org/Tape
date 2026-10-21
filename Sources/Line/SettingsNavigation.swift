@@ -5,6 +5,7 @@ enum SettingsPage: String, CaseIterable, Hashable {
 
     var title: String { self == .general ? "General" : "About" }
     var symbol: String { self == .general ? "gearshape" : "info.circle" }
+    var menuTitle: String { self == .general ? "General Settings…" : "About DayTape" }
 }
 
 @MainActor
