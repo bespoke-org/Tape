@@ -1,9 +1,9 @@
 <p align="center">
-  <img src="Resources/DayTapeIcon.png" width="128" height="128" alt="DayTape app icon">
+  <img src="Resources/TapeIcon.png" width="128" height="128" alt="Tape app icon">
 </p>
 
 <div align="center">
-  <h1 align="center" style="text-align: center;">DayTape</h1>
+  <h1 align="center" style="text-align: center;">Tape</h1>
 </div>
 
 <p align="center">Your day, on tape.</p>
@@ -11,7 +11,7 @@
 <p align="center">A small, native time tracker that lives in your Mac’s menu bar.</p>
 
 <p align="center">
-  <img src="docs/images/daytape.png" width="720" alt="DayTape’s timeline with sample Design, Reading, and Writing tasks, with Writing currently running.">
+  <img src="docs/images/tape.png" width="720" alt="Tape’s timeline with sample Design, Reading, and Writing tasks, with Writing currently running.">
 </p>
 
 Start a task and let the timeline fill in. Drag to add time, resize to make corrections, and pick up where you left off after a break. Everything stays on your Mac.
@@ -22,7 +22,7 @@ Requires **macOS 26+** and **Xcode 26+**.
 
 ```sh
 ./scripts/build-app.sh
-open build/DayTape.app
+open build/Tape.app
 ```
 
 Built with Swift, SwiftUI, and AppKit. No account or subscription.
@@ -31,4 +31,4 @@ Built with Swift, SwiftUI, and AppKit. No account or subscription.
 
 ## License
 
-DayTape is licensed under the [GNU General Public License v2.0 only](LICENSE) (`GPL-2.0-only`).
+Tape is licensed under the [GNU General Public License v2.0 only](LICENSE) (`GPL-2.0-only`).

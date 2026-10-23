@@ -2,9 +2,9 @@
 import PackageDescription
 
 let package = Package(
-    name: "DayTape",
+    name: "Tape",
     platforms: [.macOS("26.0")],
-    products: [.executable(name: "DayTape", targets: ["Line"])],
+    products: [.executable(name: "Tape", targets: ["Line"])],
     targets: [
         .target(name: "LineCore"),
         .executableTarget(name: "Line", dependencies: ["LineCore"]),

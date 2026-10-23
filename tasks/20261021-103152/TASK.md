@@ -17,7 +17,7 @@ Add Task order in General’s Tracking section with Recently used as the default
 
 - `swift test`: 93 tests in 10 suites passed. Covers sorting, ties, search, historical insertion, reassignment, deletion, running tasks, persisted choices, old/unknown preferences, and failed saves.
 - `LINE_SMOKE_CAPTURE=1 python3 scripts/smoke-test.py --main-window`: passed across two fresh launches. Exercises every Task order option through the native menu, verifies saved preferences and unchanged tracking records, and retains existing settings/window checks.
-- Release build and signing passed. Inspected the settings screenshot and relaunched `build/DayTape.app` for review. The first graceful quit was canceled; a retry exited normally before replacing the bundle.
+- Release build and signing passed. Inspected the settings screenshot and relaunched `build/Tape.app` for review. The first graceful quit was canceled; a retry exited normally before replacing the bundle.
 
 - Added the explanatory subtitle, rebuilt, and relaunched successfully.
 

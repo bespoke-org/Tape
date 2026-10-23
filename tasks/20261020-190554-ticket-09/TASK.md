@@ -5,7 +5,7 @@
 - TAGS:
 - LEGACY-ID: 09
 
-**Spec:** [DayTape v1 — Command-drag overwrite](../../docs/spec.md#command-drag-overwrite)
+**Spec:** [Tape v1 — Command-drag overwrite](../../docs/spec.md#command-drag-overwrite)
 
 **What to build:** Hold ⌘ while drawing a new interval to replace time already assigned to other entries. Trim partially covered entries, split entries when the selection covers their middle, and delete entries covered entirely.
 

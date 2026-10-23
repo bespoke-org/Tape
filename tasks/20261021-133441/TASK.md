@@ -26,7 +26,7 @@ Custom date ranges, comparisons, exports, editing from statistics and saved filt
 - Inspected week, filtered week, month, day, minimum-width and light-appearance screenshots from the isolated test app.
 - Removed instructional captions and the “Daily totals” / “Your day at a glance” subtitles at the user's request. Kept the active filter and total context.
 
-- Release build and ad-hoc signing passed. Gracefully replaced the production bundle and relaunched DayTape for review.
+- Release build and ad-hoc signing passed. Gracefully replaced the production bundle and relaunched Tape for review.
 
 Implementation is ready for user review; keep this task open until accepted.
 
@@ -40,7 +40,7 @@ Visual refinement: aligned the tracked-time total with the period picker on the 
 
 Chart refinement: stack weekly/monthly bars by the selected Tasks / Tags grouping. Divide multi-tag sessions equally between their tags for visualization only; keep total bar height equal to tracked time and keep full overlapping tag durations in the breakdown. A selected tag shows its full matching time, with unrelated time gray. Hover describes the shares.
 
-Stack verification: 106 tests passed, including conservation of tracked time with overlapping tags and filtered stacks. Native Statistics checks passed; inspected task/tag stack screenshots. Release build and signing passed, and DayTape was relaunched.
+Stack verification: 106 tests passed, including conservation of tracked time with overlapping tags and filtered stacks. Native Statistics checks passed; inspected task/tag stack screenshots. Release build and signing passed, and Tape was relaunched.
 
 Layout refinement: align the grouping picker with content using its natural width. Replace custom rows with a native SwiftUI Table and alternating row backgrounds. Keep the chart and table controls fixed; only table rows scroll. Use a compact chart in short windows so the table remains accessible.
 
@@ -86,7 +86,7 @@ Day markers: show every three hours from 03:00 through 21:00, omitting midnight 
 
 Day timeline corners: match the menu bar timeline with an 8-point track radius and 4-point entry radius. Release build passed.
 
-Stack selection refinement: keep every segment in the same order and at the same height when selecting a task or tag in week/month views. Gray out nonmatching shares in place, retaining separate segment outlines and outer corner rounding. Across groupings, highlight only the matching share within a segment. Keep full matching durations in the total and table. All 116 core tests passed, including stable geometry for both periods and overlapping tags; native Statistics checks and release build passed. Inspected filtered week/month screenshots and relaunched DayTape.
+Stack selection refinement: keep every segment in the same order and at the same height when selecting a task or tag in week/month views. Gray out nonmatching shares in place, retaining separate segment outlines and outer corner rounding. Across groupings, highlight only the matching share within a segment. Keep full matching durations in the total and table. All 116 core tests passed, including stable geometry for both periods and overlapping tags; native Statistics checks and release build passed. Inspected filtered week/month screenshots and relaunched Tape.
 
 Excluded segment styling: use the native tertiary label color for a darker, quieter gray in dark appearance, retaining stronger gray when Increase Contrast is enabled. Release build passed.
 

@@ -45,7 +45,7 @@ final class LoginItemSettings {
         }
         refresh()
         if enabled && status == .notFound && errorMessage == nil {
-            errorMessage = "macOS could not find DayTape’s login item. Reopen DayTape from Finder and try again."
+            errorMessage = "macOS could not find Tape’s login item. Reopen Tape from Finder and try again."
         }
     }
 

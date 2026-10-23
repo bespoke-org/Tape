@@ -28,7 +28,7 @@ Saves task name `Building DayLine` with tags `dayline`, `coding`, and `deepwork`
 
 - A whitespace-separated word anywhere in the input is a tag if it begins with `:` and does not end with `:`. Remove the leading colon to obtain its tag name.
 - Keep colon-delimited emoji-like words such as `:peka:` in the task name. Ordinary embedded or trailing colons, such as `https://example.com` and `Planning:`, are not tags. A bare `:` is not a completed tag.
-- Remove recognized tag words from the name and clean up surrounding whitespace. `:coding DayTape` becomes `DayTape`, not ` DayTape`. Handle tags at the beginning, middle, and end, including pasted input and multiple whitespace characters.
+- Remove recognized tag words from the name and clean up surrounding whitespace. `:coding Tape` becomes `Tape`, not ` Tape`. Handle tags at the beginning, middle, and end, including pasted input and multiple whitespace characters.
 - Keep the input as editable plain text. Do not turn tags into chips while typing.
 - Render `:tag` words in the name field with the native secondary text color, keeping task names and literal emoji-style words at normal brightness.
 - Tag-only input such as `:coding :deepwork` is valid for searching. Creating an entry still requires a nonempty task name or choosing an existing task.
@@ -92,7 +92,7 @@ Related: [task ordering](../20261021-103152/TASK.md), [application spec](../../d
 - `python3 scripts/smoke-test.py --creation`: passed for historical and running creation, selection, cancellation, and popover anchoring.
 - `python3 scripts/smoke-test.py --editing`: passed for reassignment, color changes, deletion, resizing, and anchoring. Updated preexisting resize test gestures to exceed the three-pixel drag threshold at default zoom and avoid floating-point ambiguity at a shared boundary.
 - Inspected the native editor screenshot. The input stays plain text. Removed the explanatory tag label after user review.
-- Release build and signing passed; gracefully relaunched `build/DayTape.app` for user review.
+- Release build and signing passed; gracefully relaunched `build/Tape.app` for user review.
 - Review refinement: dimmed inline tags with native secondary text color. Native tag smoke checks passed again, the updated editor screenshot was inspected, and the release app was rebuilt and relaunched.
 
 Tags are stored on tasks; the autocomplete vocabulary is derived from current task tags, so unused tags require no separate registry cleanup. No projects, statistics, or tag-management page were added.

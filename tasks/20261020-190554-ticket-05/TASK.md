@@ -5,7 +5,7 @@
 - TAGS:
 - LEGACY-ID: 05
 
-**Spec:** [DayTape v1](../../docs/spec.md)
+**Spec:** [Tape v1](../../docs/spec.md)
 
 **What to build:** Detect actual lock/sleep, save the interruption endpoint, distinguish usable return from wake-while-locked, and ignore ordinary inactivity/display-off.
 

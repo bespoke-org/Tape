@@ -16,7 +16,7 @@ struct AboutView: View {
                         .frame(width: 72, height: 72)
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("DayTape").font(.title2.weight(.semibold))
+                        Text("Tape").font(.title2.weight(.semibold))
                         Text("Your day, on tape.").foregroundStyle(.secondary)
                     }
                 }

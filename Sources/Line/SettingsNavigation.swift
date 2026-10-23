@@ -21,7 +21,7 @@ enum SettingsPage: String, CaseIterable, Hashable {
         switch self {
         case .statistics: "Statistics"
         case .general: "General Settings"
-        case .about: "About DayTape"
+        case .about: "About Tape"
         }
     }
 

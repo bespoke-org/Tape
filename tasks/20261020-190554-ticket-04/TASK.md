@@ -5,7 +5,7 @@
 - TAGS:
 - LEGACY-ID: 04
 
-**Spec:** [DayTape v1](../../docs/spec.md)
+**Spec:** [Tape v1](../../docs/spec.md)
 
 **What to build:** Edit tasks and timestamps, resize entries, recolor tasks, and confirm deletion; keep running-entry behavior and validation consistent.
 

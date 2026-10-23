@@ -1,8 +1,8 @@
-# DayTape v1 ticket breakdown
+# Tape v1 ticket breakdown
 
 **Status:** approved with the basic live timeline merged into ticket 01 and browsing/zooming retained as ticket 02. Individual tickets are maintained with tatr in [tasks](../tasks/README.md).
 
-**Spec:** [DayTape v1](spec.md)
+**Spec:** [Tape v1](spec.md)
 
 Each ticket delivers usable behavior through UI, tracking operations, local storage where applicable, and validation. Native appearance and accessibility apply to every UI slice. There is no existing implementation to prefactor.
 
@@ -66,7 +66,7 @@ Each ticket delivers usable behavior through UI, tracking operations, local stor
 ### 06: Resume interrupted work with a cancellable countdown
 
 - After a usable return, immediately present a nine-second countdown with OK and Reject from the menu bar without stealing keyboard focus.
-- Continuation reopens the interrupted entry for a break under five minutes; otherwise it creates one running entry starting at usable return. Reject creates none. Clicks elsewhere keep the notice visible and countdown running. OK or opening DayTape accepts immediately; the main window never shows a continuation dialog. Hovering over the notice freezes its remaining countdown; moving away resumes it. OK and Reject still work immediately while paused. Other activity leaves the countdown active.
+- Continuation reopens the interrupted entry for a break under five minutes; otherwise it creates one running entry starting at usable return. Reject creates none. Clicks elsewhere keep the notice visible and countdown running. OK or opening Tape accepts immediately; the main window never shows a continuation dialog. Hovering over the notice freezes its remaining countdown; moving away resumes it. OK and Reject still work immediately while paused. Other activity leaves the countdown active.
 - Another lock/sleep cancels the provisional interval and offers a fresh countdown on the next usable return. Duplicate return signals do not reset or multiply countdowns.
 - Starting a task, beginning entry creation/editing, Stop, or Quit prevents pending continuation from committing. Verify this against the actual creation/editing flows delivered by 04 and its blockers.
 - Test completion/action races and restart during a countdown with controlled time; manually verify focus, anchoring, dismissal, and real system-event behavior.

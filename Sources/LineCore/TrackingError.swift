@@ -15,7 +15,7 @@ public enum TrackingError: LocalizedError {
         switch self {
         case .emptyTaskName: "Enter a task name."
         case .clockMovedBackwards: "The Mac's clock moved backward. Tracking was not changed. Check Date & Time settings and try again."
-        case .unsupportedStoreVersion: "This data was saved by a different version of DayTape. It has not been changed."
+        case .unsupportedStoreVersion: "This data was saved by a different version of Tape. It has not been changed."
         case .emptyInterval: "The end must be after the start."
         case .futureInterval: "Time entries must start in the past."
         case .overlappingEntry: "This interval overlaps tracked time. Choose an empty interval."

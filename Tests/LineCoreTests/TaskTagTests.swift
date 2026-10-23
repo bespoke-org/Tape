@@ -6,8 +6,8 @@ import Testing
 struct TaskTagTests {
     @Test(arguments: [
         ("Building DayLine :dayline :coding :deepwork", "Building DayLine", ["dayline", "coding", "deepwork"]),
-        (" :coding  DayTape ", "DayTape", ["coding"]),
-        ("Build\t:coding\nDayTape :deepwork ", "Build DayTape", ["coding", "deepwork"]),
+        (" :coding  Tape ", "Tape", ["coding"]),
+        ("Build\t:coding\nTape :deepwork ", "Build Tape", ["coding", "deepwork"]),
         ("Planning: :peka: https://example.com : :work", "Planning: :peka: https://example.com :", ["work"]),
         (":coding :deepwork", "", ["coding", "deepwork"]),
         ("Read :Универ :универ :Coding :coding", "Read", ["универ", "coding"]),
@@ -68,21 +68,21 @@ struct TaskTagTests {
         func add(_ text: String, _ offset: Double) throws {
             try store.createEntry(named: text, selection: store.prepareEntry(from: base + offset, to: base + offset + 60))
         }
-        try add("DayTape :coding :Универ", 0)
+        try add("Tape :coding :Универ", 0)
         try add("Other :coding", 120)
-        try add("DayTape :deepwork", 240)
+        try add("Tape :deepwork", 240)
         #expect(store.tasks.count == 2)
-        #expect(store.taskSuggestions(matching: ":CODING").map(\.name) == ["DayTape", "Other"])
-        #expect(store.taskSuggestions(matching: ":УНИВЕР :deepwork").map(\.name) == ["DayTape"])
-        #expect(store.taskSuggestions(matching: "day :coding").map(\.name) == ["DayTape"])
+        #expect(store.taskSuggestions(matching: ":CODING").map(\.name) == ["Tape", "Other"])
+        #expect(store.taskSuggestions(matching: ":УНИВЕР :deepwork").map(\.name) == ["Tape"])
+        #expect(store.taskSuggestions(matching: "tap :coding").map(\.name) == ["Tape"])
         #expect(store.taskSuggestions(matching: ":nonexistent").isEmpty)
         let id = store.entries[0].id
         let records = store.entries
-        try store.reassignEntry(id: id, taskName: "DayTape :research")
+        try store.reassignEntry(id: id, taskName: "Tape :research")
         #expect(store.entries == records)
         #expect(store.tags == ["coding", "research"])
         #expect(store.task(id: store.entries[2].taskID)?.tags == ["research"])
-        try store.reassignEntry(id: id, taskName: "DayTape")
+        try store.reassignEntry(id: id, taskName: "Tape")
         #expect(store.tags == ["coding"])
         let otherID = store.entries[1].id
         try store.deleteEntry(id: otherID)

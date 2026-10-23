@@ -3,7 +3,7 @@ import SwiftUI
 import LineCore
 
 @main
-enum DayTapeApp {
+enum TapeApp {
     @MainActor
     static func main() {
         let app = NSApplication.shared
@@ -21,7 +21,7 @@ enum DayTapeApp {
         let settings = application.addItem(withTitle: "Settings…", action: #selector(AppDelegate.openMainWindow(_:)), keyEquivalent: ",")
         settings.target = delegate
         application.addItem(.separator())
-        application.addItem(withTitle: "Quit DayTape", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        application.addItem(withTitle: "Quit Tape", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         let applicationItem = NSMenuItem()
         applicationItem.submenu = application
         menu.addItem(applicationItem)
@@ -64,7 +64,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             directory = URL(fileURLWithPath: override, isDirectory: true)
         } else {
             directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-                // Keep the original data directory across the DayTape rename.
+                // Keep the original data directory across app renames.
                 .appendingPathComponent("Line", isDirectory: true)
         }
         model = AppModel(storeURL: directory.appendingPathComponent("tracking.json"))
@@ -189,7 +189,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             item.target = self
         }
         menu.addItem(.separator())
-        let quit = NSMenuItem(title: "Quit DayTape", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        let quit = NSMenuItem(title: "Quit Tape", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         quit.target = NSApplication.shared
         menu.addItem(quit)
 
@@ -243,7 +243,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         popover.contentViewController = controller
         // AppKit anchors using the initial size. A later shrink otherwise leaves a gap below the icon.
         popover.contentSize = controller.view.fittingSize
-        // User-initiated opening activates DayTape. Continuation uses a non-activating panel.
+        // User-initiated opening activates Tape. Continuation uses a non-activating panel.
         NSApplication.shared.activate(ignoringOtherApps: true)
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         popover.contentViewController?.view.window?.makeKey()
@@ -285,7 +285,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private func updateStatus() {
         let running = model.store?.runningTask
         let glyph = model.errorMessage != nil
-            ? NSImage(systemSymbolName: "exclamationmark.circle", accessibilityDescription: "DayTape")
+            ? NSImage(systemSymbolName: "exclamationmark.circle", accessibilityDescription: "Tape")
             : Self.playheadIcon(isTracking: running != nil)
         // AppKit anchors status-item popovers to the image. Keep its canvas constant across states.
         let image = glyph.map { glyph in
@@ -299,8 +299,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         }
         image?.isTemplate = true
         statusItem.button?.image = image
-        let description = model.errorMessage.map { "DayTape: \($0)" }
-            ?? running.map { "DayTape: tracking \($0.name)" } ?? "DayTape: not tracking"
+        let description = model.errorMessage.map { "Tape: \($0)" }
+            ?? running.map { "Tape: tracking \($0.name)" } ?? "Tape: not tracking"
         statusItem.button?.toolTip = description
         statusItem.button?.setAccessibilityLabel(description)
     }

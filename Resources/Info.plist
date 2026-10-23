@@ -3,10 +3,10 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleIdentifier</key><string>app.line.timetracker</string>
-    <key>CFBundleName</key><string>DayTape</string>
-    <key>CFBundleDisplayName</key><string>DayTape</string>
-    <key>CFBundleExecutable</key><string>DayTape</string>
-    <key>CFBundleIconFile</key><string>DayTape</string>
+    <key>CFBundleName</key><string>Tape</string>
+    <key>CFBundleDisplayName</key><string>Tape</string>
+    <key>CFBundleExecutable</key><string>Tape</string>
+    <key>CFBundleIconFile</key><string>Tape</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleShortVersionString</key><string>0.1.0</string>
     <key>CFBundleVersion</key><string>1</string>

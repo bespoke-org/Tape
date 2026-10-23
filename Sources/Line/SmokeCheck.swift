@@ -50,7 +50,7 @@ enum SmokeCheck {
             }
             if ProcessInfo.processInfo.environment["LINE_SMOKE_CONTINUATION"] == "1" {
                 try await checkContinuation(button: button, popover: popover, model: model)
-                try Data("PASS: continuation panel preserves focus, hover pauses the nine-second countdown, OK resumes immediately, Reject and explicit actions cancel, outside clicks preserve the notice and opening DayTape accepts continuation, and short-break continuation reopens the original entry.\n".utf8)
+                try Data("PASS: continuation panel preserves focus, hover pauses the nine-second countdown, OK resumes immediately, Reject and explicit actions cancel, outside clicks preserve the notice and opening Tape accepts continuation, and short-break continuation reopens the original entry.\n".utf8)
                     .write(to: output.appendingPathComponent("result.txt"))
                 NSApp.terminate(nil)
                 return
@@ -113,9 +113,9 @@ enum SmokeCheck {
             try requirePickerHidden(popover)
             try await openPicker(named: "Start task", in: popover)
             try requireAnchored(popover, to: button)
-            try enterTaskName("Build DayTape", in: popover)
+            try enterTaskName("Build Tape", in: popover)
             try await settle()
-            try require(model.store?.runningTask?.name == "Build DayTape", "Submitting the native text field must start tracking")
+            try require(model.store?.runningTask?.name == "Build Tape", "Submitting the native text field must start tracking")
             try requirePickerHidden(popover)
             try requireAnchored(popover, to: button)
             let firstStart = model.store?.runningEntry?.start
@@ -133,9 +133,9 @@ enum SmokeCheck {
             try requirePickerHidden(popover)
             try requireAnchored(popover, to: button)
             try await openPicker(named: "Switch task", in: popover)
-            try pressAccessibleControl(named: "Switch to Build DayTape", in: contentView(popover))
+            try pressAccessibleControl(named: "Switch to Build Tape", in: contentView(popover))
             try await settle()
-            try require(model.store?.runningTask?.name == "Build DayTape", "Choosing an existing task must switch tracking")
+            try require(model.store?.runningTask?.name == "Build Tape", "Choosing an existing task must switch tracking")
             try requirePickerHidden(popover)
             try requireAnchored(popover, to: button)
             try await requireStablePosition(popover)
@@ -160,7 +160,7 @@ enum SmokeCheck {
             try await settle()
             try require(!popover.isShown, "Status item must close its popover")
             try require(popover.contentViewController == nil, "Closing must remove the rendering schedule")
-            try require(model.store?.runningTask?.name == "Build DayTape", "Closing must not stop tracking")
+            try require(model.store?.runningTask?.name == "Build Tape", "Closing must not stop tracking")
             try clickStatusItem(button)
             try await settle()
             try require(popover.isShown, "Popover must reopen")
@@ -242,8 +242,14 @@ enum SmokeCheck {
         try require(model.timeFormat == (firstLaunch ? .system : .twentyFourHour), "Time format must survive a fresh process")
         try require(model.resumeCountdownSeconds == (firstLaunch ? 9 : 15), "Resume countdown must survive a fresh process")
         try require(model.automaticResumeEnabled && model.shortBreakSeconds == (firstLaunch ? 300 : 30), "Resume preferences must survive a fresh process")
-        let frameName = "DayTape.MainWindow.\(ProcessInfo.processInfo.environment["LINE_DATA_DIRECTORY"]!)"
+        let frameName = "Tape.MainWindow.\(ProcessInfo.processInfo.environment["LINE_DATA_DIRECTORY"]!)"
         let frameKey = "NSWindow Frame \(frameName)"
+        let legacyFrameKey = "NSWindow Frame DayTape.MainWindow.\(ProcessInfo.processInfo.environment["LINE_DATA_DIRECTORY"]!)"
+        if firstLaunch {
+            let legacyWindow = NSWindow(contentRect: NSRect(x: 100, y: 100, width: 850, height: 650),
+                                        styleMask: [.titled], backing: .buffered, defer: true)
+            UserDefaults.standard.set(legacyWindow.frameDescriptor, forKey: legacyFrameKey)
+        }
         if !firstLaunch {
             let saved = try String(contentsOf: output.appendingPathComponent("window-frame.txt"), encoding: .utf8)
             try require(UserDefaults.standard.string(forKey: frameKey) == saved, "Saved geometry must survive a fresh process")
@@ -255,7 +261,7 @@ enum SmokeCheck {
         try await settle()
         try await openPicker(named: "Switch task", in: popover)
         try enterTaskName("Unsubmitted draft", in: popover, submit: false)
-        try pressAccessibleControl(named: "Open DayTape", in: contentView(popover))
+        try pressAccessibleControl(named: "Open Tape", in: contentView(popover))
         try await settle()
         guard let window = delegate.mainWindowController?.window,
               let content = window.contentView else { throw NSError(domain: "LineSmokeCheck", code: 11) }
@@ -264,8 +270,13 @@ enum SmokeCheck {
         try require(!popover.isShown && popover.contentViewController == nil, "Opening the window must dismiss and release the popover")
         try require(!model.store!.tasks.contains(where: { $0.name == "Unsubmitted draft" }), "Opening must discard unsubmitted text")
         try require(model.store?.runningEntry?.id == runningID, "Opening must keep the same running entry")
-        try require(window.title == "DayTape" && window.styleMask.contains([.resizable, .miniaturizable, .closable]),
+        try require(window.title == "Tape" && window.styleMask.contains([.resizable, .miniaturizable, .closable]),
                     "Main window must use normal native controls")
+        if firstLaunch {
+            try require(abs(window.frame.width - 850) < 1 && UserDefaults.standard.string(forKey: frameKey) != nil,
+                        "Tape must restore the previous app name's saved window geometry")
+            UserDefaults.standard.removeObject(forKey: legacyFrameKey)
+        }
         guard let split = window.contentViewController as? NSSplitViewController else { throw NSError(domain: "LineSmokeCheck", code: 12) }
         try require(split.splitViewItems.count == 2 && split.splitViewItems[0].canCollapse, "Settings sidebar must support collapsing")
         guard let sidebar = descendants(split.splitViewItems[0].viewController.view).compactMap({ $0 as? NSOutlineView }).first else {
@@ -273,7 +284,7 @@ enum SmokeCheck {
         }
         try require(sidebar.numberOfRows == 3 && sidebar.selectedRow == 0, "Sidebar must show General, Statistics, About, initially selecting General")
         guard let navigation = window.toolbar?.items.compactMap({ $0.view as? NSSegmentedControl }).first,
-              let heading = window.toolbar?.items.first(where: { $0.itemIdentifier.rawValue == "DayTape.SettingsTitle" })?.view as? NSTextField else {
+              let heading = window.toolbar?.items.first(where: { $0.itemIdentifier.rawValue == "Tape.SettingsTitle" })?.view as? NSTextField else {
             throw NSError(domain: "LineSmokeCheck", code: 20)
         }
         try require(!navigation.isEnabled(forSegment: 0) && !navigation.isEnabled(forSegment: 1), "New window must have no page history")
@@ -573,10 +584,10 @@ enum SmokeCheck {
         try await settle()
         try require(window.isMiniaturized && NSApp.activationPolicy() == .regular, "Minimizing must keep Dock presence")
         let actions = delegate.makeActionsMenu()
-        try require(actions.items.map(\.title) == ["General Settings", "Statistics", "About DayTape", "", "Quit DayTape"] && actions.items[3].isSeparatorItem,
+        try require(actions.items.map(\.title) == ["General Settings", "Statistics", "About Tape", "", "Quit Tape"] && actions.items[3].isSeparatorItem,
                     "Status menu must order General, Statistics, About, then a separator and Quit")
         let general = actions.item(withTitle: "General Settings")!
-        let about = actions.item(withTitle: "About DayTape")!
+        let about = actions.item(withTitle: "About Tape")!
         try require(NSApp.sendAction(about.action!, to: about.target, from: about), "Status menu must open About")
         try await settle()
         try require(!window.isMiniaturized && window.isKeyWindow && delegate.mainWindowController?.window === window,
@@ -623,7 +634,7 @@ enum SmokeCheck {
         let store = model.store!
         let calendar = Calendar.autoupdatingCurrent
         let yesterday = calendar.date(byAdding: .day, value: -1, to: calendar.startOfDay(for: .now))!
-        for (name, offset, duration) in [("Building DayTape :dayline :coding", 8.0, 2.0),
+        for (name, offset, duration) in [("Building Tape :dayline :coding", 8.0, 2.0),
                                          ("Meeting :dayline :meeting", 11.0, 1.0),
                                          ("Reading", 14.0, 1.0)] {
             let start = yesterday.addingTimeInterval(offset * 3_600)
@@ -947,12 +958,12 @@ enum SmokeCheck {
                     menu.performActionForItem(at: 1)
                 }
                 try await settle()
-                try require(popover.isShown, "Closing only the color menu must keep DayTape open")
+                try require(popover.isShown, "Closing only the color menu must keep Tape open")
             }
             // Exercise the production callback registered for clicks in other apps.
             (NSApp.delegate as? AppDelegate)?.dismissForOutsideClick()
             try await settle()
-            try require(!popover.isShown, "Leaving DayTape must dismiss its popover; color menu action: \(menuAction)")
+            try require(!popover.isShown, "Leaving Tape must dismiss its popover; color menu action: \(menuAction)")
         }
     }
 
@@ -1305,7 +1316,7 @@ enum SmokeCheck {
         try require(accessibilityElement(named: "OK", in: noticeContent) != nil, "OK must have an accessibility title")
         let hoverAreas = descendants(noticeContent).flatMap(\.trackingAreas).filter { ($0.owner as? ContinuationPanel) === notice }
         try require(hoverAreas.contains { $0.options.contains([.activeAlways, .mouseEnteredAndExited, .inVisibleRect]) },
-                    "The full notice must track hover even while DayTape is inactive")
+                    "The full notice must track hover even while Tape is inactive")
         notice.mouseEntered(with: TimelineTestEvent(type: .mouseEntered, window: notice, location: .zero))
         let frozenSeconds = model.interruptions!.remainingSeconds
         try await Task.sleep(for: .milliseconds(1_200))
@@ -1333,12 +1344,12 @@ enum SmokeCheck {
         try clickStatusItem(button)
         try await settle()
         try require(store.runningEntry?.id == openedEntry.id && model.interruptions?.pendingContinuation == nil,
-                    "Opening DayTape must immediately accept continuation")
+                    "Opening Tape must immediately accept continuation")
         try require(accessibilityElement(named: "Reject continuation", in: contentView(popover)) == nil,
                     "The main popover must never contain a continuation dialog")
         try clickStatusItem(button)
         try await settle()
-        try require(model.stop(), "Stop work accepted by opening DayTape")
+        try require(model.stop(), "Stop work accepted by opening Tape")
 
         let pending = try await offer()
         let timerEntry = store.entries.last!
@@ -1362,7 +1373,7 @@ enum SmokeCheck {
                 try clickStatusItem(button)
                 try await settle()
                 try pressAccessibleControl(named: "Switch task", in: contentView(popover))
-                try require(model.stop(), "Stop work already accepted when opening DayTape")
+                try require(model.stop(), "Stop work already accepted when opening Tape")
             case "edit":
                 model.editEntry(id: historical.id)
                 model.cancelEntry()

@@ -4,7 +4,7 @@
 - PRIORITY: 100
 - TAGS:
 
-Replace Open DayTape in the menu bar secondary-click menu with one item for each current sidebar section. Use General Settings… followed by About DayTape, then a separator and Quit DayTape. Retain normal left-click popover behavior.
+Replace Open Tape in the menu bar secondary-click menu with one item for each current sidebar section. Use General Settings… followed by About Tape, then a separator and Quit Tape. Retain normal left-click popover behavior.
 
 ## Acceptance criteria
 
@@ -17,6 +17,6 @@ Replace Open DayTape in the menu bar secondary-click menu with one item for each
 ## Verification
 
 - `LINE_SMOKE_CAPTURE=1 python3 scripts/smoke-test.py --main-window`: passed across two fresh launches. Asserts menu order and separator placement, restores a minimized General window directly to About, switches directly to General in the same window, and reopens a closed window directly to About without changing tracking. Existing sidebar/history, settings, and native thumb checks also pass.
-- Release build and signing passed; relaunched `build/DayTape.app` for review.
+- Release build and signing passed; relaunched `build/Tape.app` for review.
 
 Accepted by the user after reviewing the section shortcuts and matching sidebar icons.

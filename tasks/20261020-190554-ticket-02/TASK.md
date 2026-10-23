@@ -5,7 +5,7 @@
 - TAGS:
 - LEGACY-ID: 02
 
-**Spec:** [DayTape v1](../../docs/spec.md)
+**Spec:** [Tape v1](../../docs/spec.md)
 
 **What to build:** Scroll into history/future, return to now, pinch to zoom, adapt date/time ticks to scale, and retain scale across reopen/relaunch.
 

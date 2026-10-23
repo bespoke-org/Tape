@@ -23,7 +23,7 @@ Actual login after logout and registration approval on this Mac remain manual ch
 - Packaged Settings check passed across two fresh launches. Operated the native switch and steppers, checked dependent-control disabling and saved values, and confirmed tracking records stayed unchanged.
 - Login-service checks cover registration/unregistration results, failures, approval guidance, external status refresh, and a missing service. The real macOS registration status is read; automated checks do not register the development bundle.
 - Inspected the composited Settings capture. Native switches and steppers appear in grouped Tracking and Startup sections.
-- Final `LINE_SMOKE_CAPTURE=1 python3 scripts/smoke-test.py --main-window` passed across two launches after the startup-error adjustment. Release build and signing passed; relaunched `build/DayTape.app` for review.
+- Final `LINE_SMOKE_CAPTURE=1 python3 scripts/smoke-test.py --main-window` passed across two launches after the startup-error adjustment. Release build and signing passed; relaunched `build/Tape.app` for review.
 
 Accepted by the user on 2026-10-21 when requesting the settings commit and moving on to About. Actual login and approval remain manual platform checks in ticket 07.
 
@@ -43,4 +43,4 @@ Thresholds are now stored in seconds. Legacy minute values retain their duration
 
 - `swift test`: 88 tests passed, including 30-second and custom 45-second boundaries, persisted seconds, legacy conversion, defaults, bounds, and failed-save preservation.
 - Native menu checks exercise Never, 30 seconds, and 60 minutes, custom 45-second input, Cancel, and selecting a preset after Custom. The picker retains explicit presentation state so cancelling Custom restores the saved selection instead of leaving the menu on Custom.
-- Final `LINE_SMOKE_CAPTURE=1 python3 scripts/smoke-test.py --main-window` passed across two fresh launches, including restoring the 30-second threshold. Tracking records and dependent settings remained intact; native thumb rendering checks passed. Inspected the Settings capture. Release build and signing passed, and DayTape was relaunched for review.
+- Final `LINE_SMOKE_CAPTURE=1 python3 scripts/smoke-test.py --main-window` passed across two fresh launches, including restoring the 30-second threshold. Tracking records and dependent settings remained intact; native thumb rendering checks passed. Inspected the Settings capture. Release build and signing passed, and Tape was relaunched for review.

@@ -1,4 +1,4 @@
-# DayTape tasks
+# Tape tasks
 
 Tasks are Markdown files managed with [tatr](https://github.com/tsoding/tatr) and committed with the project. Use `tatr ls` for open tasks and `tatr ls -c` for closed tasks. Each `TASK.md` records its current status.
 

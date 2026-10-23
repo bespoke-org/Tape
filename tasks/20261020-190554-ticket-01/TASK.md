@@ -5,7 +5,7 @@
 - TAGS:
 - LEGACY-ID: 01
 
-**Spec:** [DayTape v1](../../docs/spec.md)
+**Spec:** [Tape v1](../../docs/spec.md)
 
 **What to build:** A runnable native menu bar app; create/search tasks, start/stop/switch, and watch entries grow on an eight-hour timeline following now; preserve data and stop safely on quit or recovery.
 

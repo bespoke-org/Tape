@@ -4,9 +4,9 @@ import SwiftUI
 
 @MainActor
 final class MainWindowController: NSWindowController, NSWindowDelegate, NSToolbarDelegate {
-    private static let sidebarSeparator = NSToolbarItem.Identifier("DayTape.SidebarSeparator")
-    private static let navigation = NSToolbarItem.Identifier("DayTape.Navigation")
-    private static let settingsTitle = NSToolbarItem.Identifier("DayTape.SettingsTitle")
+    private static let sidebarSeparator = NSToolbarItem.Identifier("Tape.SidebarSeparator")
+    private static let navigation = NSToolbarItem.Identifier("Tape.Navigation")
+    private static let settingsTitle = NSToolbarItem.Identifier("Tape.SettingsTitle")
     private let navigation = SettingsNavigation()
     let statisticsSelection = StatisticsSelection()
     private let statisticsController: StatisticsHostingController
@@ -36,7 +36,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSToolba
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 900, height: 600),
                               styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
                               backing: .buffered, defer: false)
-        window.title = "DayTape"
+        window.title = "Tape"
         window.titleVisibility = .hidden
         window.contentViewController = split
         window.setContentSize(NSSize(width: 900, height: 600))
@@ -53,14 +53,20 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSToolba
         window.center()
         // Development sessions must not overwrite the personal window position.
         let suffix = ProcessInfo.processInfo.environment["LINE_DATA_DIRECTORY"].map { ".\($0)" } ?? ""
-        let frameName = "DayTape.MainWindow\(suffix)"
+        let frameName = "Tape.MainWindow\(suffix)"
         super.init(window: window)
         navigation.onChange = { [weak self] in self?.showSelectedPage() }
         shouldCascadeWindows = false
+        let frameKey = "NSWindow Frame \(frameName)"
+        let legacyFrameKey = "NSWindow Frame DayTape.MainWindow\(suffix)"
+        if UserDefaults.standard.string(forKey: frameKey) == nil,
+           let savedFrame = UserDefaults.standard.string(forKey: legacyFrameKey) {
+            UserDefaults.standard.set(savedFrame, forKey: frameKey)
+        }
         windowFrameAutosaveName = frameName
         window.setFrameUsingName(frameName)
         window.delegate = self
-        let toolbar = NSToolbar(identifier: "DayTape.MainWindow")
+        let toolbar = NSToolbar(identifier: "Tape.MainWindow")
         toolbar.delegate = self
         toolbar.displayMode = .iconOnly
         toolbar.allowsUserCustomization = false
@@ -384,13 +390,13 @@ private struct SettingsView: View {
             Section("Startup") {
                 Toggle(isOn: Binding(get: { model.loginItem.isEnabled }, set: { model.loginItem.setEnabled($0) })) {
                     Text("Launch at login")
-                    Text("Open DayTape in the menu bar when you log in.")
+                    Text("Open Tape in the menu bar when you log in.")
                         .foregroundStyle(.secondary)
                 }
                 .toggleStyle(.switch)
                 .accessibilityLabel("Launch at login")
                 if model.loginItem.needsApproval {
-                    LabeledContent("Allow DayTape in Login Items to enable launch at login.") {
+                    LabeledContent("Allow Tape in Login Items to enable launch at login.") {
                         Button("Open System Settings…") { model.loginItem.showSystemSettings() }
                     }
                 }

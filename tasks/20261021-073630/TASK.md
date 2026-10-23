@@ -22,6 +22,6 @@ The previous settings work was accepted and committed as `f4e7266` before starti
 - Inspected the composited About capture: app icon/name, grouped information rows, source/license links, and local-data section are visible. Version 0.1.0 and build 1 match the bundle.
 - Toolbar checks use native mouse events because momentary segmented controls report no selected segment outside a click.
 - `LINE_SMOKE_CAPTURE=1 python3 scripts/smoke-test.py --main-window`: passed across two fresh launches. Checks General/About sidebar selection, toolbar titles, Back/Forward, clearing forward history, committing a pending countdown edit when leaving General, unchanged sidebar width and tracking, accessible About actions, and restored slider/switch thumbs after returning. Existing settings and window lifecycle checks also pass.
-- Relaunched `build/DayTape.app` for user review.
+- Relaunched `build/Tape.app` for user review.
 
 Accepted by the user on 2026-10-21. Implementation and verification complete.

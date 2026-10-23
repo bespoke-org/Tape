@@ -5,7 +5,7 @@
 - TAGS:
 - LEGACY-ID: 07
 
-**Spec:** [DayTape v1](../../docs/spec.md)
+**Spec:** [Tape v1](../../docs/spec.md)
 
 **What to build:** Optional launch at login, reproducible local build/install instructions, and verification of the packaged app, native appearance/accessibility, persistence, and combined tracking workflows.
 

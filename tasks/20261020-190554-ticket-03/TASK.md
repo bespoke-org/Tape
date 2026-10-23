@@ -5,7 +5,7 @@
 - TAGS:
 - LEGACY-ID: 03
 
-**Spec:** [DayTape v1](../../docs/spec.md)
+**Spec:** [Tape v1](../../docs/spec.md)
 
 **What to build:** Drag empty space, type/select a task, save historical time or keep running when drawing through now; support cancellation and reject overlaps without modifying existing entries.
 

@@ -1,6 +1,6 @@
 # Task tracking
 
-DayTape uses [tatr](https://github.com/tsoding/tatr) to manage Markdown tasks in Git. The authoritative tasks live in [`tasks/`](../tasks/README.md), one `TASK.md` per generated task directory.
+Tape uses [tatr](https://github.com/tsoding/tatr) to manage Markdown tasks in Git. The authoritative tasks live in [`tasks/`](../tasks/README.md), one `TASK.md` per generated task directory.
 
 ## Workflow
 
@@ -35,7 +35,7 @@ Replace `TASK_ID` with the generated directory name. Always include the intended
 
 ## Existing plans and records
 
-- The [DayTape v1 spec](spec.md) remains the implementation reference.
+- The [Tape v1 spec](spec.md) remains the implementation reference.
 - The [approved breakdown](ticket-plan.md) records the original scope and dependency plan. Current task status lives only in `TASK.md`.
 - Tickets 01–09 were migrated into tatr. Their titles and `LEGACY-ID` properties preserve the old ticket numbers used in conversations and verification documents. New tasks use generated IDs without needing another sequential number.
 - Acceptance checkboxes, completion notes, and links to verification records were preserved. Previously accepted tasks remain closed, including those whose remaining manual checks were explicitly carried to ticket 07.

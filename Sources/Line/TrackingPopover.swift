@@ -135,15 +135,15 @@ struct TrackingPopover: View {
 
     private var mainWindowButton: some View {
         Button(action: openMainWindow) {
-            Label("Open DayTape", systemImage: "gearshape")
+            Label("Open Tape", systemImage: "gearshape")
                 .labelStyle(.iconOnly)
                 .fontWeight(.semibold)
                 .frame(width: 24, height: 24)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .help("Open DayTape")
-        .accessibilityLabel("Open DayTape")
+        .help("Open Tape")
+        .accessibilityLabel("Open Tape")
     }
 
     private func pickerButton(_ title: String, systemImage: String) -> some View {
