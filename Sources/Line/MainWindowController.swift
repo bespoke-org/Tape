@@ -207,12 +207,47 @@ private struct MainSidebar: View {
             if let page { navigation.select(page) }
         })) {
             ForEach(SettingsPage.allCases, id: \.self) { page in
-                Label(page.title, systemImage: page.symbol)
+                Label {
+                    Text(page.title)
+                } icon: {
+                    SettingsSidebarIcon(page: page)
+                }
                     .tag(page)
             }
         }
         .listStyle(.sidebar)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+private struct SettingsSidebarIcon: View {
+    let page: SettingsPage
+
+    private var color: Color {
+        switch page {
+        case .general: .gray
+        case .statistics: .orange
+        case .about: .blue
+        }
+    }
+
+    var body: some View {
+        Image(systemName: page.symbol)
+            .resizable()
+            .scaledToFit()
+            .symbolVariant(.none)
+            .symbolRenderingMode(.monochrome)
+            .font(.system(size: 13, weight: .regular))
+            .foregroundStyle(.white)
+            .frame(width: 13, height: 13)
+            .frame(width: 20, height: 20)
+            .background(color.gradient, in: RoundedRectangle(cornerRadius: 5))
+            .overlay {
+                RoundedRectangle(cornerRadius: 5)
+                    .strokeBorder(.white.opacity(0.2), lineWidth: 0.5)
+            }
+            .shadow(color: .black.opacity(0.12), radius: 1, y: 1)
+            .accessibilityHidden(true)
     }
 }
 
