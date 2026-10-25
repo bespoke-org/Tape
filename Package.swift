@@ -8,6 +8,7 @@ let package = Package(
     targets: [
         .target(name: "LineCore"),
         .executableTarget(name: "Line", dependencies: ["LineCore"]),
-        .testTarget(name: "LineCoreTests", dependencies: ["LineCore"])
+        .testTarget(name: "LineCoreTests", dependencies: ["LineCore"]),
+        .testTarget(name: "LineSmokeTests", dependencies: ["Line"])
     ]
 )

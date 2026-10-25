@@ -110,6 +110,10 @@ focus; the existing smoke code still performs and checks every interaction.
 CI allows 90 seconds per app launch and 30 minutes for the complete smoke job. Use
 `--timeout SECONDS` to override a scenario's local timeout when needed, or
 `--skip-build` to reuse an already-built `build/smoke/Tape.app` bundle.
+Smoke interactions wait up to five seconds for an accessible control or focused
+picker field, polling every 50 ms. Actions run once after readiness; a timeout
+still fails the scenario. Regression tests cover delayed accessibility, timeout
+failures, single-press behavior, and overwrite gestures across the snapping grid.
 
 The [hosted runner comparison](https://github.com/bespoke-org/Tape/actions/runs/40182247945)
 isolated the empty accessibility tree, and the

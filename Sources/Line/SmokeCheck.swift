@@ -9,6 +9,8 @@ import SwiftUI
 @MainActor
 enum SmokeCheck {
     private static var initialContentGap: CGFloat?
+    // Stay inside the entry even when its end snaps toward the drag origin.
+    static let overwriteThroughNowStart = 0.40
     static func run(button: NSStatusBarButton, popover: NSPopover, model: AppModel, output: URL) async {
         initialContentGap = nil
         // Keep unrelated desktop clicks from dismissing this isolated test window.
@@ -133,7 +135,7 @@ enum SmokeCheck {
             try requirePickerHidden(popover)
             try requireAnchored(popover, to: button)
             try await openPicker(named: "Switch task", in: popover)
-            try pressAccessibleControl(named: "Switch to Build Tape", in: contentView(popover))
+            try await pressAccessibleControl(named: "Switch to Build Tape", in: contentView(popover))
             try await settle()
             try require(model.store?.runningTask?.name == "Build Tape", "Choosing an existing task must switch tracking")
             try requirePickerHidden(popover)
@@ -170,7 +172,7 @@ enum SmokeCheck {
 
             // Native Stop is a SwiftUI button. Its public accessibility action stays within this process.
             let content = try contentView(popover)
-            try pressAccessibleControl(named: "Stop", in: content)
+            try await pressAccessibleControl(named: "Stop", in: content)
             try await settle()
             try require(model.store?.runningTask == nil, "Stop button must end tracking")
             try await requireStablePosition(popover)
@@ -261,7 +263,7 @@ enum SmokeCheck {
         try await settle()
         try await openPicker(named: "Switch task", in: popover)
         try enterTaskName("Unsubmitted draft", in: popover, submit: false)
-        try pressAccessibleControl(named: "Open Tape", in: contentView(popover))
+        try await pressAccessibleControl(named: "Open Tape", in: contentView(popover))
         try await settle()
         guard let window = delegate.mainWindowController?.window,
               let content = window.contentView else { throw NSError(domain: "LineSmokeCheck", code: 11) }
@@ -705,17 +707,17 @@ enum SmokeCheck {
                     "Search must not clear an active chart filter when its row is hidden")
         state.search = ""
         try await settle()
-        try pressAccessibleControl(named: "Show tasks", in: content)
+        try await pressAccessibleControl(named: "Show tasks", in: content)
         try await settle()
         try require(state.grouping == .tasks, "The glass control must switch to tasks")
         try require(try breakdownTable().numberOfRows == 2 && state.filter == .tag("dayline"),
                     "Changing grouping must show only the two tasks in the selected tag")
         try capture("statistics-table-filtered")
         let dayLabel = "Explore \(yesterday.formatted(date: .complete, time: .omitted)), 3h"
-        try pressAccessibleControl(named: dayLabel, in: content)
+        try await pressAccessibleControl(named: dayLabel, in: content)
         try await settle()
         try require(state.period == .day && calendar.isDate(state.anchor, inSameDayAs: yesterday), "Day bar must open the session timeline")
-        try pressAccessibleControl(named: "Show tags", in: content)
+        try await pressAccessibleControl(named: "Show tags", in: content)
         try await settle()
         try require(state.grouping == .tags, "The glass control must switch back to tags")
         try await clickRow(0)
@@ -725,7 +727,7 @@ enum SmokeCheck {
         let session = store.entries.first!
         let task = store.task(id: session.taskID)!
         let sessionLabel = "\(task.inputText), \(model.timeFormat.string(from: session.start))–\(model.timeFormat.string(from: session.end!)), 2h"
-        try pressAccessibleControl(named: sessionLabel, in: content)
+        try await pressAccessibleControl(named: sessionLabel, in: content)
         try await settle()
         try require(state.filter == .task(task.id), "Selecting a session must focus its task")
         try await clickRow(breakdownTable().selectedRow)
@@ -987,7 +989,7 @@ enum SmokeCheck {
             _ = input.handle(TimelineTestEvent(type: .leftMouseDown, window: input.window!, location: point))
             _ = input.handle(TimelineTestEvent(type: .leftMouseUp, window: input.window!, location: point))
         }
-        func confirm(_ title: String) throws {
+        func confirm(_ title: String) async throws {
             let host = try contentView(popover).window!
             let panel = host.attachedSheet ?? NSApp.modalWindow ??
                 NSApp.windows.first { $0.isVisible && $0 !== host && $0.contentView.map { accessibilityElement(named: title, in: $0) != nil } == true }
@@ -997,7 +999,7 @@ enum SmokeCheck {
             if let button = descendants(content).compactMap({ $0 as? NSButton }).first(where: { $0.title == title && $0.isEnabled }) {
                 button.performClick(nil)
             } else {
-                try pressAccessibleControl(named: title, in: content)
+                try await pressAccessibleControl(named: title, in: content)
             }
         }
 
@@ -1149,15 +1151,15 @@ enum SmokeCheck {
         try require(model.editingEntryID == nil && model.entryError == nil && store.entries[0].start == original.start && store.task(id: original.taskID)?.color == TaskColor.allCases[nextColorIndex], "Escape must close the editor and retain the saved color without changing entry times")
         try clickEntry(base - 3_300)
         try await settle()
-        try pressAccessibleControl(named: "Delete entry", in: contentView(popover))
+        try await pressAccessibleControl(named: "Delete entry", in: contentView(popover))
         try await settle()
         try require(store.entries.count == 3 && store.runningEntry?.id == running.id, "Asking to delete must preserve records and tracking")
-        try confirm("Cancel")
+        try await confirm("Cancel")
         try await settle()
         try require(store.entries.count == 3 && model.editingEntryID == original.id, "Cancel must retain the entry and editor")
-        try pressAccessibleControl(named: "Delete entry", in: contentView(popover))
+        try await pressAccessibleControl(named: "Delete entry", in: contentView(popover))
         try await settle()
-        try confirm("Delete")
+        try await confirm("Delete")
         try await settle()
         try require(store.entries.count == 2 && store.task(id: original.taskID) == nil, "Confirmed deletion must prune the unused task")
 
@@ -1188,7 +1190,7 @@ enum SmokeCheck {
         try await settle()
         try enterTaskName("Keep", in: popover, submit: false)
         try await settle()
-        try pressAccessibleControl(named: "Use Keep", in: contentView(popover))
+        try await pressAccessibleControl(named: "Use Keep", in: contentView(popover))
         try await settle()
         try require(store.runningTask?.name == "New assignment", "Choosing an editor suggestion must wait for Return")
         try enterTaskName("Keep", in: popover)
@@ -1198,9 +1200,9 @@ enum SmokeCheck {
         try requireAnchored(popover, to: button)
         try clickEntry(base - 300)
         try await settle()
-        try pressAccessibleControl(named: "Delete entry", in: contentView(popover))
+        try await pressAccessibleControl(named: "Delete entry", in: contentView(popover))
         try await settle()
-        try confirm("Delete")
+        try await confirm("Delete")
         try await settle()
         try require(store.runningEntry == nil && store.entries.count == 1, "Deleting the running entry must stop tracking")
         let remaining = store.entries[0]
@@ -1237,7 +1239,7 @@ enum SmokeCheck {
         let resumedFrame = try contentView(popover).window!.frame
         try require(abs(stoppedFrame.minY - resumedFrame.minY) < 0.25 && abs(stoppedFrame.height - resumedFrame.height) < 0.25,
                     "Resuming by resize must not shift the popover: stopped \(stoppedFrame), resumed \(resumedFrame)")
-        try pressAccessibleControl(named: "Stop", in: contentView(popover))
+        try await pressAccessibleControl(named: "Stop", in: contentView(popover))
         try await settle()
         try require(store.runningEntry == nil && store.entries[0].id == remaining.id, "The continued entry must stop normally")
         try requireAnchored(popover, to: button)
@@ -1372,7 +1374,7 @@ enum SmokeCheck {
             case "picker":
                 try clickStatusItem(button)
                 try await settle()
-                try pressAccessibleControl(named: "Switch task", in: contentView(popover))
+                try await pressAccessibleControl(named: "Switch task", in: contentView(popover))
                 try require(model.stop(), "Stop work already accepted when opening Tape")
             case "edit":
                 model.editEntry(id: historical.id)
@@ -1563,7 +1565,7 @@ enum SmokeCheck {
         try require(model.entrySelection == nil && store.entries == original, "Closing must discard an overwrite draft")
         try draw(0.15, 0.25, in: popover, command: true)
         try await settle()
-        try pressAccessibleControl(named: "Use Original", in: contentView(popover))
+        try await pressAccessibleControl(named: "Use Original", in: contentView(popover))
         try await settle()
         try require(store.entries == original, "Overwriting inside the same task must keep one continuous original entry")
         try draw(0.15, 0.25, in: popover, command: true)
@@ -1576,14 +1578,14 @@ enum SmokeCheck {
                     "Committing a middle overwrite must split the original")
         try draw(0.44, 0.10, in: popover, command: true)
         try await settle()
-        try pressAccessibleControl(named: "Use Replacement", in: contentView(popover))
+        try await pressAccessibleControl(named: "Use Replacement", in: contentView(popover))
         try await settle()
         try require(store.entries.count == 3 && store.tasks.count == 3, "Reverse overwrite must cross multiple entries and reuse a task")
-        try draw(0.43, 0.55, in: popover, command: true)
+        try draw(overwriteThroughNowStart, 0.55, in: popover, command: true)
         try await settle()
         let live = try requireSelection(model)
         try require(live.end == nil, "Overwrite through Now must retain running intent")
-        try pressAccessibleControl(named: "Use Original", in: contentView(popover))
+        try await pressAccessibleControl(named: "Use Original", in: contentView(popover))
         try await settle()
         try require(store.runningEntry?.start == live.start && store.runningTask?.name == "Original" && store.entries.count == 3,
                     "Through-Now overwrite must start the chosen task and remove covered entries")
@@ -1592,7 +1594,7 @@ enum SmokeCheck {
         try await openPicker(named: "Switch task", in: popover)
         try require(accessibilityElement(named: "Switch to Tail", in: contentView(popover)) == nil,
                     "Deleted tasks must disappear from picker suggestions")
-        try pressAccessibleControl(named: "Switch task", in: contentView(popover))
+        try await pressAccessibleControl(named: "Switch task", in: contentView(popover))
         try await settle()
         try requireAnchored(popover, to: button)
         try await requireStablePosition(popover)
@@ -1661,7 +1663,7 @@ enum SmokeCheck {
         try require(!model.isDrawing && model.drawnRange == nil, "Escape during drawing must cancel the preview")
         try draw(0.4, 0.3)
         try await settle()
-        try pressAccessibleControl(named: "Use Past work", in: contentView(popover))
+        try await pressAccessibleControl(named: "Use Past work", in: contentView(popover))
         try await settle()
         try require(model.store!.entries.count == 2 && model.store!.tasks.count == 1, "Reverse drag must reuse the selected task")
         try draw(0.05, 0.25, finish: false)
@@ -1813,10 +1815,11 @@ enum SmokeCheck {
     }
 
     private static func openPicker(named title: String, in popover: NSPopover) async throws {
-        try pressAccessibleControl(named: title, in: contentView(popover))
-        try await settle()
-        let fields = descendants(try contentView(popover)).compactMap { $0 as? NSTextField }
-        try require(fields.contains(where: { $0.isEditable && $0.currentEditor() != nil }), "Revealing the picker must focus its search field")
+        try await pressAccessibleControl(named: title, in: contentView(popover))
+        _ = try await waitFor("Revealing the picker must focus its search field") {
+            descendants(try contentView(popover)).compactMap { $0 as? NSTextField }
+                .first(where: { $0.isEditable && $0.currentEditor() != nil })
+        }
     }
 
     private static func requireAnchored(_ popover: NSPopover, to button: NSStatusBarButton) throws {
@@ -1881,7 +1884,7 @@ enum SmokeCheck {
         let middleEditor = try field().currentEditor() as! NSTextView
         middleEditor.setSelectedRange(NSRange(location: ("Building :de" as NSString).length, length: 0))
         try await settle()
-        try pressAccessibleControl(named: "Insert tag :deepwork", in: contentView(popover))
+        try await pressAccessibleControl(named: "Insert tag :deepwork", in: contentView(popover))
         try await settle()
         try require(TaskInput(try field().stringValue) == TaskInput("Building DayLine :deepwork"),
                     "Clicking a completion at the caret must preserve the surrounding name")
@@ -1942,7 +1945,7 @@ enum SmokeCheck {
         try await openPicker(named: "Switch task", in: popover)
         try enterTaskName("Building :newtag", in: popover, submit: false)
         try await settle()
-        try pressAccessibleControl(named: "Switch to Building DayLine", in: contentView(popover))
+        try await pressAccessibleControl(named: "Switch to Building DayLine", in: contentView(popover))
         try await settle()
         try require(store.runningEntry == running && store.runningTask!.tags.contains("newtag"), "Choosing a task must retain typed tags")
 
@@ -1967,7 +1970,7 @@ enum SmokeCheck {
         try require(!store.tags.contains("newtag") && !store.tags.contains("co"), "Unused tags must disappear")
         try enterTaskName("Study", in: popover, submit: false)
         try await settle()
-        try pressAccessibleControl(named: "Use Study", in: contentView(popover))
+        try await pressAccessibleControl(named: "Use Study", in: contentView(popover))
         try await settle()
         try require(store.runningTask?.name == "Building DayLine", "Selecting another task must wait for confirmation")
         try require(try field().stringValue == "Study :универ :deepwork", "Selection must load destination tags without source tags")
@@ -2016,10 +2019,29 @@ enum SmokeCheck {
         [view] + view.subviews.flatMap(descendants)
     }
 
-    private static func pressAccessibleControl(named name: String, in root: NSView, role: NSAccessibility.Role = .button) throws {
-        guard let object = accessibilityElement(named: name, in: root),
-              attribute("accessibilityRole", of: object) as? String == role.rawValue else {
-            throw NSError(domain: "LineSmokeCheck", code: 6, userInfo: [NSLocalizedDescriptionKey: "Accessible \(name) control is missing"])
+    // Poll readiness without replaying actions. A missing control still fails at the deadline.
+    private static func waitFor<Value>(_ description: String, timeout: Duration = .seconds(5),
+                                       probe: () throws -> Value?) async throws -> Value {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: timeout)
+        while true {
+            try Task.checkCancellation()
+            if let value = try probe() { return value }
+            let remaining = clock.now.duration(to: deadline)
+            guard remaining > .zero else {
+                throw NSError(domain: "LineSmokeCheck", code: 6,
+                              userInfo: [NSLocalizedDescriptionKey: "\(description) after waiting \(timeout)"])
+            }
+            try await Task.sleep(for: min(.milliseconds(50), remaining))
+        }
+    }
+
+    static func pressAccessibleControl(named name: String, in root: NSView, role: NSAccessibility.Role = .button,
+                                       timeout: Duration = .seconds(5)) async throws {
+        let object: NSObject = try await waitFor("Accessible \(name) control is missing", timeout: timeout) {
+            guard let object = accessibilityElement(named: name, in: root),
+                  attribute("accessibilityRole", of: object) as? String == role.rawValue else { return nil }
+            return object
         }
         let selector = NSSelectorFromString("accessibilityPerformPress")
         guard object.responds(to: selector), let implementation = object.method(for: selector) else {
