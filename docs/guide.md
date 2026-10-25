@@ -86,12 +86,12 @@ same bundle checks.
 The separate `GUI smoke` workflow also runs on pull requests and pushes to
 `main`. It exercises all 12 scenarios: tracking, main-window persistence,
 timeline, creation, editing, overwrite, resize-overwrite, tags, statistics,
-system activity, continuation, and dismissal. Each scenario gets its own
-`macos-26` runner, so parallel jobs never share a desktop or output directory.
-Failures do not cancel other scenarios; the aggregate `smoke` check passes only
-when every scenario succeeds. `LINE_SMOKE_CAPTURE=1` also enables window
-screenshots and the existing slider/switch rendering assertions. Main-window
-and statistics jobs start in dark appearance so the dark-only slider assertion
+system activity, continuation, and dismissal. A single `smoke` job builds the
+debug app once on `macos-26` and runs all scenarios sequentially. Each scenario
+starts a fresh app with temporary data and separate reports. Failures do not
+stop later scenarios; the job passes only when every scenario succeeds.
+`LINE_SMOKE_CAPTURE=1` also enables window screenshots and the existing
+slider/switch rendering assertions. The job starts in dark appearance so the dark-only slider assertion
 runs; the statistics scenario also captures its existing light appearance step.
 Both workflows can also be launched manually from
 the Actions tab once they are on `main`, selecting the branch to test. Smoke
@@ -107,8 +107,9 @@ an empty accessibility tree on all three hosted images we tried: `macos-26`,
 and [automation permissions](https://github.com/actions/runner-images/blob/main/images/macos/scripts/build/configure-tccdb-macos.sh).
 The reader requests the test app's UI elements without sending input or taking
 focus; the existing smoke code still performs and checks every interaction.
-CI allows 90 seconds per app launch and ten minutes per scenario job. Use
-`--timeout SECONDS` to override a scenario's local timeout when needed.
+CI allows 90 seconds per app launch and 30 minutes for the complete smoke job. Use
+`--timeout SECONDS` to override a scenario's local timeout when needed, or
+`--skip-build` to reuse an already-built `build/smoke/Tape.app` bundle.
 
 The [hosted runner comparison](https://github.com/bespoke-org/Tape/actions/runs/40182247945)
 isolated the empty accessibility tree, and the
