@@ -77,6 +77,20 @@ The paper icon source is `Resources/TapeIcon.png`. Run `./scripts/build-icon.sh`
 
 ## Validation
 
+GitHub Actions runs `Verify` on pull requests and pushes to `main`. It runs the
+Swift tests, builds the release app, and validates its plist, executable, icon,
+and code signature on a macOS 26 ARM64 runner. Test reports are retained for
+seven days. Run `./scripts/verify-app.sh` after a local app build to perform the
+same bundle checks.
+
+The separate `GUI smoke` workflow runs the default tracking scenario and
+`--main-window` sequentially. Launch it manually from the Actions tab once the
+workflow is on `main`, selecting the branch to test. Logs and generated previews
+are retained for seven days, including on failure. It is separate from normal
+PR verification because these checks require a graphical session and depend on
+window focus and timing. Neither workflow configures required branch checks;
+select `verify` in the repository's branch rules if merges should require it.
+
 ```sh
 swift test
 python3 scripts/smoke-test.py
