@@ -77,6 +77,52 @@ The paper icon source is `Resources/TapeIcon.png`. Run `./scripts/build-icon.sh`
 
 ## Validation
 
+GitHub Actions runs `Verify` on pull requests and pushes to `main`. It runs the
+Swift tests, builds the release app, and validates its plist, executable, icon,
+and code signature on a macOS 26 ARM64 runner. Test reports are retained for
+seven days. Run `./scripts/verify-app.sh` after a local app build to perform the
+same bundle checks.
+
+The separate `GUI smoke` workflow also runs on pull requests and pushes to
+`main`. It exercises all 12 scenarios: tracking, main-window persistence,
+timeline, creation, editing, overwrite, resize-overwrite, tags, statistics,
+system activity, continuation, and dismissal. A single `smoke` job builds the
+debug app once on `macos-26` and runs all scenarios sequentially. Each scenario
+starts a fresh app with temporary data and separate reports. Failures do not
+stop later scenarios; the job passes only when every scenario succeeds.
+`LINE_SMOKE_CAPTURE=1` also enables window screenshots and the existing
+slider/switch rendering assertions. The job starts in dark appearance so the dark-only slider assertion
+runs; the statistics scenario also captures its existing light appearance step.
+Both workflows can also be launched manually from
+the Actions tab once they are on `main`, selecting the branch to test. Smoke
+logs and generated previews are retained for seven days, including on failure.
+Neither workflow configures required branch checks; select `verify` and `smoke`
+in the repository's branch rules if merges should require them.
+
+The GUI job starts a read-only System Events accessibility reader for the test
+app and stops it afterward. Without an accessibility client, SwiftUI returned
+an empty accessibility tree on all three hosted images we tried: `macos-26`,
+`macos-26-intel`, and `xcode-27`. GitHub's images already configure
+[GUI login](https://github.com/actions/runner-images/blob/main/images/macos/scripts/build/configure-autologin.sh)
+and [automation permissions](https://github.com/actions/runner-images/blob/main/images/macos/scripts/build/configure-tccdb-macos.sh).
+The reader requests the test app's UI elements without sending input or taking
+focus; the existing smoke code still performs and checks every interaction.
+CI allows 90 seconds per app launch and 30 minutes for the complete smoke job. Use
+`--timeout SECONDS` to override a scenario's local timeout when needed, or
+`--skip-build` to reuse an already-built `build/smoke/Tape.app` bundle.
+Smoke interactions wait up to five seconds for an accessible control or focused
+picker field, polling every 50 ms. Actions run once after readiness; a timeout
+still fails the scenario. Regression tests cover delayed accessibility, timeout
+failures, single-press behavior, and overwrite gestures across the snapping grid.
+
+The [hosted runner comparison](https://github.com/bespoke-org/Tape/actions/runs/40182247945)
+isolated the empty accessibility tree, and the
+[macOS 26 run with the reader](https://github.com/bespoke-org/Tape/actions/runs/40182829546)
+passed both scenarios without changing their assertions. The main-window smoke
+still depends on native `NSPopUpButton` backing controls. A local macOS 27 run
+exposed accessible popup elements without those native instances, so that check
+needs adaptation before moving GUI CI to the Xcode 27 image.
+
 ```sh
 swift test
 python3 scripts/smoke-test.py
@@ -88,11 +134,14 @@ python3 scripts/smoke-test.py --editing
 python3 scripts/smoke-test.py --resize-overwrite
 python3 scripts/smoke-test.py --system-activity
 python3 scripts/smoke-test.py --continuation
+python3 scripts/smoke-test.py --statistics
+python3 scripts/smoke-test.py --tags
+python3 scripts/smoke-test.py --dismissal
 ```
 
 Tests exercise the public tracking operations using a controlled clock and temporary real files. Native menu bar behavior, focus, dismissal, rendering, and appearance/accessibility settings also need checks in the running app.
 
-The smoke check builds a separate debug bundle under `build/smoke/`, uses temporary data, drives the app's own native text field and accessible Stop button, then exits. It kills the test process if it exceeds 20 seconds, 40 seconds for editing or main-window checks, or 50 seconds for continuation. It also checks popover close/reopen, anchoring to the menu bar through content resizing, and continued tracking. It needs a logged-in graphical session; avoid interacting with other apps during the short run. It does not change system accessibility settings or require control of other apps, and it leaves the main release bundle untouched.
+The smoke check builds a separate debug bundle under `build/smoke/`, uses temporary data, drives the app's own native text field and accessible Stop button, then exits. Its default timeout is 20 seconds per launch, 40 seconds for editing, and 50 seconds for statistics, tags, continuation, or main-window checks. CI overrides these limits with `--timeout 90`. It also checks popover close/reopen, anchoring to the menu bar through content resizing, and continued tracking. It needs a logged-in graphical session; avoid interacting with other apps during the short run. It does not change system accessibility settings or require control of other apps, and it leaves the main release bundle untouched.
 
 The main-window smoke check runs two fresh processes with isolated records and window-frame preferences. It exercises the native slider, time-format popup and keyboard selection, popover button, menu actions, Command-comma, Command-W, draft dismissal, minimize/restore, single-window reuse, frame restoration, activation policy, and continued tracking. It saves a content preview under `build/main-window-smoke-results/settings.png`. For a composited image including native glass, run `LINE_SMOKE_CAPTURE=1 python3 scripts/smoke-test.py --main-window`; this captures only the test window into `settings-window.png` when screen capture is available. It also captures `settings-first-open.png` before any slider interaction and checks that the native thumb is light in dark appearance. Physical Dock/app-switcher behavior, Spaces, and the full appearance/accessibility matrix still need manual verification.
 
