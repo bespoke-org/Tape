@@ -82,6 +82,7 @@ jobs:
       - name: Run smoke scenario
         env:
           SMOKE_SCENARIO: ${{ matrix.scenario }}
+          LINE_SMOKE_CAPTURE: '1'
         run: |
           mkdir -p build/reports
           args=(--timeout 90)
