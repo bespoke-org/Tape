@@ -90,7 +90,10 @@ system activity, continuation, and dismissal. Each scenario gets its own
 `macos-26` runner, so parallel jobs never share a desktop or output directory.
 Failures do not cancel other scenarios; the aggregate `smoke` check passes only
 when every scenario succeeds. `LINE_SMOKE_CAPTURE=1` also enables window
-screenshots and the existing slider/switch rendering assertions. Both workflows can also be launched manually from
+screenshots and the existing slider/switch rendering assertions. Main-window
+and statistics jobs start in dark appearance so the dark-only slider assertion
+runs; the statistics scenario also captures its existing light appearance step.
+Both workflows can also be launched manually from
 the Actions tab once they are on `main`, selecting the branch to test. Smoke
 logs and generated previews are retained for seven days, including on failure.
 Neither workflow configures required branch checks; select `verify` and `smoke`

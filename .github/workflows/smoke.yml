@@ -50,6 +50,12 @@ jobs:
           sw_vers
           stat -f '%Su' /dev/console
 
+      - name: Set dark appearance for rendering checks
+        if: ${{ matrix.scenario == 'main-window' || matrix.scenario == 'statistics' }}
+        run: |
+          osascript -e 'tell application "System Events" to tell appearance preferences to set dark mode to true'
+          test "$(osascript -e 'tell application "System Events" to tell appearance preferences to get dark mode')" = true
+
       # Build first so a cold compiler does not consume the smoke script's build timeout.
       - name: Build debug app
         id: build
