@@ -2019,6 +2019,9 @@ enum SmokeCheck {
     private static func pressAccessibleControl(named name: String, in root: NSView, role: NSAccessibility.Role = .button) throws {
         guard let object = accessibilityElement(named: name, in: root),
               attribute("accessibilityRole", of: object) as? String == role.rawValue else {
+            print("[DEBUG-ci-ax] Missing \(name); active=\(NSApp.isActive); window=\(root.window?.isVisible == true); screens=\(NSScreen.screens.count)")
+            var remaining = 80
+            dumpAccessibility(root, depth: 0, remaining: &remaining)
             throw NSError(domain: "LineSmokeCheck", code: 6, userInfo: [NSLocalizedDescriptionKey: "Accessible \(name) control is missing"])
         }
         let selector = NSSelectorFromString("accessibilityPerformPress")
@@ -2029,6 +2032,17 @@ enum SmokeCheck {
         typealias Press = @convention(c) (AnyObject, Selector) -> Bool
         let pressed = unsafeBitCast(implementation, to: Press.self)(object, selector)
         try require(pressed, "Accessible \(name) control must be operable")
+    }
+
+    private static func dumpAccessibility(_ element: Any, depth: Int, remaining: inout Int) {
+        guard depth < 8, remaining > 0, let object = element as? NSObject else { return }
+        remaining -= 1
+        let values = ["accessibilityRole", "accessibilityLabel", "accessibilityTitle", "accessibilityValue"].map {
+            "\($0)=\(String(describing: attribute($0, of: object)))"
+        }.joined(separator: " ")
+        let children = attribute("accessibilityChildren", of: object) as? [Any] ?? []
+        print("[DEBUG-ci-ax] \(depth) \(type(of: object)) \(values) children=\(children.count)")
+        for child in children { dumpAccessibility(child, depth: depth + 1, remaining: &remaining) }
     }
 
     private static func accessibilityElement(named name: String, in element: Any) -> NSObject? {
