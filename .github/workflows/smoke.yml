@@ -1,0 +1,119 @@
+name: GUI smoke
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: smoke
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+          sw_vers
+          stat -f '%Su' /dev/console
+
+      - name: Set dark appearance for rendering checks
+        run: |
+          osascript -e 'tell application "System Events" to tell appearance preferences to set dark mode to true'
+          test "$(osascript -e 'tell application "System Events" to tell appearance preferences to get dark mode')" = true
+
+      # All scenarios exercise this same bundle without rebuilding it.
+      - name: Build debug app
+        run: LINE_APP_OUTPUT="$PWD/build/smoke/Tape.app" ./scripts/build-app.sh debug
+
+      - name: Attach an accessibility reader
+        run: |
+          mkdir -p build/reports
+          # SwiftUI creates its accessibility tree only after a client requests it.
+          # System Events is pre-authorized on GitHub's macOS image. This reader
+          # observes the isolated smoke app without sending input or taking focus.
+          osascript > build/reports/accessibility-reader.log 2>&1 <<'APPLESCRIPT' &
+          repeat
+            try
+              tell application "System Events"
+                if exists application process "Tape" then
+                  get entire contents of application process "Tape"
+                end if
+              end tell
+            on error message number code
+              -- The smoke app exits between scenarios and between persistence launches.
+              if code is not -1728 and code is not -600 then error message number code
+            end try
+            delay 0.2
+          end repeat
+          APPLESCRIPT
+          echo "$!" > "$RUNNER_TEMP/tape-accessibility-reader.pid"
+
+      # Each invocation starts a fresh app with temporary data and separate reports.
+      - name: Run all smoke scenarios
+        env:
+          LINE_SMOKE_CAPTURE: '1'
+        run: |
+          mkdir -p build/reports
+          scenarios=(tracking main-window timeline creation editing overwrite resize-overwrite tags statistics system-activity continuation dismissal)
+          failed=()
+          for scenario in "${scenarios[@]}"; do
+            echo "::group::Smoke: $scenario"
+            args=(--skip-build --timeout 90)
+            if [[ "$scenario" != tracking ]]; then
+              args+=("--$scenario")
+            fi
+            if python3 scripts/smoke-test.py "${args[@]}" 2>&1 | tee "build/reports/$scenario-smoke.log"; then
+              echo "- PASS: $scenario" >> "$GITHUB_STEP_SUMMARY"
+            else
+              failed+=("$scenario")
+              echo "- FAIL: $scenario" >> "$GITHUB_STEP_SUMMARY"
+            fi
+            echo '::endgroup::'
+          done
+          if (( ${#failed[@]} )); then
+            echo "::error::Smoke scenarios failed: ${failed[*]}"
+            exit 1
+          fi
+
+      - name: Stop accessibility reader
+        if: always()
+        run: |
+          if [[ -f "$RUNNER_TEMP/tape-accessibility-reader.pid" ]]; then
+            reader_pid=$(cat "$RUNNER_TEMP/tape-accessibility-reader.pid")
+            if ! kill -0 "$reader_pid" 2>/dev/null; then
+              cat build/reports/accessibility-reader.log
+              echo 'The accessibility reader exited unexpectedly.' >&2
+              exit 1
+            fi
+            kill "$reader_pid"
+            rm "$RUNNER_TEMP/tape-accessibility-reader.pid"
+          fi
+
+      - name: Upload smoke reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: smoke-results
+          path: |
+            build/reports/
+            build/*smoke-results/
+          retention-days: 7
+          if-no-files-found: warn
