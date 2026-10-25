@@ -83,18 +83,32 @@ and code signature on a macOS 26 ARM64 runner. Test reports are retained for
 seven days. Run `./scripts/verify-app.sh` after a local app build to perform the
 same bundle checks.
 
-The separate `GUI smoke` workflow runs the default tracking scenario and
-`--main-window` sequentially. Launch it manually from the Actions tab once the
-workflow is on `main`, selecting the branch to test. Logs and generated previews
-are retained for seven days, including on failure. It is separate from normal
-PR verification because these checks require a graphical session and depend on
-window focus and timing. Neither workflow configures required branch checks;
-select `verify` in the repository's branch rules if merges should require it.
+The separate `GUI smoke` workflow also runs on pull requests and pushes to
+`main`. It exercises the default tracking scenario and `--main-window`
+sequentially on `macos-26`. Both workflows can also be launched manually from
+the Actions tab once they are on `main`, selecting the branch to test. Smoke
+logs and generated previews are retained for seven days, including on failure.
+Neither workflow configures required branch checks; select `verify` and `smoke`
+in the repository's branch rules if merges should require them.
 
-The initial hosted GUI trial failed to find the accessible Start/Switch task
-controls, while the default tracking smoke passed locally. Keep the GUI workflow
-manual until that difference is resolved; a passing `Verify` does not establish
-that the GUI smoke checks pass.
+The GUI job starts a read-only System Events accessibility reader for the test
+app and stops it afterward. Without an accessibility client, SwiftUI returned
+an empty accessibility tree on all three hosted images we tried: `macos-26`,
+`macos-26-intel`, and `xcode-27`. GitHub's images already configure
+[GUI login](https://github.com/actions/runner-images/blob/main/images/macos/scripts/build/configure-autologin.sh)
+and [automation permissions](https://github.com/actions/runner-images/blob/main/images/macos/scripts/build/configure-tccdb-macos.sh).
+The reader requests the test app's UI elements without sending input or taking
+focus; the existing smoke code still performs and checks every interaction.
+CI allows 60 seconds for tracking and 90 seconds per main-window launch. Use
+`--timeout SECONDS` to override a scenario's local timeout when needed.
+
+The [hosted runner comparison](https://github.com/bespoke-org/Tape/actions/runs/40182247945)
+isolated the empty accessibility tree, and the
+[macOS 26 run with the reader](https://github.com/bespoke-org/Tape/actions/runs/40182829546)
+passed both scenarios without changing their assertions. The main-window smoke
+still depends on native `NSPopUpButton` backing controls. A local macOS 27 run
+exposed accessible popup elements without those native instances, so that check
+needs adaptation before moving GUI CI to the Xcode 27 image.
 
 ```sh
 swift test
