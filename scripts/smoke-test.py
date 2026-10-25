@@ -8,6 +8,7 @@ import subprocess
 import tempfile
 
 parser = argparse.ArgumentParser()
+parser.add_argument('--timeout', type=int, help='Maximum seconds per app launch, including on slower CI runners')
 modes = parser.add_mutually_exclusive_group()
 modes.add_argument('--statistics', action='store_true', help='Verify statistics charts, filters and navigation')
 modes.add_argument('--tags', action='store_true', help='Verify native task tags, autocomplete, and editing')
@@ -22,6 +23,10 @@ modes.add_argument('--dismissal', action='store_true', help='Verify outside-clic
 modes.add_argument('--editing', action='store_true', help='Verify inline entry correction, resizing, and deletion')
 args = parser.parse_args()
 run_timeout = 50 if args.statistics or args.tags or args.continuation or args.main_window else 40 if args.editing else 20
+if args.timeout is not None:
+    if args.timeout <= 0:
+        parser.error('--timeout must be positive')
+    run_timeout = args.timeout
 root = Path(__file__).resolve().parent.parent
 app = root / 'build/smoke/Tape.app'
 subprocess.run([str(root / 'scripts/build-app.sh'), 'debug'], cwd=root,
@@ -40,7 +45,10 @@ with tempfile.TemporaryDirectory(prefix='line-smoke-') as data:
                          LINE_SMOKE_EDITING='1' if args.editing else '0', LINE_SMOKE_CREATION='1' if args.creation else '0', LINE_SMOKE_OVERWRITE='1' if args.overwrite else '0'),
                 capture_output=True, text=True, timeout=run_timeout,
             )
-        except subprocess.TimeoutExpired:
+        except subprocess.TimeoutExpired as error:
+            for captured in (error.stdout, error.stderr):
+                if captured:
+                    print(captured.decode(errors='replace') if isinstance(captured, bytes) else captured, end='')
             raise SystemExit(f'Smoke check exceeded {run_timeout} seconds. The test app was terminated.')
         if result.stdout:
             print(result.stdout, end='')

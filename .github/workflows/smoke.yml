@@ -3,6 +3,8 @@ name: GUI smoke
 on:
   workflow_dispatch:
   pull_request:
+  push:
+    branches: [main]
 
 permissions:
   contents: read
@@ -17,11 +19,7 @@ concurrency:
 
 jobs:
   smoke:
-    strategy:
-      fail-fast: false
-      matrix:
-        runner: [macos-26]
-    runs-on: ${{ matrix.runner }}
+    runs-on: macos-26
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -43,35 +41,57 @@ jobs:
       - name: Attach an accessibility reader
         run: |
           mkdir -p build/reports
+          # SwiftUI creates its accessibility tree only after a client requests it.
+          # System Events is pre-authorized on GitHub's macOS image. This reader
+          # observes the isolated smoke app without sending input or taking focus.
           osascript > build/reports/accessibility-reader.log 2>&1 <<'APPLESCRIPT' &
-          repeat 600 times
-            tell application "System Events"
-              if exists application process "Tape" then
-                get entire contents of application process "Tape"
-              end if
-            end tell
+          repeat
+            try
+              tell application "System Events"
+                if exists application process "Tape" then
+                  get entire contents of application process "Tape"
+                end if
+              end tell
+            on error message number code
+              -- The smoke app exits between scenarios and between persistence launches.
+              if code is not -1728 and code is not -600 then error message number code
+            end try
             delay 0.2
           end repeat
           APPLESCRIPT
-          echo "$!" > build/accessibility-reader.pid
+          echo "$!" > "$RUNNER_TEMP/tape-accessibility-reader.pid"
 
       # These scenarios share the desktop and must run sequentially.
       - name: Tracking smoke
         run: |
           mkdir -p build/reports
-          python3 scripts/smoke-test.py 2>&1 | tee build/reports/tracking-smoke.log
+          python3 scripts/smoke-test.py --timeout 60 2>&1 | tee build/reports/tracking-smoke.log
 
       - name: Main window smoke
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: |
           mkdir -p build/reports
-          python3 scripts/smoke-test.py --main-window 2>&1 | tee build/reports/main-window-smoke.log
+          python3 scripts/smoke-test.py --main-window --timeout 90 2>&1 | tee build/reports/main-window-smoke.log
+
+      - name: Stop accessibility reader
+        if: always()
+        run: |
+          if [[ -f "$RUNNER_TEMP/tape-accessibility-reader.pid" ]]; then
+            reader_pid=$(cat "$RUNNER_TEMP/tape-accessibility-reader.pid")
+            if ! kill -0 "$reader_pid" 2>/dev/null; then
+              cat build/reports/accessibility-reader.log
+              echo 'The accessibility reader exited unexpectedly.' >&2
+              exit 1
+            fi
+            kill "$reader_pid"
+            rm "$RUNNER_TEMP/tape-accessibility-reader.pid"
+          fi
 
       - name: Upload smoke reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: smoke-results-${{ matrix.runner }}
+          name: smoke-results
           path: |
             build/reports/
             build/*smoke-results/
