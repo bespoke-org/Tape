@@ -18,9 +18,26 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  smoke:
+  scenarios:
+    name: GUI / ${{ matrix.scenario }}
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario:
+          - tracking
+          - main-window
+          - timeline
+          - creation
+          - editing
+          - overwrite
+          - resize-overwrite
+          - tags
+          - statistics
+          - system-activity
+          - continuation
+          - dismissal
     runs-on: macos-26
-    timeout-minutes: 15
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -61,17 +78,17 @@ jobs:
           APPLESCRIPT
           echo "$!" > "$RUNNER_TEMP/tape-accessibility-reader.pid"
 
-      # These scenarios share the desktop and must run sequentially.
-      - name: Tracking smoke
+      # Each matrix job has its own desktop, build directory, and test data.
+      - name: Run smoke scenario
+        env:
+          SMOKE_SCENARIO: ${{ matrix.scenario }}
         run: |
           mkdir -p build/reports
-          python3 scripts/smoke-test.py --timeout 60 2>&1 | tee build/reports/tracking-smoke.log
-
-      - name: Main window smoke
-        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
-        run: |
-          mkdir -p build/reports
-          python3 scripts/smoke-test.py --main-window --timeout 90 2>&1 | tee build/reports/main-window-smoke.log
+          args=(--timeout 90)
+          if [[ "$SMOKE_SCENARIO" != tracking ]]; then
+            args+=("--$SMOKE_SCENARIO")
+          fi
+          python3 scripts/smoke-test.py "${args[@]}" 2>&1 | tee "build/reports/$SMOKE_SCENARIO-smoke.log"
 
       - name: Stop accessibility reader
         if: always()
@@ -91,9 +108,22 @@ jobs:
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: smoke-results
+          name: smoke-results-${{ matrix.scenario }}
           path: |
             build/reports/
             build/*smoke-results/
           retention-days: 7
           if-no-files-found: warn
+
+  # One stable required check covers the entire matrix, including failed jobs.
+  smoke:
+    name: smoke
+    needs: scenarios
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Require every GUI scenario to pass
+        env:
+          RESULT: ${{ needs.scenarios.result }}
+        run: test "$RESULT" = success
