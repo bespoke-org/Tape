@@ -2,9 +2,6 @@ name: GUI smoke
 
 on:
   workflow_dispatch:
-  # Bootstrap the hosted-runner trial before this workflow reaches main.
-  push:
-    branches: [mcherigin/ci]
 
 permissions:
   contents: read

@@ -91,6 +91,11 @@ PR verification because these checks require a graphical session and depend on
 window focus and timing. Neither workflow configures required branch checks;
 select `verify` in the repository's branch rules if merges should require it.
 
+The initial hosted GUI trial failed to find the accessible Start/Switch task
+controls, while the default tracking smoke passed locally. Keep the GUI workflow
+manual until that difference is resolved; a passing `Verify` does not establish
+that the GUI smoke checks pass.
+
 ```sh
 swift test
 python3 scripts/smoke-test.py
