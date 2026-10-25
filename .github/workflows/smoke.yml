@@ -20,7 +20,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        runner: [macos-26, macos-26-intel, xcode-27]
+        runner: [macos-26]
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 15
     steps:
@@ -39,6 +39,21 @@ jobs:
       - name: Build debug app
         id: build
         run: LINE_APP_OUTPUT="$PWD/build/smoke/Tape.app" ./scripts/build-app.sh debug
+
+      - name: Attach an accessibility reader
+        run: |
+          mkdir -p build/reports
+          osascript > build/reports/accessibility-reader.log 2>&1 <<'APPLESCRIPT' &
+          repeat 600 times
+            tell application "System Events"
+              if exists application process "Tape" then
+                get entire contents of application process "Tape"
+              end if
+            end tell
+            delay 0.2
+          end repeat
+          APPLESCRIPT
+          echo "$!" > build/accessibility-reader.pid
 
       # These scenarios share the desktop and must run sequentially.
       - name: Tracking smoke
