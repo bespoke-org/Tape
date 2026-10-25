@@ -84,8 +84,12 @@ seven days. Run `./scripts/verify-app.sh` after a local app build to perform the
 same bundle checks.
 
 The separate `GUI smoke` workflow also runs on pull requests and pushes to
-`main`. It exercises the default tracking scenario and `--main-window`
-sequentially on `macos-26`. Both workflows can also be launched manually from
+`main`. It exercises all 12 scenarios: tracking, main-window persistence,
+timeline, creation, editing, overwrite, resize-overwrite, tags, statistics,
+system activity, continuation, and dismissal. Each scenario gets its own
+`macos-26` runner, so parallel jobs never share a desktop or output directory.
+Failures do not cancel other scenarios; the aggregate `smoke` check passes only
+when every scenario succeeds. Both workflows can also be launched manually from
 the Actions tab once they are on `main`, selecting the branch to test. Smoke
 logs and generated previews are retained for seven days, including on failure.
 Neither workflow configures required branch checks; select `verify` and `smoke`
@@ -99,7 +103,7 @@ an empty accessibility tree on all three hosted images we tried: `macos-26`,
 and [automation permissions](https://github.com/actions/runner-images/blob/main/images/macos/scripts/build/configure-tccdb-macos.sh).
 The reader requests the test app's UI elements without sending input or taking
 focus; the existing smoke code still performs and checks every interaction.
-CI allows 60 seconds for tracking and 90 seconds per main-window launch. Use
+CI allows 90 seconds per app launch and ten minutes per scenario job. Use
 `--timeout SECONDS` to override a scenario's local timeout when needed.
 
 The [hosted runner comparison](https://github.com/bespoke-org/Tape/actions/runs/40182247945)
@@ -121,11 +125,14 @@ python3 scripts/smoke-test.py --editing
 python3 scripts/smoke-test.py --resize-overwrite
 python3 scripts/smoke-test.py --system-activity
 python3 scripts/smoke-test.py --continuation
+python3 scripts/smoke-test.py --statistics
+python3 scripts/smoke-test.py --tags
+python3 scripts/smoke-test.py --dismissal
 ```
 
 Tests exercise the public tracking operations using a controlled clock and temporary real files. Native menu bar behavior, focus, dismissal, rendering, and appearance/accessibility settings also need checks in the running app.
 
-The smoke check builds a separate debug bundle under `build/smoke/`, uses temporary data, drives the app's own native text field and accessible Stop button, then exits. It kills the test process if it exceeds 20 seconds, 40 seconds for editing or main-window checks, or 50 seconds for continuation. It also checks popover close/reopen, anchoring to the menu bar through content resizing, and continued tracking. It needs a logged-in graphical session; avoid interacting with other apps during the short run. It does not change system accessibility settings or require control of other apps, and it leaves the main release bundle untouched.
+The smoke check builds a separate debug bundle under `build/smoke/`, uses temporary data, drives the app's own native text field and accessible Stop button, then exits. Its default timeout is 20 seconds per launch, 40 seconds for editing, and 50 seconds for statistics, tags, continuation, or main-window checks. CI overrides these limits with `--timeout 90`. It also checks popover close/reopen, anchoring to the menu bar through content resizing, and continued tracking. It needs a logged-in graphical session; avoid interacting with other apps during the short run. It does not change system accessibility settings or require control of other apps, and it leaves the main release bundle untouched.
 
 The main-window smoke check runs two fresh processes with isolated records and window-frame preferences. It exercises the native slider, time-format popup and keyboard selection, popover button, menu actions, Command-comma, Command-W, draft dismissal, minimize/restore, single-window reuse, frame restoration, activation policy, and continued tracking. It saves a content preview under `build/main-window-smoke-results/settings.png`. For a composited image including native glass, run `LINE_SMOKE_CAPTURE=1 python3 scripts/smoke-test.py --main-window`; this captures only the test window into `settings-window.png` when screen capture is available. It also captures `settings-first-open.png` before any slider interaction and checks that the native thumb is light in dark appearance. Physical Dock/app-switcher behavior, Spaces, and the full appearance/accessibility matrix still need manual verification.
 
