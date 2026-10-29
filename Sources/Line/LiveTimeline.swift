@@ -58,14 +58,14 @@ struct LiveTimeline: View {
                             let left = max(0, position(leftDate, width: width))
                             let rightDate = preview?.end ?? segment.interval.end
                             let right = min(width, position(rightDate, width: width))
-
+                            let shape = entryShape(from: leftDate, to: rightDate, width: width)
                             let blockWidth = max(2, right - left)
                             let color = segment.isMissed ? Color.secondary : task.color.displayColor
                             Button { model.editEntry(id: plan.id) } label: {
-                                RoundedRectangle(cornerRadius: 4)
+                                shape
                                     .fill(reduceTransparency ? Color(nsColor: .controlBackgroundColor) : color.opacity(0.08))
                                     .overlay {
-                                        RoundedRectangle(cornerRadius: 4)
+                                        shape
                                             .strokeBorder(color.opacity(contrast == .increased || selected ? 1 : 0.6),
                                                           style: StrokeStyle(lineWidth: selected || contrast == .increased ? 2 : 1, dash: [5, 3]))
                                     }
@@ -92,18 +92,18 @@ struct LiveTimeline: View {
                             let end = min(preview?.end ?? entry.end ?? now, now)
                             let left = max(0, position(start, width: width))
                             let right = min(width, position(end, width: width))
-
+                            let shape = entryShape(from: start, to: end, width: width)
                             let entryWidth = max(2, right - left)
                             Button { model.editEntry(id: entry.id) } label: {
-                                RoundedRectangle(cornerRadius: 4)
+                                shape
                                     .fill(reduceTransparency ? Color(nsColor: .controlBackgroundColor) : task.color.displayColor.opacity(0.23))
                                     .overlay {
                                         if isSelected {
-                                            selectionStripes(color: task.color.displayColor)
+                                            selectionStripes(color: task.color.displayColor, shape: shape)
                                         }
                                     }
                                     .overlay {
-                                        RoundedRectangle(cornerRadius: 4)
+                                        shape
                                             .strokeBorder(task.color.displayColor, lineWidth: contrast == .increased || isSelected ? 2 : 1)
                                     }
                                     .overlay(alignment: .leading) {
@@ -125,10 +125,10 @@ struct LiveTimeline: View {
                                 let futureLeft = max(0, position(now, width: width))
                                 let futureRight = min(width, position(preview.end, width: width))
                                 if futureRight > futureLeft {
-
-                                    RoundedRectangle(cornerRadius: 4).fill(task.color.displayColor.opacity(0.08))
+                                    let futureShape = entryShape(from: now, to: preview.end, width: width)
+                                    futureShape.fill(task.color.displayColor.opacity(0.08))
                                         .overlay {
-                                            RoundedRectangle(cornerRadius: 4).strokeBorder(task.color.displayColor.opacity(0.6),
+                                            futureShape.strokeBorder(task.color.displayColor.opacity(0.6),
                                                                      style: StrokeStyle(lineWidth: 2, dash: [5, 3]))
                                         }
                                         .frame(width: futureRight - futureLeft, height: 46)
@@ -144,14 +144,14 @@ struct LiveTimeline: View {
                         let left = max(0, position(selection.start, width: width))
                         let right = min(width, position(selection.end, width: width))
                         if right > left {
-
-                            RoundedRectangle(cornerRadius: 4)
+                            let shape = entryShape(from: selection.start, to: selection.end, width: width)
+                            shape
                                 .fill(Color.gray.opacity(reduceTransparency ? 0.35 : 0.18))
                                 .overlay {
-                                    selectionStripes(color: .gray)
+                                    selectionStripes(color: .gray, shape: shape)
                                 }
                                 .overlay {
-                                    RoundedRectangle(cornerRadius: 4)
+                                    shape
                                         .strokeBorder(Color.gray, lineWidth: 2)
                                 }
                                 .frame(width: right - left, height: 46)
@@ -247,7 +247,15 @@ struct LiveTimeline: View {
         return DateInterval(start: selection.start, end: max(selection.start, selection.end ?? now))
     }
 
-    private func selectionStripes(color: Color) -> some View {
+    private func entryShape(from start: Date, to end: Date, width: CGFloat) -> UnevenRoundedRectangle {
+        // Match the Now marker's half-width so visually touching edges join squarely.
+        let leading: CGFloat = abs(position(start, width: width) - position(now, width: width)) <= 0.75 ? 0 : 4
+        let trailing: CGFloat = abs(position(end, width: width) - position(now, width: width)) <= 0.75 ? 0 : 4
+        return UnevenRoundedRectangle(topLeadingRadius: leading, bottomLeadingRadius: leading,
+                                      bottomTrailingRadius: trailing, topTrailingRadius: trailing)
+    }
+
+    private func selectionStripes(color: Color, shape: UnevenRoundedRectangle) -> some View {
         Canvas { context, size in
             var stripes = Path()
             for x in stride(from: -size.height, through: size.width, by: 16) {
@@ -256,7 +264,7 @@ struct LiveTimeline: View {
             }
             context.stroke(stripes, with: .color(color.opacity(contrast == .increased ? 0.5 : 0.25)), lineWidth: 5)
         }
-        .clipShape(RoundedRectangle(cornerRadius: 4))
+        .clipShape(shape)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
