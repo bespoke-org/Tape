@@ -3,7 +3,7 @@ import LineCore
 import SwiftUI
 
 @MainActor
-final class MainWindowController: NSWindowController, NSWindowDelegate, NSToolbarDelegate {
+final class MainWindowController: NSWindowController, NSWindowDelegate, NSToolbarDelegate, NSMenuItemValidation {
     private static let sidebarSeparator = NSToolbarItem.Identifier("Tape.SidebarSeparator")
     private static let navigation = NSToolbarItem.Identifier("Tape.Navigation")
     private static let settingsTitle = NSToolbarItem.Identifier("Tape.SettingsTitle")
@@ -147,6 +147,24 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSToolba
     @objc private func navigate(_ sender: NSSegmentedControl) {
         if sender.selectedSegment == 0 { navigation.goBack() }
         else if sender.selectedSegment == 1 { navigation.goForward() }
+    }
+
+    @objc func toggleSettingsSidebar(_ sender: Any?) {
+        (window?.contentViewController as? NSSplitViewController)?.toggleSidebar(sender)
+    }
+
+    @objc func goBack(_ sender: Any?) { navigation.goBack() }
+
+    @objc func goForward(_ sender: Any?) { navigation.goForward() }
+
+    func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        guard window?.isKeyWindow == true else { return false }
+        switch menuItem.action {
+        case #selector(toggleSettingsSidebar(_:)): return true
+        case #selector(goBack(_:)): return navigation.canGoBack
+        case #selector(goForward(_:)): return navigation.canGoForward
+        default: return true
+        }
     }
 
     func present(page: SettingsPage? = nil) {

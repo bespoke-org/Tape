@@ -33,6 +33,14 @@ enum TapeApp {
         let editItem = NSMenuItem(title: "Edit", action: nil, keyEquivalent: "")
         editItem.submenu = edit
         menu.addItem(editItem)
+        let view = NSMenu(title: "View")
+        view.addItem(withTitle: "Toggle Sidebar", action: #selector(MainWindowController.toggleSettingsSidebar(_:)), keyEquivalent: "b")
+        view.addItem(.separator())
+        view.addItem(withTitle: "Back", action: #selector(MainWindowController.goBack(_:)), keyEquivalent: String(UnicodeScalar(NSLeftArrowFunctionKey)!))
+        view.addItem(withTitle: "Forward", action: #selector(MainWindowController.goForward(_:)), keyEquivalent: String(UnicodeScalar(NSRightArrowFunctionKey)!))
+        let viewItem = NSMenuItem(title: "View", action: nil, keyEquivalent: "")
+        viewItem.submenu = view
+        menu.addItem(viewItem)
         let window = NSMenu(title: "Window")
         window.addItem(withTitle: "Close Window", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
         window.addItem(withTitle: "Minimize", action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m")

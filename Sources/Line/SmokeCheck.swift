@@ -297,6 +297,13 @@ enum SmokeCheck {
               let heading = window.toolbar?.items.first(where: { $0.itemIdentifier.rawValue == "Tape.SettingsTitle" })?.view as? NSTextField else {
             throw NSError(domain: "LineSmokeCheck", code: 20)
         }
+        func command(_ character: String, keyCode: UInt16) throws {
+            let event = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: .command,
+                                        timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+                                        context: nil, characters: character, charactersIgnoringModifiers: character,
+                                        isARepeat: false, keyCode: keyCode)!
+            try require(NSApp.mainMenu?.performKeyEquivalent(with: event) == true, "Command-\(character) must be handled")
+        }
         try require(!navigation.isEnabled(forSegment: 0) && !navigation.isEnabled(forSegment: 1), "New window must have no page history")
         func clickSidebarRow(_ row: Int) async throws {
             let rect = sidebar.rect(ofRow: row)
@@ -345,6 +352,13 @@ enum SmokeCheck {
         try await Task.sleep(for: .milliseconds(600))
         try require(window.firstResponder === sidebar,
                     "Unfolding must restore sidebar focus after the animation (responder=\(String(describing: window.firstResponder)))")
+        try command("b", keyCode: 11)
+        try await settle()
+        try require(split.splitViewItems[0].isCollapsed, "Command-B must collapse the sidebar (key=\(window.isKeyWindow), active=\(NSApp.isActive), target=\(String(describing: NSApp.target(forAction: #selector(MainWindowController.toggleSettingsSidebar(_:))))))")
+        try command("b", keyCode: 11)
+        try await Task.sleep(for: .milliseconds(600))
+        try require(!split.splitViewItems[0].isCollapsed && sidebar.selectedRow == 0 && window.firstResponder === sidebar,
+                    "Command-B must restore the sidebar, selected page, and focus")
         guard let slider = descendants(content).compactMap({ $0 as? NSSlider }).first else {
             throw NSError(domain: "LineSmokeCheck", code: 13, userInfo: [NSLocalizedDescriptionKey: "Native default zoom slider is missing"])
         }
@@ -565,6 +579,16 @@ enum SmokeCheck {
                     "Back must restore General and enable Forward (row=\(sidebar.selectedRow), heading=\(heading.stringValue), forward=\(navigation.isEnabled(forSegment: 1)))")
         try await navigate(1)
         try require(sidebar.selectedRow == 2 && heading.stringValue == "About", "Forward must restore About")
+        try require(NSApp.target(forAction: #selector(MainWindowController.goBack(_:))) as? MainWindowController === delegate.mainWindowController,
+                    "Back shortcut must target the settings controller, got \(String(describing: NSApp.target(forAction: #selector(MainWindowController.goBack(_:)))))")
+        try command(String(UnicodeScalar(NSLeftArrowFunctionKey)!), keyCode: 123)
+        try await settle()
+        try require(sidebar.selectedRow == 0 && heading.stringValue == "General" && navigation.isEnabled(forSegment: 1),
+                    "Command-Left must navigate back through page history (row=\(sidebar.selectedRow), title=\(heading.stringValue), forward=\(navigation.isEnabled(forSegment: 1)), key=\(window.isKeyWindow))")
+        try command(String(UnicodeScalar(NSRightArrowFunctionKey)!), keyCode: 124)
+        try await settle()
+        try require(sidebar.selectedRow == 2 && heading.stringValue == "About" && !navigation.isEnabled(forSegment: 1),
+                    "Command-Right must navigate forward through page history")
         try await navigate(0)
         sidebar.selectRowIndexes(IndexSet(integer: 2), byExtendingSelection: false)
         try await settle()
@@ -579,13 +603,6 @@ enum SmokeCheck {
             try await settle()
             let returnedSlider = descendants(content).compactMap { $0 as? NSSlider }.first!
             try checkInitialSliderThumb(returnedSlider, in: window, output: output)
-        }
-        func command(_ character: String, keyCode: UInt16) throws {
-            let event = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: .command,
-                                        timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
-                                        context: nil, characters: character, charactersIgnoringModifiers: character,
-                                        isARepeat: false, keyCode: keyCode)!
-            try require(NSApp.mainMenu?.performKeyEquivalent(with: event) == true, "Command-\(character) must be handled")
         }
         try command(",", keyCode: 43)
         try await settle()
