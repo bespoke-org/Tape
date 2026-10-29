@@ -6,6 +6,7 @@ import LineCore
 @MainActor
 final class ContinuationPanel: NSPanel {
     private let countdown = NSTextField(labelWithString: "")
+    private let countdownPrefix: String
     private let reject: () -> Void
     private let accept: () -> Void
     private let hoverChanged: (Bool) -> Void
@@ -15,7 +16,9 @@ final class ContinuationPanel: NSPanel {
     override var canBecomeMain: Bool { false }
 
     init(task: TrackedTask, remainingSeconds: Int, hoverChanged: @escaping (Bool) -> Void,
-         accept: @escaping () -> Void, reject: @escaping () -> Void) {
+         accept: @escaping () -> Void, reject: @escaping () -> Void,
+         countdownPrefix: String = "Auto-continuing", acceptTitle: String = "OK", rejectTitle: String = "Reject") {
+        self.countdownPrefix = countdownPrefix
         self.reject = reject
         self.accept = accept
         self.hoverChanged = hoverChanged
@@ -45,17 +48,17 @@ final class ContinuationPanel: NSPanel {
         dot.layer?.backgroundColor = NSColor(task.color.displayColor).cgColor
         dot.layer?.cornerRadius = 5
         dot.setAccessibilityElement(false)
-        let button = NSButton(title: "Reject", target: self, action: #selector(rejectClicked))
+        let button = NSButton(title: rejectTitle, target: self, action: #selector(rejectClicked))
         // Glass button labels dim in a non-key panel; the standard push style stays legible.
         button.bezelStyle = .push
         button.tintProminence = .primary
         button.font = .systemFont(ofSize: 13, weight: .medium)
-        button.toolTip = "Leave this time untracked"
-        let acceptButton = NSButton(title: "OK", target: self, action: #selector(acceptClicked))
+        button.toolTip = rejectTitle == "Reject" ? "Leave this time untracked" : rejectTitle
+        let acceptButton = NSButton(title: acceptTitle, target: self, action: #selector(acceptClicked))
         acceptButton.bezelStyle = .push
         acceptButton.tintProminence = .primary
         acceptButton.font = .systemFont(ofSize: 13, weight: .medium)
-        acceptButton.toolTip = "Resume this task now"
+        acceptButton.toolTip = acceptTitle == "OK" ? "Resume this task now" : acceptTitle
         let row = NSStackView(views: [dot, labels, button, acceptButton])
         row.alignment = .centerY
         row.spacing = 8
@@ -87,15 +90,15 @@ final class ContinuationPanel: NSPanel {
     override func mouseExited(with event: NSEvent) { hoverChanged(false) }
 
     func updateCountdown(seconds: Int) {
-        countdown.stringValue = seconds == 1 ? "Auto-continuing in 1 second" : "Auto-continuing in \(seconds) seconds"
+        countdown.stringValue = "\(countdownPrefix) in \(seconds) \(seconds == 1 ? "second" : "seconds")"
     }
 
-    func show(below button: NSStatusBarButton) {
+    func show(below button: NSStatusBarButton, avoiding frameToAvoid: NSRect? = nil) {
         guard let window = button.window, let screen = window.screen else { return }
         let anchor = window.convertToScreen(button.convert(button.bounds, to: nil))
         let visible = screen.visibleFrame.insetBy(dx: 8, dy: 8)
         let x = min(max(anchor.midX - frame.width / 2, visible.minX), visible.maxX - frame.width)
-        let y = max(visible.minY, anchor.minY - frame.height - 8)
+        let y = max(visible.minY, min(anchor.minY, frameToAvoid?.minY ?? anchor.minY) - frame.height - 8)
         setFrameOrigin(NSPoint(x: x, y: y))
         orderFrontRegardless()
         anchorButton = button

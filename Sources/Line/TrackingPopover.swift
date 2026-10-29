@@ -29,7 +29,7 @@ struct TrackingPopover: View {
                         LiveTimeline(store: store, now: context.date, model: model)
                     }
                 }
-                if let id = model.editingEntryID, let entry = store.entries.first(where: { $0.id == id }) {
+                if let id = model.editingEntryID, let entry = store.editableEntry(id: id) {
                     EntryEditor(model: model, store: store, entry: entry)
                         .id(id)
                 } else if isTaskPickerShown {
@@ -197,6 +197,8 @@ struct TrackingPopover: View {
     private func pickerAction(store: TrackingStore) -> String {
         if let selection = model.entrySelection {
             if selection.overwritesExisting { return selection.end == nil ? "Overwrite & Start" : "Overwrite" }
+            if selection.startsInFuture { return "Schedule" }
+            if let end = selection.end, end > .now { return "Start" }
             return selection.end == nil ? "Start" : "Save"
         }
         return store.runningTask == nil ? "Start" : "Switch"

@@ -123,9 +123,8 @@ struct EntryOverwriteTests {
         #expect(throws: TrackingError.emptyInterval) {
             try store.prepareEntry(from: base + 61, to: base + 62, overwriting: true)
         }
-        #expect(throws: TrackingError.futureInterval) {
-            try store.prepareEntry(from: now + 60, to: now + 120, overwriting: true)
-        }
+        let future = try store.prepareEntry(from: now + 60, to: now + 120, overwriting: true)
+        #expect(future.start == now + 60 && future.end == now + 120)
         #expect(throws: TrackingError.emptyTaskName) { try store.createEntry(named: " ", selection: draft) }
         now = base + 100
         #expect(throws: TrackingError.clockMovedBackwards) { try store.createEntry(named: "Correction", selection: draft) }

@@ -22,6 +22,13 @@ enum SmokeCheck {
             try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
             try require(NSApp.activationPolicy() == .accessory, "App must have no Dock icon")
             try require(button.image != nil, "Status item must have an icon")
+            if ProcessInfo.processInfo.environment["LINE_SMOKE_PLANNING"] == "1" {
+                try await checkPlanning(button: button, popover: popover, model: model, output: output)
+                try Data("PASS: future and cross-Now drawing, plan editing, dashed timeline, scheduled notifications, manual and automatic actions.\n".utf8)
+                    .write(to: output.appendingPathComponent("result.txt"))
+                NSApp.terminate(nil)
+                return
+            }
             if ProcessInfo.processInfo.environment["LINE_SMOKE_STATISTICS"] == "1" {
                 try await checkStatistics(model: model, output: output)
                 try Data("PASS: statistics navigation, chart drilldown, filters, search, small-window layout and unchanged tracking data.\n".utf8)
@@ -257,7 +264,7 @@ enum SmokeCheck {
             try require(UserDefaults.standard.string(forKey: frameKey) == saved, "Saved geometry must survive a fresh process")
         }
         try require(model.start("Window check"), "Tracking must start")
-        let runningID = model.store!.runningEntry!.id
+        let originalRunningID = model.store!.runningEntry!.id
         try await settle()
         try clickStatusItem(button)
         try await settle()
@@ -270,8 +277,9 @@ enum SmokeCheck {
         try require(window.isVisible && window.isKeyWindow && NSApp.activationPolicy() == .regular,
                     "Opening must focus the main window and enable Dock presence (visible=\(window.isVisible), key=\(window.isKeyWindow), policy=\(NSApp.activationPolicy().rawValue), active=\(NSApp.isActive), front=\(NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "unknown"))")
         try require(!popover.isShown && popover.contentViewController == nil, "Opening the window must dismiss and release the popover")
-        try require(!model.store!.tasks.contains(where: { $0.name == "Unsubmitted draft" }), "Opening must discard unsubmitted text")
-        try require(model.store?.runningEntry?.id == runningID, "Opening must keep the same running entry")
+        try require(model.store?.runningTask?.name == "Unsubmitted draft", "Opening must save the named creation draft")
+        let runningID = model.store!.runningEntry!.id
+        try require(runningID != originalRunningID, "Opening must complete the pending task switch")
         try require(window.title == "Tape" && window.styleMask.contains([.resizable, .miniaturizable, .closable]),
                     "Main window must use normal native controls")
         if firstLaunch {
@@ -1224,7 +1232,17 @@ enum SmokeCheck {
         let runningFrame = try contentView(popover).window!.frame
         let liveEnd = model.timeline.fraction(for: .now, now: .now)
         try draw(liveEnd, liveEnd + 6 / width, in: popover)
-        try require(store.runningEntry?.id == remaining.id, "Dragging a running end beyond Now must keep tracking")
+        try require(store.runningEntry?.id == remaining.id && store.activePlan?.end ?? .distantPast > .now,
+                    "Dragging a running end beyond Now must keep tracking and set an automatic stop")
+        let plannedEnd = store.activePlan!.end
+        let snapNowFraction = model.timeline.fraction(for: .now, now: .now)
+        try draw(model.timeline.fraction(for: plannedEnd, now: .now), snapNowFraction + 1 / width, in: popover, finish: false)
+        try require(abs(model.drawnRange!.end.timeIntervalSinceNow) < 1, "The planned endpoint preview must snap to Now")
+        let snapInput = try timelineInput(in: popover)
+        _ = snapInput.handle(TimelineTestEvent(type: .leftMouseUp, window: snapInput.window!,
+                                              location: snapInput.convert(NSPoint(x: snapInput.bounds.width * (snapNowFraction + 1 / width), y: 60), to: nil)))
+        try require(store.runningEntry?.id == remaining.id && store.activePlan == nil,
+                    "Releasing at Now must remove the planned stop and keep tracking")
         try draw(model.timeline.fraction(for: .now, now: .now),
                  model.timeline.fraction(for: base - 600, now: .now), in: popover)
         try await settle()
@@ -1584,7 +1602,7 @@ enum SmokeCheck {
         try draw(overwriteThroughNowStart, 0.55, in: popover, command: true)
         try await settle()
         let live = try requireSelection(model)
-        try require(live.end == nil, "Overwrite through Now must retain running intent")
+        try require(live.end != nil && live.end! > .now, "Overwrite through Now must retain a scheduled endpoint")
         try await pressAccessibleControl(named: "Use Original", in: contentView(popover))
         try await settle()
         try require(store.runningEntry?.start == live.start && store.runningTask?.name == "Original" && store.entries.count == 3,
@@ -1603,6 +1621,136 @@ enum SmokeCheck {
     private static func requireSelection(_ model: AppModel) throws -> EntrySelection {
         try require(model.entrySelection != nil, "Drawing must produce a selection")
         return model.entrySelection!
+    }
+
+    private static func checkPlanning(button: NSStatusBarButton, popover: NSPopover, model: AppModel, output: URL) async throws {
+        try await settle()
+        let store = model.store!
+        let delegate = NSApp.delegate as! AppDelegate
+        func capture(_ window: NSWindow?, _ name: String) throws {
+            guard ProcessInfo.processInfo.environment["LINE_SMOKE_CAPTURE"] == "1", let window else { return }
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+            process.arguments = ["-x", "-l", String(window.windowNumber), output.appendingPathComponent(name + ".png").path]
+            try process.run()
+            process.waitUntilExit()
+        }
+        try clickStatusItem(button)
+        try await settle()
+        let _: TimelineInputView = try await waitFor("Planning timeline input") {
+            try descendants(contentView(popover)).compactMap { $0 as? TimelineInputView }.first
+        }
+        try draw(0.65, 0.8, in: popover)
+        try await settle()
+        try require(model.entrySelection?.start ?? .distantPast > .now, "Future drawing must open a planned draft")
+        try enterTaskName("Deep work :coding", in: popover, submit: false)
+        try clickStatusItem(button)
+        try await settle()
+        try require(store.plans.count == 1 && store.entries.isEmpty, "Click-away must save the plan without recording future time")
+        try clickStatusItem(button)
+        try await settle()
+        try await pressAccessibleControl(named: "Planned: Deep work", in: contentView(popover))
+        try await settle()
+        try enterTaskName("Deep work :focus", in: popover)
+        try await settle()
+        try require(store.tasks.first?.tags == ["focus"], "Planned entries must use the existing tag editor")
+        let planID = store.plans[0].id
+        try await pressAccessibleControl(named: "Reschedule…", in: contentView(popover))
+        let rescheduleContent: NSView = try await waitFor("Reschedule popover") {
+            NSApp.windows.compactMap(\.contentView).first {
+                accessibilityElement(named: "Reschedule", in: $0) != nil
+            }
+        }
+        try require(descendants(rescheduleContent).compactMap { $0 as? NSDatePicker }.count == 2,
+                    "Reschedule must provide native start and end pickers")
+        try await pressAccessibleControl(named: "Reschedule", in: rescheduleContent)
+        try await settle()
+        try require(store.plans[0].id == planID && store.plans[0].state == .scheduled, "Rescheduling must preserve plan identity")
+        let end = model.timeline.fraction(for: store.plans[0].end, now: .now)
+        try draw(end, 0.9, in: popover)
+        try await settle()
+        try require(store.plans[0].end > model.timeline.date(at: 0.85, now: .now), "Plan endpoint must resize into the future")
+        model.cancelEntry()
+        try draw(0.35, 0.55, in: popover)
+        try await settle()
+        try enterTaskName("Building Tape", in: popover)
+        try await settle()
+        try require(store.activePlan != nil && store.runningEntry != nil, "Cross-Now drawing must track now with a planned stop")
+        try capture(popover.contentViewController?.view.window, "planned-timeline-dark")
+        let originalAppearance = popover.appearance
+        popover.appearance = NSAppearance(named: .aqua)
+        popover.contentViewController?.view.window?.appearance = NSAppearance(named: .aqua)
+        try await settle()
+        try capture(popover.contentViewController?.view.window, "planned-timeline-light")
+        popover.appearance = originalAppearance
+        popover.contentViewController?.view.window?.appearance = nil
+        try store.stop()
+        for plan in store.plans { try store.deleteEntry(id: plan.id) }
+        for entry in store.entries { try store.deleteEntry(id: entry.id) }
+        try require(store.plans.allSatisfy { $0.id != planID }, "Deleting a plan must remove it")
+        try clickStatusItem(button)
+        try await settle()
+
+        model.setResumeCountdownSeconds(9)
+        let base = Date.now
+        try store.createEntry(named: "Scheduled work", selection: EntrySelection(start: base + 12, end: base + 25))
+        let notice: ScheduleNotice = try await waitFor("Scheduled start notice", timeout: .seconds(8)) { model.schedule?.notice }
+        guard let panel = delegate.schedulePanel, let content = panel.contentView else { throw NSError(domain: "LineSmokeCheck", code: 40) }
+        try require(notice.action == .start && !panel.canBecomeKey && !panel.canBecomeMain,
+                    "Scheduled start popup must not take keyboard focus")
+        panel.mouseEntered(with: TimelineTestEvent(type: .mouseEntered, window: panel, location: .zero))
+        try clickStatusItem(button)
+        try await settle()
+        try require(model.schedule?.notice?.deadline == notice.deadline && store.runningEntry == nil,
+                    "Hovering and opening Tape must neither pause nor accept the scheduled action")
+        try capture(panel, "scheduled-start")
+        guard let startButton = descendants(content).compactMap({ $0 as? NSButton }).first(where: { $0.title == "Start now" }) else {
+            throw NSError(domain: "LineSmokeCheck", code: 41)
+        }
+        try require(startButton.isEnabled && startButton.acceptsFirstMouse(for: nil), "Start now must accept the first click")
+        startButton.performClick(nil)
+        try await settle()
+        try require(store.runningTask?.name == "Scheduled work" && store.activePlan?.end == base + 25,
+                    "Start now must retain the original endpoint")
+        let stopNotice: ScheduleNotice = try await waitFor("Scheduled stop notice", timeout: .seconds(18)) {
+            model.schedule?.notice.flatMap { $0.action == .stop ? $0 : nil }
+        }
+        try require(stopNotice.deadline == base + 25, "Stop notice must use the planned endpoint")
+        try capture(delegate.schedulePanel, "scheduled-stop")
+        let keep = descendants(delegate.schedulePanel!.contentView!).compactMap { $0 as? NSButton }.first { $0.title == "Keep tracking" }!
+        keep.performClick(nil)
+        try await settle()
+        try require(store.runningEntry != nil && store.activePlan == nil, "Keep tracking must cancel the automatic endpoint")
+        model.setResumeCountdownSeconds(2)
+        let next = Date.now
+        try store.createEntry(named: "Automatic switch", selection: EntrySelection(start: next + 3, end: next + 7))
+        let _: Bool = try await waitFor("Automatic scheduled switch", timeout: .seconds(6)) {
+            store.runningTask?.name == "Automatic switch" ? true : nil
+        }
+        let _: Bool = try await waitFor("Automatic scheduled stop", timeout: .seconds(6)) {
+            store.runningEntry == nil ? true : nil
+        }
+        try require(store.entries.last?.start == next + 3 && store.entries.last?.end == next + 7,
+                    "Automatic actions must retain exact scheduled boundaries")
+        let skip = Date.now
+        try store.createEntry(named: "Skip this", selection: EntrySelection(start: skip + 3, end: skip + 10))
+        let _: ScheduleNotice = try await waitFor("Skip notice", timeout: .seconds(5)) { model.schedule?.notice }
+        let skipButton = descendants(delegate.schedulePanel!.contentView!).compactMap { $0 as? NSButton }.first { $0.title == "Skip" }!
+        skipButton.performClick(nil)
+        try await settle()
+        try require(store.plans.last?.state == .skipped && store.runningEntry == nil, "Skip must preserve a skipped plan without recording time")
+        try requireAnchored(popover, to: button)
+        model.setResumeCountdownSeconds(9)
+        try store.startTask(named: "Interrupted manual task")
+        let unlockPlan = Date.now
+        try store.createEntry(named: "Priority plan", selection: EntrySelection(start: unlockPlan + 5, end: unlockPlan + 30))
+        delegate.handleSystemEvent(.locked)
+        delegate.handleSystemEvent(.unlocked)
+        try await settle()
+        try require(model.schedule?.notice?.action == .start && model.interruptions?.pendingContinuation == nil &&
+                    delegate.continuationPanel?.isVisible != true,
+                    "A due plan must take priority over resuming the interrupted task")
+        model.rejectScheduledAction()
     }
 
     private static func checkCreationDismissal(button: NSStatusBarButton, popover: NSPopover, model: AppModel) async throws {
@@ -1775,7 +1923,7 @@ enum SmokeCheck {
         try draw(0.15, 0.25)
         try require(model.entrySelection == nil && !model.isDrawing, "Dragging from an existing entry must not create another entry")
         try draw(0.7, 0.8)
-        try require(model.entryError != nil && model.entrySelection == nil, "Wholly future drawing must be rejected")
+        try require(model.entryError == nil && model.entrySelection?.start ?? .distantPast > .now, "Future drawing must create a planned draft")
         try escape()
         try draw(0.25, 0.28)
         try await settle()
@@ -1788,8 +1936,8 @@ enum SmokeCheck {
         try draw(0.45, 0.55)
         try await settle()
         let runningStart = model.entrySelection?.start
-        try require(runningStart != nil && model.entrySelection?.end == nil,
-                    "Drawing through Now must retain running intent; selection=\(String(describing: model.entrySelection)), error=\(String(describing: model.entryError)), drawing=\(model.isDrawing)")
+        try require(runningStart != nil && model.entrySelection?.end != nil,
+                    "Drawing through Now must retain its future endpoint; selection=\(String(describing: model.entrySelection)), error=\(String(describing: model.entryError)), drawing=\(model.isDrawing)")
         try enterTaskName("Past work", in: popover)
         try await settle()
         try require(model.store!.runningEntry?.start == runningStart && model.store!.entries.count == 3, "Delayed task submission must start from the drawn start")

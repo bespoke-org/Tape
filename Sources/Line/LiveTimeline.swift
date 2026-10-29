@@ -47,12 +47,52 @@ struct LiveTimeline: View {
                             .accessibilityHidden(true)
                     }
 
+                    ForEach(store.plannedSegments(in: visibleRange, at: now).filter {
+                        !model.isResizingEnd || $0.plan.runningEntryID != model.resizingEntryID
+                    }) { segment in
+                        if let task = store.task(id: segment.plan.taskID) {
+                            let plan = segment.plan
+                            let selected = model.editingEntryID == plan.id || model.resizingEntryID == plan.id
+                            let preview = model.resizingEntryID == plan.id && segment.interval.end == plan.end ? model.drawnRange : nil
+                            let leftDate = preview.map { plan.state == .active ? max(now, $0.start) : $0.start } ?? segment.interval.start
+                            let left = max(0, position(leftDate, width: width))
+                            let rightDate = preview?.end ?? segment.interval.end
+                            let right = min(width, position(rightDate, width: width))
+
+                            let blockWidth = max(2, right - left)
+                            let color = segment.isMissed ? Color.secondary : task.color.displayColor
+                            Button { model.editEntry(id: plan.id) } label: {
+                                RoundedRectangle(cornerRadius: 4)
+                                    .fill(reduceTransparency ? Color(nsColor: .controlBackgroundColor) : color.opacity(0.08))
+                                    .overlay {
+                                        RoundedRectangle(cornerRadius: 4)
+                                            .strokeBorder(color.opacity(contrast == .increased || selected ? 1 : 0.6),
+                                                          style: StrokeStyle(lineWidth: selected || contrast == .increased ? 2 : 1, dash: [5, 3]))
+                                    }
+                                    .overlay(alignment: .leading) {
+                                        if blockWidth > 42 {
+                                            Text(task.name).font(.caption.weight(.medium)).lineLimit(1)
+                                                .foregroundStyle(.secondary).padding(.horizontal, 6)
+                                        }
+                                    }
+                                    .frame(width: blockWidth, height: 46)
+                            }
+                            .buttonStyle(.plain)
+                            .offset(x: left, y: stripTop + (stripHeight - 46) / 2)
+                            .help("\(segment.label): \(task.inputText), \(model.timeFormat.string(from: plan.start, includeDate: true)) to \(model.timeFormat.string(from: plan.end, includeDate: true))")
+                            .accessibilityLabel("\(segment.label): \(task.name)")
+                        }
+                    }
+
                     ForEach(visibleEntries) { entry in
                         if let task = store.task(id: entry.taskID) {
                             let isSelected = model.editingEntryID == entry.id || model.resizingEntryID == entry.id
                             let preview = model.resizingEntryID == entry.id ? model.drawnRange : nil
-                            let left = max(0, position(preview?.start ?? entry.start, width: width))
-                            let right = min(width, position(preview?.end ?? entry.end ?? now, width: width))
+                            let start = preview?.start ?? entry.start
+                            let end = min(preview?.end ?? entry.end ?? now, now)
+                            let left = max(0, position(start, width: width))
+                            let right = min(width, position(end, width: width))
+
                             let entryWidth = max(2, right - left)
                             Button { model.editEntry(id: entry.id) } label: {
                                 RoundedRectangle(cornerRadius: 4)
@@ -81,6 +121,22 @@ struct LiveTimeline: View {
                                 .help(entryDescription(entry, task: task))
                                 .accessibilityElement(children: .ignore)
                                 .accessibilityLabel(entryDescription(entry, task: task))
+                            if let preview, preview.end > now {
+                                let futureLeft = max(0, position(now, width: width))
+                                let futureRight = min(width, position(preview.end, width: width))
+                                if futureRight > futureLeft {
+
+                                    RoundedRectangle(cornerRadius: 4).fill(task.color.displayColor.opacity(0.08))
+                                        .overlay {
+                                            RoundedRectangle(cornerRadius: 4).strokeBorder(task.color.displayColor.opacity(0.6),
+                                                                     style: StrokeStyle(lineWidth: 2, dash: [5, 3]))
+                                        }
+                                        .frame(width: futureRight - futureLeft, height: 46)
+                                        .offset(x: futureLeft, y: stripTop + (stripHeight - 46) / 2)
+                                        .allowsHitTesting(false)
+                                        .accessibilityHidden(true)
+                                }
+                            }
                         }
                     }
 
@@ -88,6 +144,7 @@ struct LiveTimeline: View {
                         let left = max(0, position(selection.start, width: width))
                         let right = min(width, position(selection.end, width: width))
                         if right > left {
+
                             RoundedRectangle(cornerRadius: 4)
                                 .fill(Color.gray.opacity(reduceTransparency ? 0.35 : 0.18))
                                 .overlay {

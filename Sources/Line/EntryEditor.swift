@@ -10,6 +10,9 @@ struct EntryEditor: View {
     @State private var isTaskFocused = false
     @State private var tagCompletion = TaskTagCompletion()
     @State private var confirmsDeletion = false
+    @State private var showsReschedule = false
+    @State private var plannedStart = Date.now
+    @State private var plannedEnd = Date.now
 
     init(model: AppModel, store: TrackingStore, entry: TimeEntry) {
         self.model = model
@@ -36,6 +39,34 @@ struct EntryEditor: View {
                             .strokeBorder(.quaternary, lineWidth: 0.5)
                             .allowsHitTesting(false)
                     }
+                if let plan = store.plans.first(where: { $0.id == entry.id }) {
+                    Button("Reschedule…") {
+                        plannedStart = Date(timeIntervalSince1970: ceil(max(plan.start, Date.now.addingTimeInterval(60)).timeIntervalSince1970 / 60) * 60)
+                        plannedEnd = plannedStart.addingTimeInterval(plan.end.timeIntervalSince(plan.start))
+                        showsReschedule = true
+                    }
+                    .buttonStyle(.borderless)
+                    .popover(isPresented: $showsReschedule) {
+                        VStack(alignment: .leading, spacing: 12) {
+                            DatePicker("Start", selection: $plannedStart, displayedComponents: [.date, .hourAndMinute])
+                            DatePicker("End", selection: $plannedEnd, displayedComponents: [.date, .hourAndMinute])
+                            if let error = model.entryError {
+                                Text(error).font(.callout).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
+                            }
+                            HStack {
+                                Spacer()
+                                Button("Cancel") { showsReschedule = false }
+                                Button("Reschedule") {
+                                    if model.reschedulePlan(id: entry.id, start: plannedStart, end: plannedEnd) {
+                                        showsReschedule = false
+                                    }
+                                }
+                                .keyboardShortcut(.defaultAction)
+                            }
+                        }
+                        .padding().frame(width: 310)
+                    }
+                }
                 Button { confirmsDeletion = true } label: {
                     Label("Delete entry", systemImage: "trash")
                         .labelStyle(.iconOnly)
@@ -70,7 +101,7 @@ struct EntryEditor: View {
             Button("Cancel", role: .cancel) {}
             Button("Delete", role: .destructive) { _ = model.deleteEntry(id: entry.id) }
         } message: {
-            Text(entry.end == nil ? "This will stop tracking and remove this entry. This cannot be undone." :
+            Text(store.plans.contains(where: { $0.id == entry.id }) ? "This will cancel the plan and keep any time already recorded." : entry.end == nil ? "This will stop tracking and remove this entry. This cannot be undone." :
                     "This will remove the recorded time. This cannot be undone.")
         }
     }
@@ -82,7 +113,7 @@ struct EntryEditor: View {
     private func chooseTask(_ name: String) {
         guard !TaskInput(name).name.isEmpty else { return }
         if model.reassignEntry(id: entry.id, taskName: name) {
-            taskName = store.entries.first(where: { $0.id == entry.id })
+            taskName = store.editableEntry(id: entry.id)
                 .flatMap { store.task(id: $0.taskID)?.inputText } ?? name
             isTaskFocused = false
         }

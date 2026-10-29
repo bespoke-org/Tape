@@ -72,7 +72,7 @@ jobs:
           LINE_SMOKE_CAPTURE: '1'
         run: |
           mkdir -p build/reports
-          scenarios=(tracking main-window timeline creation editing overwrite resize-overwrite tags statistics system-activity continuation dismissal)
+          scenarios=(tracking main-window timeline creation planning editing overwrite resize-overwrite tags statistics system-activity continuation dismissal)
           failed=()
           for scenario in "${scenarios[@]}"; do
             echo "::group::Smoke: $scenario"

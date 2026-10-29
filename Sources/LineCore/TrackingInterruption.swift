@@ -23,7 +23,7 @@ public final class TrackingInterruption {
     private let uptime: () -> TimeInterval
     private var locked = false
     private var sleeping = false
-    private var pendingStop: (entryID: UUID, end: Date)?
+    private var pendingStop: (entryID: UUID, end: Date, preservesPlan: Bool)?
     private var interruptedEntryID: UUID?
     public private(set) var interruptedTask: TrackedTask?
     public private(set) var pendingContinuation: PendingContinuation?
@@ -55,9 +55,10 @@ public final class TrackingInterruption {
         }
         if !wasAway && (locked || sleeping) && pendingStop == nil {
             if let entry = store.runningEntry {
-                interruptedTask = store.automaticResumeEnabled ? store.runningTask : nil
-                interruptedEntryID = store.automaticResumeEnabled ? entry.id : nil
-                pendingStop = (entry.id, now())
+                let planned = store.activePlan?.runningEntryID == entry.id
+                interruptedTask = store.automaticResumeEnabled && !planned ? store.runningTask : nil
+                interruptedEntryID = store.automaticResumeEnabled && !planned ? entry.id : nil
+                pendingStop = (entry.id, min(now(), store.activePlan?.end ?? .distantFuture), planned)
             }
         }
         try retryStop()
@@ -68,7 +69,7 @@ public final class TrackingInterruption {
     public func retryStop() throws {
         guard let pendingStop else { return }
         if store.runningEntry?.id == pendingStop.entryID {
-            try store.stop(at: pendingStop.end)
+            try store.stop(at: pendingStop.end, preservingPlan: pendingStop.preservesPlan)
         }
         self.pendingStop = nil
     }

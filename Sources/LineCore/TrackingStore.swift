@@ -5,12 +5,14 @@ import Observation
 @MainActor
 @Observable
 public final class TrackingStore {
-    private var snapshot: TrackingSnapshot
+    var snapshot: TrackingSnapshot
     private let url: URL
-    private let now: () -> Date
+    let now: () -> Date
 
     public var tasks: [TrackedTask] { snapshot.tasks }
     public var entries: [TimeEntry] { snapshot.entries }
+    public var plans: [PlannedEntry] { snapshot.plans ?? [] }
+    public var activePlan: PlannedEntry? { plans.first { $0.state == .active } }
     public static let defaultZoomPresets = [1, 2, 4, 8, 12, 16, 24]
     public var defaultZoomHours: Int { Self.nearestZoomPreset(snapshot.defaultZoomHours ?? 8) }
     public var statisticsDayStartHour: Int { StatisticsDayBoundary(hour: snapshot.statisticsDayStartHour ?? 0).hour }
@@ -41,14 +43,18 @@ public final class TrackingStore {
         } else {
             snapshot = TrackingSnapshot()
         }
-        guard snapshot.version == 1 else { throw TrackingError.unsupportedStoreVersion }
+        guard snapshot.version == 1 || snapshot.version == 2 else { throw TrackingError.unsupportedStoreVersion }
         if let checkpoint = snapshot.checkpoint, runningEntry != nil {
             var recovered = snapshot
-            finishRunning(in: &recovered, at: checkpoint)
+            for index in (recovered.plans ?? []).indices where recovered.plans?[index].state == .active {
+                recovered.plans?[index].state = .paused
+                recovered.plans?[index].runningEntryID = nil
+            }
+            finishRunning(in: &recovered, at: min(checkpoint, activePlan?.end ?? checkpoint))
             recovered.checkpoint = nil
             try commit(recovered)
         } else {
-            let usedTasks = Set(entries.map(\.taskID))
+            let usedTasks = Set(entries.map(\.taskID) + plans.map(\.taskID))
             if tasks.contains(where: { !usedTasks.contains($0.id) }) {
                 try commit(snapshot)
             }
@@ -72,7 +78,7 @@ public final class TrackingStore {
         Set(tasks.flatMap(\.tags)).sorted { $0.localizedStandardCompare($1) == .orderedAscending }
     }
 
-    private func resolveTask(_ input: TaskInput, replacingTags: Bool = false,
+    func resolveTask(_ input: TaskInput, replacingTags: Bool = false,
                              in candidate: inout TrackingSnapshot) -> TrackedTask {
         if let index = candidate.tasks.firstIndex(where: { $0.name.caseInsensitiveCompare(input.name) == .orderedSame }) {
             let existing = candidate.tasks[index]
@@ -126,8 +132,12 @@ public final class TrackingStore {
         let step = snap.rawValue
         let roundedStart = Date(timeIntervalSince1970: (min(first, second).timeIntervalSince1970 / step).rounded() * step)
         let roundedEnd = Date(timeIntervalSince1970: (max(first, second).timeIntervalSince1970 / step).rounded() * step)
-        guard min(first, second) < instant else {
-            throw roundedStart == roundedEnd ? TrackingError.emptyInterval : TrackingError.futureInterval
+        // Only a drag ending at Now is open-ended. A later endpoint is a plan.
+        if min(first, second) >= instant && roundedStart == roundedEnd { throw TrackingError.emptyInterval }
+        let futureEnd = min(first, second) >= instant || (!reachesNow && max(first, second) > instant && roundedEnd > instant)
+        if futureEnd {
+            return try preparePlan(from: first, to: second, start: roundedStart, end: roundedEnd,
+                                   overwriting: overwriting, at: instant)
         }
         if overwriting {
             let continues = reachesNow || max(first, second) >= instant
@@ -163,6 +173,10 @@ public final class TrackingStore {
         guard !input.name.isEmpty else { throw TrackingError.emptyTaskName }
         let instant = try checkedInstant()
         try validate(selection, at: instant)
+        if let end = selection.end, end > instant || selection.startsInFuture {
+            try createPlan(input: input, selection: selection, at: instant)
+            return
+        }
         var candidate = snapshot
         if selection.overwritesExisting { removeOverlaps(with: selection, from: &candidate, at: instant) }
         let task = resolveTask(input, in: &candidate)
@@ -175,7 +189,7 @@ public final class TrackingStore {
     }
 
     private func initialColor(in candidate: TrackingSnapshot) -> TaskColor {
-        let usedTasks = Set(candidate.entries.map(\.taskID))
+        let usedTasks = Set(candidate.entries.map(\.taskID) + (candidate.plans ?? []).map(\.taskID))
         let usedColors = Set(candidate.tasks.filter { usedTasks.contains($0.id) }.map(\.color))
         let unused = TaskColor.allCases.filter { !usedColors.contains($0) }
         return (unused.isEmpty ? TaskColor.allCases : unused).randomElement()!
@@ -183,16 +197,27 @@ public final class TrackingStore {
 
     public func prepareResize(id: UUID, edge: EntryEdge, to date: Date, reachesNow: Bool = false,
                               overwriting: Bool = false) throws -> EntrySelection {
+        if let plan = plans.first(where: { $0.id == id }) {
+            if plan.state == .active && edge == .end && (reachesNow || date == now()) {
+                return EntrySelection(start: plan.start, end: nil, overwritesExisting: overwriting)
+            }
+            return try preparePlanResize(plan, edge: edge, to: date, overwriting: overwriting)
+        }
         guard let index = entries.firstIndex(where: { $0.id == id }) else { throw TrackingError.missingEntry }
         let entry = entries[index]
         guard date.timeIntervalSince1970.isFinite else { throw TrackingError.emptyInterval }
         let instant = try checkedInstant()
         let snapped = Date(timeIntervalSince1970: (date.timeIntervalSince1970 / 60).rounded() * 60)
         let lower = !overwriting && index > 0 ? entries[index - 1].end ?? .distantPast : .distantPast
-        let upper = !overwriting && index + 1 < entries.count ? entries[index + 1].start : instant
+        let nextRecord = !overwriting && index + 1 < entries.count ? entries[index + 1].start : nil
+        let nextPlan = !overwriting ? plans.filter {
+            $0.state.isAutomatic && $0.runningEntryID != id && $0.start > instant
+        }.map(\.start).min() : nil
+        let upper = nextRecord ?? (edge == .end ? nextPlan ?? .distantFuture : instant)
         let startBoundary = date <= lower ? lower : max(lower, snapped)
         let endBoundary = date >= upper ? upper : min(upper, snapped)
-        let continues = edge == .end && (overwriting || index == entries.count - 1) && (reachesNow || date >= instant)
+        let futureEndpoint = edge == .end && !reachesNow && date > instant && snapped > instant
+        let continues = edge == .end && nextRecord == nil && !futureEndpoint && (reachesNow || date >= instant)
         let selection = EntrySelection(start: edge == .start ? startBoundary : entry.start,
                                        end: continues ? nil : edge == .end ? endBoundary : entry.end, overwritesExisting: overwriting)
         try validate(selection, at: instant, excluding: id)
@@ -201,10 +226,27 @@ public final class TrackingStore {
 
     public func resizeEntry(id: UUID, edge: EntryEdge, to date: Date, reachesNow: Bool = false,
                             overwriting: Bool = false) throws {
+        if let plan = plans.first(where: { $0.id == id }) {
+            if plan.state == .active && edge == .end && (reachesNow || date == now()) {
+                try setPlanState(id: id, state: .skipped)
+            } else {
+                try resizePlan(plan, edge: edge, to: date, overwriting: overwriting)
+            }
+            return
+        }
         let selection = try prepareResize(id: id, edge: edge, to: date, reachesNow: reachesNow, overwriting: overwriting)
         guard let original = entries.first(where: { $0.id == id }) else { throw TrackingError.missingEntry }
         let instant = try checkedInstant()
+        if let end = selection.end, end > instant {
+            try scheduleResizedEntry(original, selection: selection, at: instant)
+            return
+        }
         var candidate = snapshot
+        if edge == .end && selection.end == nil,
+           let planIndex = candidate.plans?.firstIndex(where: { $0.runningEntryID == id && $0.state == .active }) {
+            candidate.plans?[planIndex].state = .skipped
+            candidate.plans?[planIndex].runningEntryID = nil
+        }
         candidate.entries.removeAll { $0.id == id }
         if overwriting { removeOverlaps(with: selection, from: &candidate, at: instant) }
         let entry = TimeEntry(id: id, taskID: original.taskID, start: selection.start, end: selection.end)
@@ -219,7 +261,7 @@ public final class TrackingStore {
         try commit(candidate)
     }
 
-    private func removeOverlaps(with selection: EntrySelection, from candidate: inout TrackingSnapshot, at instant: Date) {
+    func removeOverlaps(with selection: EntrySelection, from candidate: inout TrackingSnapshot, at instant: Date) {
         if candidate.entries.contains(where: { $0.end == nil && $0.start < (selection.end ?? .distantFuture) }) {
             // A surviving running tail may begin after its previous recovery checkpoint.
             candidate.checkpoint = instant
@@ -239,7 +281,7 @@ public final class TrackingStore {
         }
     }
 
-    private func mergeConnectedEntries(at insertionIndex: Int, in candidate: inout TrackingSnapshot, preserving id: UUID? = nil) {
+    func mergeConnectedEntries(at insertionIndex: Int, in candidate: inout TrackingSnapshot, preserving id: UUID? = nil) {
         var index = insertionIndex
         let taskID = candidate.entries[index].taskID
         while index > 0,
@@ -260,6 +302,10 @@ public final class TrackingStore {
     }
 
     public func deleteEntry(id: UUID) throws {
+        if plans.contains(where: { $0.id == id }) {
+            try deletePlan(id: id)
+            return
+        }
         guard let entry = entries.first(where: { $0.id == id }) else { throw TrackingError.missingEntry }
         var candidate = snapshot
         candidate.entries.removeAll { $0.id == id }
@@ -277,6 +323,10 @@ public final class TrackingStore {
     public func reassignEntry(id: UUID, taskName rawName: String) throws {
         let input = TaskInput(rawName)
         guard !input.name.isEmpty else { throw TrackingError.emptyTaskName }
+        if plans.contains(where: { $0.id == id }) {
+            try reassignPlan(id: id, input: input)
+            return
+        }
         guard let index = entries.firstIndex(where: { $0.id == id }) else { throw TrackingError.missingEntry }
         var candidate = snapshot
         let task = resolveTask(input, replacingTags: true, in: &candidate)
@@ -292,6 +342,7 @@ public final class TrackingStore {
         guard (original.end == nil) == (end == nil) else { throw TrackingError.trackingStateChanged }
         let instant = try checkedInstant()
         try validate(EntrySelection(start: start, end: end, overwritesExisting: false), at: instant, excluding: id)
+        guard start < instant, (end ?? instant) <= instant else { throw TrackingError.futureInterval }
         var candidate = snapshot
         candidate.entries.removeAll { $0.id == id }
         let entry = TimeEntry(id: id, taskID: taskID, start: start, end: end)
@@ -301,24 +352,32 @@ public final class TrackingStore {
         try commit(candidate)
     }
 
-    private func validate(_ selection: EntrySelection, at instant: Date, excluding id: UUID? = nil) throws {
+    func validate(_ selection: EntrySelection, at instant: Date, excluding id: UUID? = nil) throws {
         let end = selection.end ?? instant
         guard selection.start.timeIntervalSince1970.isFinite, end.timeIntervalSince1970.isFinite,
               selection.start < end else { throw TrackingError.emptyInterval }
-        guard selection.start < instant, end <= instant else { throw TrackingError.futureInterval }
+        if end > instant || selection.startsInFuture {
+            try validatePlan(selection, at: instant, excluding: id, checkingRecordedTime: !selection.startsInFuture)
+            return
+        }
+        guard selection.start < instant else { throw TrackingError.futureInterval }
         let overlapEnd = selection.end ?? .distantFuture
         guard selection.overwritesExisting || !entries.contains(where: { $0.id != id && $0.start < overlapEnd && ($0.end ?? .distantFuture) > selection.start }) else {
             throw TrackingError.overlappingEntry
         }
     }
 
-    public func stop(at boundary: Date? = nil) throws {
+    public func stop(at boundary: Date? = nil, preservingPlan: Bool = false) throws {
         guard let running = runningEntry else { return }
         let instant = try checkedInstant()
         let end = boundary ?? instant
         guard end.timeIntervalSince1970.isFinite, end >= running.start else { throw TrackingError.emptyInterval }
         guard end <= instant else { throw TrackingError.futureInterval }
         var candidate = snapshot
+        if preservingPlan, let index = candidate.plans?.firstIndex(where: { $0.state == .active }) {
+            candidate.plans?[index].state = .paused
+            candidate.plans?[index].runningEntryID = nil
+        }
         finishRunning(in: &candidate, at: end)
         candidate.checkpoint = nil
         try commit(candidate)
@@ -327,7 +386,7 @@ public final class TrackingStore {
     public func checkpoint() throws {
         guard runningEntry != nil else { return }
         var candidate = snapshot
-        candidate.checkpoint = try checkedInstant()
+        candidate.checkpoint = min(try checkedInstant(), activePlan?.end ?? .distantFuture)
         try commit(candidate)
     }
 
@@ -398,7 +457,7 @@ public final class TrackingStore {
         min(max(seconds, shortBreakRange.lowerBound), shortBreakRange.upperBound)
     }
 
-    private func checkedInstant() throws -> Date {
+    func checkedInstant() throws -> Date {
         let instant = now()
         if let latest = snapshot.checkpoint ?? entries.last?.end, instant < latest {
             throw TrackingError.clockMovedBackwards
@@ -406,7 +465,7 @@ public final class TrackingStore {
         return instant
     }
 
-    private func finishRunning(in candidate: inout TrackingSnapshot, at instant: Date) {
+    func finishRunning(in candidate: inout TrackingSnapshot, at instant: Date) {
         guard let index = candidate.entries.lastIndex(where: { $0.end == nil }) else { return }
         if candidate.entries[index].start == instant {
             candidate.entries.remove(at: index)
@@ -415,9 +474,19 @@ public final class TrackingStore {
         }
     }
 
-    private func commit(_ candidate: TrackingSnapshot) throws {
+    func commit(_ candidate: TrackingSnapshot) throws {
         var candidate = candidate
-        let usedTasks = Set(candidate.entries.map(\.taskID))
+        if candidate.plans != nil { candidate.version = 2 }
+        // Manual stops, switches, reassignment, deletion, and overwrite all detach
+        // automation from the old running entry in the same atomic transaction.
+        for index in (candidate.plans ?? []).indices {
+            guard let plan = candidate.plans?[index], plan.state == .active else { continue }
+            if !candidate.entries.contains(where: { $0.id == plan.runningEntryID && $0.end == nil && $0.taskID == plan.taskID }) {
+                candidate.plans?[index].state = .skipped
+                candidate.plans?[index].runningEntryID = nil
+            }
+        }
+        let usedTasks = Set(candidate.entries.map(\.taskID) + (candidate.plans ?? []).map(\.taskID))
         candidate.tasks.removeAll { !usedTasks.contains($0.id) }
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         let data = try JSONEncoder().encode(candidate)

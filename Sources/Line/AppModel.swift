@@ -7,8 +7,10 @@ import Observation
 final class AppModel {
     private(set) var store: TrackingStore?
     private(set) var interruptions: TrackingInterruption?
+    private(set) var schedule: TrackingSchedule?
     private(set) var errorMessage: String?
     private var interruptionError: String?
+    private var schedulingError: String?
     private(set) var settingsError: String?
     var defaultZoomHours: Int { store?.defaultZoomHours ?? 8 }
     var statisticsDayStartHour: Int { store?.statisticsDayStartHour ?? 0 }
@@ -30,6 +32,8 @@ final class AppModel {
     private(set) var editingEntryID: UUID?
     private(set) var resizingEntryID: UUID?
     private var resizingEdge: EntryEdge?
+    private var resizingNowTolerance: Double = 0
+    var isResizingEnd: Bool { resizingEdge == .end }
     private var drawingStart: Date?
     var isDrawing: Bool { drawingStart != nil }
     private let storeURL: URL
@@ -44,7 +48,10 @@ final class AppModel {
     func load() {
         perform {
             store = try TrackingStore(url: storeURL)
-            if let store { interruptions = TrackingInterruption(store: store) }
+            if let store {
+                interruptions = TrackingInterruption(store: store)
+                schedule = TrackingSchedule(store: store)
+            }
         }
     }
 
@@ -58,6 +65,11 @@ final class AppModel {
         return perform { try store?.stop() }
     }
 
+    func stopForQuit() -> Bool {
+        rejectContinuation()
+        return perform { try store?.stop(preservingPlan: true) }
+    }
+
     func checkpoint() {
         guard store?.runningEntry != nil else { return }
         perform { try store?.checkpoint() }
@@ -67,7 +79,10 @@ final class AppModel {
         guard let interruptions else { return }
         // Update physical state even if a previous stop still needs its save retried.
         do {
+            if event == .locked || event == .willSleep { schedule?.suspend() }
             try interruptions.handle(event)
+            try schedule?.poll(available: interruptions.isAvailable && SystemActivityMonitor.sessionIsUsable())
+            if schedule?.notice != nil || store?.activePlan != nil { interruptions.cancelContinuation() }
             try interruptions.pollContinuation(sessionIsUsable: SystemActivityMonitor.sessionIsUsable())
             errorMessage = nil
             interruptionError = nil
@@ -79,6 +94,7 @@ final class AppModel {
     }
 
     func pollContinuation() {
+        pollSchedule()
         guard let interruptions, interruptions.needsContinuationPolling else { return }
         let previous = interruptions.pendingContinuation?.id
         let previousError = errorMessage
@@ -104,10 +120,37 @@ final class AppModel {
     }
 
     func acceptContinuation() {
+        guard schedule?.notice == nil, store?.activePlan == nil else { return }
         guard let interruptions, interruptions.pendingContinuation != nil else { return }
         perform {
             try interruptions.acceptContinuation(sessionIsUsable: SystemActivityMonitor.sessionIsUsable())
         }
+    }
+
+    func pollSchedule() {
+        guard let schedule, let store, schedule.notice != nil || store.plans.contains(where: { $0.state.isAutomatic }) else { return }
+        let previousNotice = schedule.notice
+        let previousPlans = store.plans
+        let previousError = errorMessage
+        do {
+            try interruptions?.retryStop()
+            try schedule.poll(available: interruptions?.isAvailable == true && SystemActivityMonitor.sessionIsUsable())
+            if errorMessage == schedulingError { errorMessage = nil }
+            schedulingError = nil
+            if schedule.notice != nil || store.activePlan != nil { interruptions?.cancelContinuation() }
+        } catch {
+            errorMessage = error.localizedDescription
+            schedulingError = errorMessage
+        }
+        if previousNotice != schedule.notice || previousPlans != store.plans || previousError != errorMessage { onChange?() }
+    }
+
+    func acceptScheduledAction() {
+        perform { try schedule?.accept(available: interruptions?.isAvailable == true && SystemActivityMonitor.sessionIsUsable()) }
+    }
+
+    func rejectScheduledAction() {
+        perform { try schedule?.reject() }
     }
 
     func preparePopover() {
@@ -117,7 +160,7 @@ final class AppModel {
     }
 
     func editEntry(id: UUID) {
-        guard store?.entries.contains(where: { $0.id == id }) == true else { return }
+        guard store?.editableEntry(id: id) != nil else { return }
         guard finishCreation() else { return }
         rejectContinuation()
         cancelEntry()
@@ -137,6 +180,11 @@ final class AppModel {
             return fraction >= left && fraction < max(left + minimumWidth, right)
         }) {
             editEntry(id: entry.id)
+        } else if let segment = store.plannedSegments(in: timeline.range(at: instant), at: instant).reversed().first(where: {
+            let date = timeline.date(at: fraction, now: instant)
+            return $0.interval.start <= date && date < $0.interval.end
+        }) {
+            editEntry(id: segment.plan.id)
         } else if editingEntryID != nil {
             cancelEntry()
         }
@@ -145,6 +193,11 @@ final class AppModel {
     func reassignEntry(id: UUID, taskName: String) -> Bool {
         guard let store else { return false }
         return performEntryEdit { try store.reassignEntry(id: id, taskName: taskName) }
+    }
+
+    func reschedulePlan(id: UUID, start: Date, end: Date) -> Bool {
+        guard let store else { return false }
+        return performEntryEdit { try store.reschedulePlan(id: id, start: start, end: end) }
     }
 
     func saveTaskColor(id: UUID, color: TaskColor) -> Bool {
@@ -170,11 +223,15 @@ final class AppModel {
             timeline.fraction(for: $0.start, now: instant) <= fraction &&
                 fraction < timeline.fraction(for: $0.end ?? instant, now: instant)
         }?.id ?? editingEntryID
-        let edges = visible.flatMap { entry -> [(UUID, EntryEdge, Double)] in
+        let planEdges = store.plans.flatMap { plan -> [(UUID, EntryEdge, Double)] in
+            let start: [(UUID, EntryEdge, Double)] = plan.state == .active ? [] : [(plan.id, .start, timeline.fraction(for: plan.start, now: instant))]
+            return start + [(plan.id, .end, timeline.fraction(for: plan.end, now: instant))]
+        }
+        let edges = (visible.flatMap { entry -> [(UUID, EntryEdge, Double)] in
             let end = entry.end ?? instant
             return [(entry.id, .start, timeline.fraction(for: entry.start, now: instant)),
                     (entry.id, .end, timeline.fraction(for: end, now: instant))]
-        }.filter { $0.2 >= 0 && $0.2 <= 1 && abs($0.2 - fraction) <= tolerance }
+        } + planEdges).filter { $0.2 >= 0 && $0.2 <= 1 && abs($0.2 - fraction) <= tolerance }
         return edges.min(by: {
             let firstDistance = abs($0.2 - fraction)
             let secondDistance = abs($1.2 - fraction)
@@ -194,14 +251,17 @@ final class AppModel {
         timeline.pauseFollowing(at: instant)
         resizingEntryID = nearest.0
         resizingEdge = nearest.1
+        resizingNowTolerance = tolerance * 3 / 5
         return nearest.1
     }
 
     func updateResizing(to fraction: Double, overwriting: Bool) {
         guard let id = resizingEntryID, let edge = resizingEdge, let store else { return }
-        let date = timeline.date(at: min(max(fraction, 0), 1), now: .now)
+        let instant = Date.now
+        let date = timeline.date(at: min(max(fraction, 0), 1), now: instant)
+        let reachesNow = abs(date.timeIntervalSince(instant)) <= timeline.span * resizingNowTolerance
         isOverwriting = overwriting
-        if let selection = try? store.prepareResize(id: id, edge: edge, to: date, overwriting: overwriting) {
+        if let selection = try? store.prepareResize(id: id, edge: edge, to: date, reachesNow: reachesNow, overwriting: overwriting) {
             drawnRange = DateInterval(start: selection.start, end: selection.end ?? .now)
         } else {
             drawnRange = nil
@@ -317,6 +377,7 @@ final class AppModel {
         editingEntryID = nil
         resizingEntryID = nil
         resizingEdge = nil
+        resizingNowTolerance = 0
         isOverwriting = false
         drawingStart = nil
         drawnRange = nil

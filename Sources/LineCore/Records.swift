@@ -61,6 +61,7 @@ struct TrackingSnapshot: Codable {
     var version = 1
     var tasks: [TrackedTask] = []
     var entries: [TimeEntry] = []
+    var plans: [PlannedEntry]?
     var checkpoint: Date?
     var defaultZoomHours: Int?
     var statisticsDayStartHour: Int?

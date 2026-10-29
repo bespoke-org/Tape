@@ -70,9 +70,8 @@ struct EntryCreationTests {
         #expect(throws: TrackingError.emptyInterval) {
             try store.prepareEntry(from: now.addingTimeInterval(61), to: now.addingTimeInterval(65), snap: .fiveMinutes)
         }
-        #expect(throws: TrackingError.futureInterval) {
-            try store.prepareEntry(from: now.addingTimeInterval(1), to: now.addingTimeInterval(601), snap: .fiveMinutes)
-        }
+        let future = try store.prepareEntry(from: now.addingTimeInterval(1), to: now.addingTimeInterval(601), snap: .fiveMinutes)
+        #expect(future.end == now.addingTimeInterval(600))
         #expect(throws: TrackingError.emptyInterval) { try store.prepareEntry(from: base, to: base) }
         #expect(throws: TrackingError.emptyInterval) { try store.prepareEntry(from: base.addingTimeInterval(1), to: base.addingTimeInterval(2)) }
         let nearNow = try TrackingStore(url: directory.appendingPathComponent("near-now.json"), now: { base.addingTimeInterval(180.25) })
@@ -122,7 +121,7 @@ struct EntryCreationTests {
         var now = base.addingTimeInterval(600)
         let url = directory.appendingPathComponent("tracking.json")
         let store = try TrackingStore(url: url, now: { now })
-        let draft = try store.prepareEntry(from: base, to: now.addingTimeInterval(60))
+        let draft = try store.prepareEntry(from: base, to: now.addingTimeInterval(60), reachesNow: true)
         now += 60
         try store.startTask(named: "Other work")
         let before = store.entries

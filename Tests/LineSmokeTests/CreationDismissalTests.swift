@@ -56,10 +56,11 @@ struct CreationDismissalTests {
         try withModel { model, store in
             try draw(model, from: 0.4, to: 0.6)
             let selection = try #require(model.entrySelection)
-            #expect(selection.end == nil)
+            #expect(try #require(selection.end) > .now)
             model.creationName = "Already working"
             #expect(model.finishCreation())
             #expect(store.runningEntry?.start == selection.start)
+            #expect(store.activePlan?.end == selection.end)
         }
     }
 

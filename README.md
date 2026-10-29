@@ -14,7 +14,7 @@
   <img src="docs/images/tape.png" width="720" alt="Tape’s timeline with sample Design, Reading, and Writing tasks, with Writing currently running.">
 </p>
 
-Start a task and let the timeline fill in. Drag to add time, resize to make corrections, and pick up where you left off after a break. Everything stays on your Mac.
+Start a task and let the timeline fill in. Drag to add time, resize to make corrections, and pick up where you left off after a break. Draw future tasks to schedule starts and stops, with a countdown before each. Everything stays on your Mac.
 
 ## Try it
 

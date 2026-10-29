@@ -253,7 +253,7 @@ struct EntryEditingTests {
         try store.startTask(named: "Live")
         let live = try #require(store.runningEntry)
         now += 60
-        #expect(try store.prepareResize(id: live.id, edge: .end, to: now + 30).end == nil)
+        #expect(try store.prepareResize(id: live.id, edge: .end, to: now + 30).end == base + 3_720)
         #expect(store.runningEntry == live)
     }
 

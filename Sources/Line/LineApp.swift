@@ -56,6 +56,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private(set) var continuationPanel: ContinuationPanel?
     private var continuationTimer: Timer?
     private var presentedContinuationID: UUID?
+    private var scheduleTimer: Timer?
+    private(set) var schedulePanel: ContinuationPanel?
+    private var presentedScheduleID: UUID?
     private(set) var mainWindowController: MainWindowController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -70,6 +73,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         model = AppModel(storeURL: directory.appendingPathComponent("tracking.json"))
         model.onChange = { [weak self] in
             self?.updateStatus()
+            self?.syncSchedule()
             self?.syncContinuation()
         }
 
@@ -90,6 +94,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         timer.tolerance = 0.5
         RunLoop.main.add(timer, forMode: .common)
         checkpointTimer = timer
+        let scheduleTimer = Timer(timeInterval: 0.25, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.model.pollSchedule()
+                if let notice = self.model.schedule?.notice {
+                    self.schedulePanel?.updateCountdown(seconds: notice.remainingSeconds(at: .now))
+                }
+            }
+        }
+        scheduleTimer.tolerance = 0.05
+        RunLoop.main.add(scheduleTimer, forMode: .common)
+        self.scheduleTimer = scheduleTimer
 
         #if DEBUG
         if let argument = CommandLine.arguments.firstIndex(of: "--smoke-test"),
@@ -110,9 +126,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             model.cancelEntry()
             popover.close()
             continuationPanel?.dismiss()
+            schedulePanel?.dismiss()
         case .unlocked, .didWake:
             break
         }
+    }
+
+    private func syncSchedule() {
+        guard let notice = model.schedule?.notice, let task = model.store?.task(id: notice.taskID),
+              let button = statusItem.button else {
+            schedulePanel?.dismiss()
+            schedulePanel = nil
+            presentedScheduleID = nil
+            return
+        }
+        if presentedScheduleID != notice.id {
+            schedulePanel?.dismiss()
+            presentedScheduleID = notice.id
+            let starts = notice.action == .start
+            schedulePanel = ContinuationPanel(task: task, remainingSeconds: notice.remainingSeconds(at: .now),
+                                             hoverChanged: { _ in },
+                                             accept: { [weak self] in self?.model.acceptScheduledAction() },
+                                             reject: { [weak self] in self?.model.rejectScheduledAction() },
+                                             countdownPrefix: starts ? "Starts" : "Stops",
+                                             acceptTitle: starts ? "Start now" : "Stop now",
+                                             rejectTitle: starts ? "Skip" : "Keep tracking")
+        }
+        schedulePanel?.show(below: button, avoiding: popover.isShown ? popover.contentViewController?.view.window?.frame : nil)
     }
 
     private func syncContinuation() {
@@ -249,6 +289,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         NSApplication.shared.activate(ignoringOtherApps: true)
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         popover.contentViewController?.view.window?.makeKey()
+        syncSchedule()
         if outsideClickMonitor == nil {
             outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]) { [weak self] _ in
                 self?.dismissForOutsideClick()
@@ -265,6 +306,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
                   let button = self.statusItem.button else { return }
             self.popover.contentSize = size
             self.popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+            self.syncSchedule()
         }
     }
 
@@ -279,6 +321,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         }
         // Destroy the TimelineView so no rendering schedule survives a closed popover.
         popover.contentViewController = nil
+        syncSchedule()
     }
 
     func dismissForOutsideClick() {
@@ -349,12 +392,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        guard model.stop() else {
+        guard model.stopForQuit() else {
             showPopover()
             return .terminateCancel
         }
         checkpointTimer?.invalidate()
         continuationTimer?.invalidate()
+        scheduleTimer?.invalidate()
+        schedulePanel?.dismiss()
         continuationPanel?.dismiss()
         return .terminateNow
     }
