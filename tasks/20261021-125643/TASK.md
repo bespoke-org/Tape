@@ -83,7 +83,7 @@ Saves task name `Building DayLine` with tags `dayline`, `coding`, and `deepwork`
 
 Current entry points are `TrackingPopover`, `EntryEditor`, and the tracking operations in `TrackingStore`. Both task pickers already share `taskSuggestions(matching:)` and the configurable `TaskOrder`. Preserve atomic save behavior and task identity when adding tag metadata. Review task reconstruction paths, including color changes, so they retain tags.
 
-Related: [task ordering](../20261021-103152/TASK.md), [application spec](../../docs/spec.md), and [task tracking workflow](../../docs/issue-tracker.md).
+Related: [task ordering](../20261021-103152/TASK.md), [application spec](../../docs/spec.md), and [GitHub Issues](https://github.com/mchernigin/daytape/issues).
 
 ## Verification
 

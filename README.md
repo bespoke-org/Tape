@@ -27,7 +27,7 @@ open build/Tape.app
 
 Built with Swift, SwiftUI, and AppKit. No account or subscription.
 
-[Usage & development](docs/guide.md) · [Spec](docs/spec.md) · [Tasks](tasks/README.md)
+[Usage & development](docs/guide.md) · [Spec](docs/spec.md) · [Issues](https://github.com/mchernigin/daytape/issues)
 
 ## License
 

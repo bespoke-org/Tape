@@ -1,12 +1,9 @@
-# Tape tasks
+# Archived task records
 
-Tasks are Markdown files managed with [tatr](https://github.com/tsoding/tatr) and committed with the project. Use `tatr ls` for open tasks and `tatr ls -c` for closed tasks. Each `TASK.md` records its current status.
+Current bugs, planned work, and status are managed in [GitHub Issues](https://github.com/mchernigin/daytape/issues). This directory preserves completed local task records for implementation and verification history. Do not create new tasks here or use these records as a current backlog. References to retired ticket numbers are historical, and unverified checks remain unverified.
 
-See [task tracking](../docs/issue-tracker.md) for the workflow and commands.
+## Completed feature records
 
-## Current additions
-
-- [Statistics](20261021-133441/TASK.md)
 - [Inline task tags](20261021-125643/TASK.md)
 - [Task picker ordering](20261021-103152/TASK.md)
 - [Settings sections in the menu bar menu](20261021-074432/TASK.md)
@@ -16,9 +13,9 @@ See [task tracking](../docs/issue-tracker.md) for the workflow and commands.
 - [Time format](20261020-205017/TASK.md)
 - [Main window, Settings, and default zoom](20261020-194050/TASK.md)
 
-## Migrated v1 tickets
+## Completed v1 tickets
 
-Original ticket numbers remain in the titles for reference. New tasks use tatr’s generated IDs.
+Original ticket numbers remain in the titles for historical reference.
 
 - [01: Track tasks on a live timeline](20261020-190554-ticket-01/TASK.md)
 - [02: Browse and zoom the timeline](20261020-190554-ticket-02/TASK.md)
@@ -26,8 +23,7 @@ Original ticket numbers remain in the titles for reference. New tasks use tatr�
 - [04: Correct entries and maintain reusable tasks](20261020-190554-ticket-04/TASK.md)
 - [05: Stop tracking on screen lock and sleep](20261020-190554-ticket-05/TASK.md)
 - [06: Resume interrupted work with a cancellable countdown](20261020-190554-ticket-06/TASK.md)
-- [07: Finish personal installation and verify complete workflows](20261020-190554-ticket-07/TASK.md)
-- [08: Migrate local storage to SQLite](20261020-190554-ticket-08/TASK.md)
 - [09: Overwrite entries with Command-drag](20261020-190554-ticket-09/TASK.md)
 
-[Spec](../docs/spec.md) · [Original breakdown](../docs/ticket-plan.md)
+
+[Spec](../docs/spec.md)

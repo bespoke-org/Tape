@@ -171,7 +171,7 @@ The [main-window task](../tasks/20261020-194050/TASK.md) adds the following beha
 ### Delivery and planning
 
 - Deliver a locally runnable app bundle and source/build instructions for this Mac. No App Store submission, notarized distribution workflow, account system, or hosted component is required.
-- Keep the spec in the repository and implementation tasks in the [tatr tracker](../tasks/README.md). Tasks use only OPEN or CLOSED and declare dependencies as links in their descriptions. Follow the [task tracking workflow](issue-tracker.md).
+- Keep the spec in the repository. Track bugs, planned work, and their status in [GitHub Issues](https://github.com/mchernigin/daytape/issues). Do not create or maintain local task files; `tasks/` contains archived records only.
 
 ## Testing Decisions
 
