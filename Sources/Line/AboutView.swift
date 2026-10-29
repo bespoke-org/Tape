@@ -5,7 +5,6 @@ struct AboutView: View {
     let dataURL: URL
 
     private var version: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "Development" }
-    private var minimumSystem: String { Bundle.main.object(forInfoDictionaryKey: "LSMinimumSystemVersion") as? String ?? "26.0" }
 
     var body: some View {
         Form {
@@ -24,10 +23,11 @@ struct AboutView: View {
             }
             Section("App information") {
                 LabeledContent("Version", value: version)
-                LabeledContent("Requires", value: "macOS \(minimumSystem) or later")
                 LabeledContent("License", value: "GPL-2.0-only")
-                Link("Source Code", destination: URL(string: "https://github.com/mchernigin/daytape")!)
-                Link("View License", destination: URL(string: "https://github.com/mchernigin/daytape/blob/main/LICENSE")!)
+                Link(destination: URL(string: "https://github.com/mchernigin/daytape")!) {
+                    Label("Source Code", systemImage: "chevron.left.forwardslash.chevron.right")
+                }
+                .labelStyle(.titleAndIcon)
             }
             Section("Your data") {
                 Text("Your tasks, time entries, and preferences stay on this Mac. No account or cloud sync.")
