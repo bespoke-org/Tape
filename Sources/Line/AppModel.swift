@@ -25,6 +25,7 @@ final class AppModel {
     private(set) var entrySelection: EntrySelection?
     private(set) var drawnRange: DateInterval?
     private(set) var entryError: String?
+    var creationName: String?
     private(set) var isOverwriting = false
     private(set) var editingEntryID: UUID?
     private(set) var resizingEntryID: UUID?
@@ -117,6 +118,7 @@ final class AppModel {
 
     func editEntry(id: UUID) {
         guard store?.entries.contains(where: { $0.id == id }) == true else { return }
+        guard finishCreation() else { return }
         rejectContinuation()
         cancelEntry()
         editingEntryID = id
@@ -124,6 +126,7 @@ final class AppModel {
 
     func selectEntry(at fraction: Double, minimumWidth: Double) {
         guard let store else { return }
+        guard finishCreation() else { return }
         let instant = Date.now
         // Match the visible blocks, including the two-point minimum for short entries.
         // Later entries draw on top and win at shared boundaries.
@@ -185,6 +188,7 @@ final class AppModel {
     func beginResizing(at fraction: Double, tolerance: Double) -> EntryEdge? {
         let instant = Date.now
         guard let nearest = resizeTarget(at: fraction, tolerance: tolerance, now: instant) else { return nil }
+        guard finishCreation() else { return nil }
         rejectContinuation()
         cancelEntry()
         timeline.pauseFollowing(at: instant)
@@ -224,6 +228,7 @@ final class AppModel {
 
     func beginDrawing(at fraction: Double, overwriting: Bool) -> Bool {
         guard let store else { return false }
+        guard finishCreation() else { return false }
         let instant = Date.now
         let start = timeline.date(at: fraction, now: instant)
         guard overwriting || !store.entries.contains(where: { $0.start <= start && ($0.end ?? instant) > start }) else { return false }
@@ -257,6 +262,7 @@ final class AppModel {
         do {
             entrySelection = try store.prepareEntry(from: start, to: end, reachesNow: reachesNow,
                                                    snap: timeline.entrySnap, overwriting: isOverwriting)
+            creationName = ""
         } catch TrackingError.emptyInterval {
             cancelEntry()
         } catch {
@@ -281,7 +287,33 @@ final class AppModel {
         }
     }
 
+    func beginCreation() -> Bool {
+        guard finishCreation() else { return false }
+        rejectContinuation()
+        cancelEntry()
+        creationName = ""
+        return true
+    }
+
+    /// Resolve a draft before leaving its picker. Overwrites always need explicit submission.
+    func finishCreation() -> Bool {
+        guard let name = creationName else { return true }
+        guard !TaskInput(name).name.isEmpty, entrySelection?.overwritesExisting != true else {
+            cancelEntry()
+            return true
+        }
+        return submitCreation(named: name)
+    }
+
+    func submitCreation(named name: String) -> Bool {
+        guard !TaskInput(name).name.isEmpty else { return false }
+        let saved = entrySelection != nil ? createSelectedEntry(named: name) : start(name)
+        if saved { cancelEntry() }
+        return saved
+    }
+
     func cancelEntry() {
+        creationName = nil
         editingEntryID = nil
         resizingEntryID = nil
         resizingEdge = nil

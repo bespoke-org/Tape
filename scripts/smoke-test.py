@@ -23,7 +23,7 @@ modes.add_argument('--overwrite', action='store_true', help='Verify Command-drag
 modes.add_argument('--dismissal', action='store_true', help='Verify outside-click dismissal after color menu use')
 modes.add_argument('--editing', action='store_true', help='Verify inline entry correction, resizing, and deletion')
 args = parser.parse_args()
-run_timeout = 50 if args.statistics or args.tags or args.continuation or args.main_window else 40 if args.editing else 20
+run_timeout = 50 if args.statistics or args.tags or args.continuation or args.main_window else 40 if args.editing or args.creation else 20
 if args.timeout is not None:
     if args.timeout <= 0:
         parser.error('--timeout must be positive')

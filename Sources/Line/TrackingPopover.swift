@@ -6,8 +6,8 @@ struct TrackingPopover: View {
     let dismiss: () -> Void
     let openMainWindow: () -> Void
     let contentSizeDidChange: (CGSize) -> Void
-    @State private var taskName = ""
-    @State private var isTaskPickerShown = false
+    private var taskName: String { model.creationName ?? "" }
+    private var isTaskPickerShown: Bool { model.creationName != nil }
     @State private var isTaskFieldFocused = false
     @State private var tagCompletion = TaskTagCompletion()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -75,30 +75,8 @@ struct TrackingPopover: View {
                 dismiss()
             }
         }
-        .onChange(of: model.isDrawing) { _, drawing in
-            if drawing {
-                isTaskPickerShown = false
-                isTaskFieldFocused = false
-                taskName = ""
-            }
-        }
-        .onChange(of: model.editingEntryID) { _, id in
-            if id != nil {
-                isTaskPickerShown = false
-                isTaskFieldFocused = false
-            }
-        }
-        .onChange(of: model.resizingEntryID) { _, id in
-            if id != nil {
-                isTaskPickerShown = false
-                isTaskFieldFocused = false
-            }
-        }
-        .onChange(of: model.entrySelection) { _, selection in
-            if selection != nil {
-                taskName = ""
-                isTaskPickerShown = true
-            }
+        .onChange(of: isTaskPickerShown) { _, shown in
+            if !shown { isTaskFieldFocused = false }
         }
         .onDisappear {
             model.stopTimelineAnimation(finish: true)
@@ -114,7 +92,9 @@ struct TrackingPopover: View {
                 Text(task.name).font(.title3.weight(.medium)).lineLimit(1)
                 Spacer(minLength: 8)
                 pickerButton("Switch task", systemImage: "arrow.left.arrow.right")
-                Button { _ = model.stop() } label: {
+                Button {
+                    if model.finishCreation() { _ = model.stop() }
+                } label: {
                     Label("Stop", systemImage: "stop.fill")
                         .labelStyle(.iconOnly)
                         .frame(width: 24, height: 24)
@@ -149,13 +129,9 @@ struct TrackingPopover: View {
     private func pickerButton(_ title: String, systemImage: String) -> some View {
         Button {
             if isTaskPickerShown && model.entrySelection == nil {
-                closeTaskPicker()
+                if model.finishCreation() { isTaskFieldFocused = false }
             } else {
-                model.rejectContinuation()
-                model.cancelEntry()
-                taskName = ""
-                isTaskPickerShown = true
-                isTaskFieldFocused = true
+                if model.beginCreation() { isTaskFieldFocused = true }
             }
         } label: {
             Label(title, systemImage: systemImage)
@@ -171,14 +147,13 @@ struct TrackingPopover: View {
     private func closeTaskPicker() {
         model.cancelEntry()
         isTaskFieldFocused = false
-        isTaskPickerShown = false
-        taskName = ""
     }
 
     private func taskPicker(store: TrackingStore) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                TaskInputField(text: $taskName, isFocused: $isTaskFieldFocused, tags: store.tags,
+                TaskInputField(text: Binding(get: { taskName }, set: { model.creationName = $0 }),
+                               isFocused: $isTaskFieldFocused, tags: store.tags,
                                completion: tagCompletion, accessibilityLabel: "Task name or search",
                                submit: { start(trimmedName) }, cancel: { closeTaskPicker() })
                     .frame(height: 22)
@@ -189,6 +164,8 @@ struct TrackingPopover: View {
                             .strokeBorder(.quaternary, lineWidth: 0.5)
                             .allowsHitTesting(false)
                     }
+                Button("Cancel", action: closeTaskPicker)
+                    .buttonStyle(.glass)
                 Button(pickerAction(store: store)) { start(trimmedName) }
                     .buttonStyle(.glassProminent)
                     .disabled(TaskInput(taskName).name.isEmpty)
@@ -214,8 +191,7 @@ struct TrackingPopover: View {
 
     private func start(_ name: String) {
         guard !TaskInput(name).name.isEmpty else { return }
-        let saved = model.entrySelection != nil ? model.createSelectedEntry(named: name) : model.start(name)
-        if saved { closeTaskPicker() }
+        if model.submitCreation(named: name) { isTaskFieldFocused = false }
     }
 
     private func pickerAction(store: TrackingStore) -> String {

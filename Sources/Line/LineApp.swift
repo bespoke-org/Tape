@@ -169,6 +169,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     }
 
     private func showActionsMenu() {
+        guard model.finishCreation() else { return }
         model.acceptContinuation()
         continuationPanel?.dismiss()
         popover.close()
@@ -206,6 +207,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     }
 
     private func presentMainWindow(page: SettingsPage? = nil) {
+        guard model.finishCreation() else { return }
         model.acceptContinuation()
         continuationPanel?.dismiss()
         popover.close()
@@ -266,6 +268,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         }
     }
 
+    func popoverShouldClose(_ popover: NSPopover) -> Bool {
+        model.finishCreation()
+    }
+
     func popoverDidClose(_ notification: Notification) {
         if let outsideClickMonitor {
             NSEvent.removeMonitor(outsideClickMonitor)
@@ -278,7 +284,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     func dismissForOutsideClick() {
         // A nested menu can leave AppKit's transient dismissal inactive after it closes.
         if popover.behavior == .transient {
-            popover.close()
+            popover.performClose(nil)
         }
     }
 

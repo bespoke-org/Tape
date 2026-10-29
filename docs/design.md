@@ -11,7 +11,7 @@ Working record of agreed behavior and unresolved decisions. This is not the impl
 - While following the present, time moves beneath a centered now marker. Browsing pauses following; a Now action returns to the present and resumes following. The now marker need not remain visible when browsing.
 - Click-and-drag on empty timeline space creates a time entry. Horizontal scrolling browses time; Shift+mouse-wheel provides a mouse alternative.
 - The default visible timeline span is eight hours. Users adjust the scale with pinch-to-zoom; no zoom buttons. Product zoom limits have not been selected.
-- After drawing, a text field accepts a new task name while searching existing tasks. Selecting an existing task or creating a new one saves the entry; Escape cancels. Live tracking uses the same task picker.
+- After drawing, a text field accepts a new task name while searching existing tasks. Selecting an existing task, submitting a new name, or leaving a named creation draft saves the entry. Escape and Cancel discard it. Live tracking uses the same task picker and starts at submission or dismissal. Overwrites require explicit submission; failed saves retain the draft and block navigation.
 - Clicking an entry allows changing its task, editing start/end times, or deleting it. Dragging an edge resizes it. Mouse edits snap to whole minutes; live tracking retains actual timestamps.
 - Creating or editing an entry cannot overlap another entry. Reject the overlap with an explanation and preserve existing entries.
 - Reopening the popover returns to now and retains the chosen zoom level.

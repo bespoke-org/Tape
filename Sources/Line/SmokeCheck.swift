@@ -1551,8 +1551,8 @@ enum SmokeCheck {
         try require(model.entrySelection == nil && model.entryError == nil, "Collapsed overwrite must silently cancel")
         try draw(0.15, 0.25, in: popover, command: true)
         try await settle()
-        try require(accessibilityElement(named: "Cancel", in: contentView(popover)) == nil,
-                    "Overwrite picker must use the compact layout without a Cancel button")
+        try require(accessibilityElement(named: "Cancel", in: contentView(popover)) != nil,
+                    "Overwrite picker must offer Cancel alongside explicit submission")
         window.sendEvent(escape)
         try await settle()
         try require(model.entrySelection == nil && store.entries == original, "Escape in the overwrite picker must preserve entries")
@@ -1605,10 +1605,108 @@ enum SmokeCheck {
         return model.entrySelection!
     }
 
+    private static func checkCreationDismissal(button: NSStatusBarButton, popover: NSPopover, model: AppModel) async throws {
+        guard let delegate = NSApp.delegate as? AppDelegate, let store = model.store else {
+            throw NSError(domain: "LineSmokeCheck", code: 30)
+        }
+        func clickOutside() {
+            let originalBehavior = popover.behavior
+            popover.behavior = .transient
+            defer { popover.behavior = originalBehavior }
+            delegate.dismissForOutsideClick()
+        }
+        func clearEntries() throws {
+            for entry in store.entries { try store.deleteEntry(id: entry.id) }
+        }
+        for action in ["outside", "icon", "settings", "native"] {
+            try draw(0.1, 0.2, in: popover)
+            try await settle()
+            guard let selection = model.entrySelection else {
+                throw NSError(domain: "LineSmokeCheck", code: 31,
+                              userInfo: [NSLocalizedDescriptionKey: "Missing drawn draft before \(action) dismissal"])
+            }
+            try enterTaskName("Saved on dismissal :coding", in: popover, submit: false)
+            switch action {
+            case "outside": clickOutside()
+            case "icon": try clickStatusItem(button)
+            case "settings": try await pressAccessibleControl(named: "Open Tape", in: contentView(popover))
+            default: popover.performClose(nil)
+            }
+            try await settle()
+            try require(store.entries.count == 1 && !popover.isShown,
+                        "Dismissing via \(action) must save the named draft before closing")
+            try require(store.entries[0].start == selection.start && store.entries[0].end == selection.end,
+                        "Dismissal must preserve the drawn interval")
+            let persisted = try TrackingStore(url: model.dataURL)
+            try require(persisted.entries == store.entries && persisted.tasks.first?.tags == ["coding"],
+                        "The dismissed entry and its tags must be persisted")
+            delegate.mainWindowController?.window?.close()
+            try clearEntries()
+            try clickStatusItem(button)
+            try await settle()
+        }
+        for name in ["Started on dismissal", "Switched on dismissal"] {
+            try await openPicker(named: store.runningEntry == nil ? "Start task" : "Switch task", in: popover)
+            try enterTaskName(name, in: popover, submit: false)
+            let beforeSave = Date.now
+            clickOutside()
+            try await settle()
+            try require(!popover.isShown && store.runningTask?.name == name && store.runningEntry!.start >= beforeSave,
+                        "Start/Switch must use the time of dismissal")
+            try clickStatusItem(button)
+            try await settle()
+        }
+        try clearEntries()
+        try await settle()
+        try draw(0.1, 0.2, in: popover)
+        try await settle()
+        try enterTaskName("Cancel this draft", in: popover, submit: false)
+        try await pressAccessibleControl(named: "Cancel", in: contentView(popover))
+        try await settle()
+        try require(store.entries.isEmpty && model.entrySelection == nil, "Cancel must discard the named draft")
+        try requirePickerHidden(popover)
+
+        try draw(0.1, 0.2, in: popover)
+        try await settle()
+        try enterTaskName("Retry after failure", in: popover, submit: false)
+        // The smoke app always has an isolated data directory. Replace its file with a
+        // directory to make atomic saves fail without changing filesystem permissions.
+        let savedData = try Data(contentsOf: model.dataURL)
+        try FileManager.default.removeItem(at: model.dataURL)
+        try FileManager.default.createDirectory(at: model.dataURL, withIntermediateDirectories: false)
+        defer {
+            if (try? model.dataURL.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true {
+                try? FileManager.default.removeItem(at: model.dataURL)
+                try? savedData.write(to: model.dataURL)
+            }
+        }
+        clickOutside()
+        try await settle()
+        try require(popover.isShown && model.entryError != nil && store.entries.isEmpty,
+                    "Failed save must veto outside-click dismissal")
+        try clickStatusItem(button)
+        try await settle()
+        try require(popover.isShown, "Failed save must veto menu-bar dismissal")
+        try await pressAccessibleControl(named: "Open Tape", in: contentView(popover))
+        try await settle()
+        try require(popover.isShown && delegate.mainWindowController?.window?.isVisible != true &&
+                    model.creationName == "Retry after failure", "Failed save must block settings and retain input")
+        try FileManager.default.removeItem(at: model.dataURL)
+        try savedData.write(to: model.dataURL)
+        clickOutside()
+        try await settle()
+        try require(!popover.isShown && store.tasks.first?.name == "Retry after failure",
+                    "Dismissal must retry the retained draft once saving works")
+        try clearEntries()
+        try clickStatusItem(button)
+        try await settle()
+    }
+
     private static func checkCreation(button: NSStatusBarButton, popover: NSPopover, model: AppModel) async throws {
         try await settle()
         try clickStatusItem(button)
         try await settle()
+        try await checkCreationDismissal(button: button, popover: popover, model: model)
         try requireAnchored(popover, to: button)
         func inputView() throws -> TimelineInputView {
             try timelineInput(in: popover)
@@ -1685,7 +1783,7 @@ enum SmokeCheck {
         try await settle()
         try clickStatusItem(button)
         try await settle()
-        try require(model.entrySelection == nil && model.store!.entries.count == 2, "Closing must discard the draft")
+        try require(model.entrySelection == nil && model.store!.entries.count == 2, "Closing must discard an unnamed draft")
         try requirePickerHidden(popover)
         try draw(0.45, 0.55)
         try await settle()
