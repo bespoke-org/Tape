@@ -93,7 +93,8 @@ struct LiveTimeline: View {
                             let left = max(0, position(start, width: width))
                             let right = min(width, position(end, width: width))
                             let shape = entryShape(from: start, to: end, width: width)
-                            let entryWidth = max(2, right - left)
+                            // A minimum width would push newly started entries past Now.
+                            let entryWidth = max(0, right - left)
                             Button { model.editEntry(id: entry.id) } label: {
                                 shape
                                     .fill(reduceTransparency ? Color(nsColor: .controlBackgroundColor) : task.color.displayColor.opacity(0.23))
@@ -114,6 +115,7 @@ struct LiveTimeline: View {
                                         }
                                     }
                                     .frame(width: entryWidth, height: 46)
+                                    .clipped()
                             }
                                 .buttonStyle(.plain)
                                 .zIndex(model.resizingEntryID == entry.id ? 1 : 0)
