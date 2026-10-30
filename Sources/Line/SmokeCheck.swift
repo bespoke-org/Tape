@@ -1249,19 +1249,19 @@ enum SmokeCheck {
         let runningFrame = try contentView(popover).window!.frame
         let liveEnd = model.timeline.fraction(for: .now, now: .now)
         try draw(liveEnd, liveEnd + 8 / width, in: popover)
-        try require(store.runningEntry?.id == remaining.id && store.activePlan == nil,
+        try require(store.runningEntry?.id == remaining.id && store.activeScheduledEntry == nil,
                     "A small overshoot past Now must keep tracking open-ended")
         try draw(liveEnd, liveEnd + 24 / width, in: popover)
-        try require(store.runningEntry?.id == remaining.id && store.activePlan?.end ?? .distantPast > .now,
+        try require(store.runningEntry?.id == remaining.id && store.activeScheduledEntry?.end ?? .distantPast > .now,
                     "Dragging a running end beyond Now must keep tracking and set an automatic stop")
-        let plannedEnd = store.activePlan!.end
+        let plannedEnd = store.activeScheduledEntry!.end!
         let snapNowFraction = model.timeline.fraction(for: .now, now: .now)
         try draw(model.timeline.fraction(for: plannedEnd, now: .now), snapNowFraction + 8 / width, in: popover, finish: false)
         try require(abs(model.drawnRange!.end.timeIntervalSinceNow) < 1, "The planned endpoint preview must snap to Now")
         let snapInput = try timelineInput(in: popover)
         _ = snapInput.handle(TimelineTestEvent(type: .leftMouseUp, window: snapInput.window!,
                                               location: snapInput.convert(NSPoint(x: snapInput.bounds.width * (snapNowFraction + 8 / width), y: 60), to: nil)))
-        try require(store.runningEntry?.id == remaining.id && store.activePlan == nil,
+        try require(store.runningEntry?.id == remaining.id && store.activeScheduledEntry == nil,
                     "Releasing at Now must remove the planned stop and keep tracking")
         try draw(model.timeline.fraction(for: .now, now: .now),
                  model.timeline.fraction(for: base - 1_200, now: .now), in: popover)
@@ -1663,10 +1663,11 @@ enum SmokeCheck {
         try draw(0.65, 0.8, in: popover)
         try await settle()
         try require(model.entrySelection?.start ?? .distantPast > .now, "Future drawing must open a planned draft")
+        try capture(popover.contentViewController?.view.window, "future-selection")
         try enterTaskName("Deep work :coding", in: popover, submit: false)
         try clickStatusItem(button)
         try await settle()
-        try require(store.plans.count == 1 && store.entries.isEmpty, "Click-away must save the plan without recording future time")
+        try require(store.entries.count == 1 && store.entries[0].recorded.isEmpty, "Click-away must save the plan without recording future time")
         try clickStatusItem(button)
         try await settle()
         try await pressAccessibleControl(named: "Planned: Deep work", in: contentView(popover))
@@ -1674,7 +1675,7 @@ enum SmokeCheck {
         try enterTaskName("Deep work :focus", in: popover)
         try await settle()
         try require(store.tasks.first?.tags == ["focus"], "Planned entries must use the existing tag editor")
-        let planID = store.plans[0].id
+        let planID = store.entries[0].id
         try await pressAccessibleControl(named: "Reschedule…", in: contentView(popover))
         let rescheduleContent: NSView = try await waitFor("Reschedule popover") {
             NSApp.windows.compactMap(\.contentView).first {
@@ -1685,17 +1686,18 @@ enum SmokeCheck {
                     "Reschedule must provide native start and end pickers")
         try await pressAccessibleControl(named: "Reschedule", in: rescheduleContent)
         try await settle()
-        try require(store.plans[0].id == planID && store.plans[0].state == .scheduled, "Rescheduling must preserve plan identity")
-        let end = model.timeline.fraction(for: store.plans[0].end, now: .now)
+        try require(store.entries[0].id == planID && store.entries[0].state == .scheduled, "Rescheduling must preserve plan identity")
+        let end = model.timeline.fraction(for: store.entries[0].end!, now: .now)
         try draw(end, 0.9, in: popover)
         try await settle()
-        try require(store.plans[0].end > model.timeline.date(at: 0.85, now: .now), "Plan endpoint must resize into the future")
+        try require(store.entries[0].end! > model.timeline.date(at: 0.85, now: .now), "Plan endpoint must resize into the future")
         model.cancelEntry()
         try draw(0.35, 0.55, in: popover)
         try await settle()
+        try capture(popover.contentViewController?.view.window, "cross-now-selection")
         try enterTaskName("Building Tape", in: popover)
         try await settle()
-        try require(store.activePlan != nil && store.runningEntry != nil, "Cross-Now drawing must track now with a planned stop")
+        try require(store.activeScheduledEntry != nil && store.runningEntry != nil, "Cross-Now drawing must track now with a planned stop")
         try capture(popover.contentViewController?.view.window, "planned-timeline-dark")
         let originalAppearance = popover.appearance
         popover.appearance = NSAppearance(named: .aqua)
@@ -1705,9 +1707,8 @@ enum SmokeCheck {
         popover.appearance = originalAppearance
         popover.contentViewController?.view.window?.appearance = nil
         try store.stop()
-        for plan in store.plans { try store.deleteEntry(id: plan.id) }
         for entry in store.entries { try store.deleteEntry(id: entry.id) }
-        try require(store.plans.allSatisfy { $0.id != planID }, "Deleting a plan must remove it")
+        try require(store.entries.allSatisfy { $0.id != planID }, "Deleting a plan must remove it")
         try clickStatusItem(button)
         try await settle()
 
@@ -1730,7 +1731,7 @@ enum SmokeCheck {
         try require(startButton.isEnabled && startButton.acceptsFirstMouse(for: nil), "Start now must accept the first click")
         startButton.performClick(nil)
         try await settle()
-        try require(store.runningTask?.name == "Scheduled work" && store.activePlan?.end == base + 25,
+        try require(store.runningTask?.name == "Scheduled work" && store.activeScheduledEntry?.end == base + 25,
                     "Start now must retain the original endpoint")
         let stopNotice: ScheduleNotice = try await waitFor("Scheduled stop notice", timeout: .seconds(18)) {
             model.schedule?.notice.flatMap { $0.action == .stop ? $0 : nil }
@@ -1740,7 +1741,7 @@ enum SmokeCheck {
         let keep = descendants(delegate.schedulePanel!.contentView!).compactMap { $0 as? NSButton }.first { $0.title == "Keep tracking" }!
         keep.performClick(nil)
         try await settle()
-        try require(store.runningEntry != nil && store.activePlan == nil, "Keep tracking must cancel the automatic endpoint")
+        try require(store.runningEntry != nil && store.activeScheduledEntry == nil, "Keep tracking must cancel the automatic endpoint")
         model.setResumeCountdownSeconds(2)
         let next = Date.now
         try store.createEntry(named: "Automatic switch", selection: EntrySelection(start: next + 3, end: next + 7))
@@ -1758,7 +1759,7 @@ enum SmokeCheck {
         let skipButton = descendants(delegate.schedulePanel!.contentView!).compactMap { $0 as? NSButton }.first { $0.title == "Skip" }!
         skipButton.performClick(nil)
         try await settle()
-        try require(store.plans.last?.state == .skipped && store.runningEntry == nil, "Skip must preserve a skipped plan without recording time")
+        try require(store.entries.last?.state == .skipped && store.runningEntry == nil, "Skip must preserve a skipped plan without recording time")
         try requireAnchored(popover, to: button)
         model.setResumeCountdownSeconds(9)
         try store.startTask(named: "Interrupted manual task")

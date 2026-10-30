@@ -14,8 +14,8 @@ public enum TaskOrder: String, Codable, CaseIterable, Sendable {
         var latest: [UUID: Date] = [:]
         var counts: [UUID: Int] = [:]
         if self != .alphabetical {
-            for entry in entries {
-                latest[entry.taskID] = max(latest[entry.taskID] ?? .distantPast, entry.start)
+            for entry in entries where !entry.recorded.isEmpty {
+                latest[entry.taskID] = max(latest[entry.taskID] ?? .distantPast, entry.recorded.last!.start)
                 counts[entry.taskID, default: 0] += 1
             }
         }

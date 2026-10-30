@@ -67,9 +67,10 @@ with tempfile.TemporaryDirectory(prefix='line-smoke-') as data:
             raise SystemExit(result.returncode)
         records = json.loads((Path(data) / 'tracking.json').read_text())
         if args.planning:
-            assert len(records['plans']) == 4
-            assert records['plans'][-1]['state'] == 'skipped'
-            assert len(records['entries']) == 3
+            assert records['version'] == 3 and 'plans' not in records
+            assert len(records['entries']) == 5
+            assert sum(entry['state'] == 'skipped' for entry in records['entries']) == 2
+            assert sum(bool(entry['recorded']) for entry in records['entries']) == 3
             assert all(entry.get('end') is not None for entry in records['entries'])
         elif args.statistics:
             assert len(records['entries']) == 28

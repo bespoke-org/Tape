@@ -83,7 +83,10 @@ public struct StatisticsReport: Sendable {
         var colors = Dictionary(uniqueKeysWithValues: tasks.map { (StatisticsFilter.task($0.id), $0.color) })
         // Resolve tag colors from all history, not just the displayed period or
         // filtered rows. The earliest entry's task supplies its current color.
-        let chronological = entries.sorted {
+        let recordedEntries = entries.flatMap { entry in
+            entry.recorded.map { TimeEntry(id: $0.id, taskID: entry.taskID, start: $0.start, end: min($0.end ?? now, entry.end ?? now)) }
+        }
+        let chronological = recordedEntries.sorted {
             if $0.start != $1.start { return $0.start < $1.start }
             return $0.id.uuidString < $1.id.uuidString
         }
@@ -94,7 +97,7 @@ public struct StatisticsReport: Sendable {
             }
         }
         self.colors = colors
-        let sessions = entries.compactMap { entry -> StatisticsSession? in
+        let sessions = recordedEntries.compactMap { entry -> StatisticsSession? in
             guard let task = lookup[entry.taskID] else { return nil }
             let start = max(entry.start, interval.start)
             let end = min(entry.end ?? now, now, interval.end)

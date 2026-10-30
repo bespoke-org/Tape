@@ -36,7 +36,9 @@ struct EntryEditingTests {
         let original = try #require(store.runningEntry)
         now = base + 3_600.25
         try store.resizeEntry(id: original.id, edge: .end, to: now + 60)
-        #expect(store.runningEntry == original)
+        #expect(store.runningEntry?.id == original.id)
+        #expect(store.runningEntry?.end == base + 3_660)
+        #expect(store.runningEntry?.recorded == original.recorded)
         try store.resizeEntry(id: original.id, edge: .end, to: now - 1, reachesNow: true)
         #expect(store.runningEntry == original)
         #expect(throws: TrackingError.emptyInterval) { try store.resizeEntry(id: original.id, edge: .end, to: base) }

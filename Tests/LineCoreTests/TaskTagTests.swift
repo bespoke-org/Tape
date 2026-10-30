@@ -107,7 +107,7 @@ struct TaskTagTests {
         #expect(store.tasks == tasks && store.entries == entries && store.tags == ["coding"])
     }
 
-    @Test func legacyTasksLoadWithoutRewritingNamesOrRecords() throws {
+    @Test func legacyTasksLoadWithOriginalBackup() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -120,6 +120,6 @@ struct TaskTagTests {
         try data.write(to: url)
         let store = try TrackingStore(url: url)
         #expect(store.tasks[0].name == "Old :peka:" && store.tags.isEmpty)
-        #expect(try Data(contentsOf: url) == data)
+        #expect(try Data(contentsOf: url.appendingPathExtension("before-unified-entries-v1.json")) == data)
     }
 }

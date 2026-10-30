@@ -159,7 +159,7 @@ struct TrackingStoreTests {
         }
     }
 
-    @Test func legacyZoomUsesNearestPresetWithoutRewritingRecords() throws {
+    @Test func legacyZoomUsesNearestPresetWithOriginalBackup() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -168,7 +168,7 @@ struct TrackingStoreTests {
         try data.write(to: url)
         let store = try TrackingStore(url: url)
         #expect(store.defaultZoomHours == 8)
-        #expect(try Data(contentsOf: url) == data)
+        #expect(try Data(contentsOf: url.appendingPathExtension("before-unified-entries-v1.json")) == data)
     }
 
     @Test func resumePreferencesPersistWithoutChangingTrackingAndRecoverOnSaveFailure() throws {
@@ -201,13 +201,13 @@ struct TrackingStoreTests {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let url = directory.appendingPathComponent("tracking.json")
         for (field, expected) in [("", 300), (#", "shortBreakMinutes":7"#, 420), (#", "shortBreakMinutes":-1"#, 0), (#", "shortBreakMinutes":100"#, 3600), (#", "shortBreakMinutes":5, "shortBreakSeconds":30"#, 30)] {
+            let url = directory.appendingPathComponent(UUID().uuidString + ".json")
             let data = Data((#"{"version":1,"tasks":[],"entries":[]"# + field + "}").utf8)
             try data.write(to: url)
             let store = try TrackingStore(url: url)
             #expect(store.automaticResumeEnabled && store.shortBreakSeconds == expected)
-            #expect(try Data(contentsOf: url) == data)
+            #expect(try Data(contentsOf: url.appendingPathExtension("before-unified-entries-v1.json")) == data)
             try store.setShortBreakSeconds(Int.min)
             #expect(store.shortBreakSeconds == 0)
             try store.setShortBreakSeconds(Int.max)
@@ -237,18 +237,18 @@ struct TrackingStoreTests {
         #expect(reopened.entries.first?.duration(at: now) == 5)
     }
 
-    @Test func resumeCountdownDefaultsAndBoundsDoNotRewriteOnLoad() throws {
+    @Test func resumeCountdownDefaultsAndBoundsPreserveOriginalBackup() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let url = directory.appendingPathComponent("tracking.json")
         for (field, expected) in [("", 9), (#", "resumeCountdownSeconds":-1"#, 1),
                                    (#", "resumeCountdownSeconds":100"#, 60)] {
+            let url = directory.appendingPathComponent(UUID().uuidString + ".json")
             let data = Data((#"{"version":1,"tasks":[],"entries":[]"# + field + "}").utf8)
             try data.write(to: url)
             let store = try TrackingStore(url: url)
             #expect(store.resumeCountdownSeconds == expected)
-            #expect(try Data(contentsOf: url) == data)
+            #expect(try Data(contentsOf: url.appendingPathExtension("before-unified-entries-v1.json")) == data)
             try store.setResumeCountdownSeconds(Int.min)
             #expect(store.resumeCountdownSeconds == 1)
             try store.setResumeCountdownSeconds(Int.max)
@@ -304,7 +304,7 @@ struct TrackingStoreTests {
         let data = Data(#"{"version":1,"tasks":[],"entries":[]}"#.utf8)
         try data.write(to: url)
         #expect(try TrackingStore(url: url).statisticsDayStartHour == 0)
-        #expect(try Data(contentsOf: url) == data)
+        #expect(try Data(contentsOf: url.appendingPathExtension("before-unified-entries-v1.json")) == data)
     }
 
     @Test func failedDayBoundarySaveKeepsPreviousChoiceAndRecords() throws {
@@ -354,7 +354,7 @@ struct TrackingStoreTests {
         let data = Data((#"{"version":1,"tasks":[],"entries":[]"# + field + "}").utf8)
         try data.write(to: url)
         #expect(try TrackingStore(url: url).timeFormat == .system)
-        #expect(try Data(contentsOf: url) == data)
+        #expect(try Data(contentsOf: url.appendingPathExtension("before-unified-entries-v1.json")) == data)
     }
 
     @Test func failedTimeFormatSaveKeepsPreviousChoiceAndRecords() throws {

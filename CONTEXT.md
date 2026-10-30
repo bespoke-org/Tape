@@ -8,8 +8,11 @@ Tape records time spent on reusable tasks through a continuous timeline.
 A named activity that can be worked on repeatedly, including across different days or weeks.
 
 **Time entry**:
-A continuous stretch of time spent on one task. A task can have many time entries, and entries cannot overlap.
+One occurrence of work on a task, which may include scheduled time, recorded time, and pauses. It retains its identity from scheduling through completion; only its recorded intervals count as time spent.
 _Avoid_: Event, session
+
+**Recorded interval**:
+A continuous portion of a time entry during which work was tracked. Pauses and missed scheduled time are excluded.
 
 **Running task**:
 The task currently accumulating tracked time. Only one task can run at a time.

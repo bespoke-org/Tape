@@ -60,7 +60,7 @@ struct CreationDismissalTests {
             model.creationName = "Already working"
             #expect(model.finishCreation())
             #expect(store.runningEntry?.start == selection.start)
-            #expect(store.activePlan?.end == selection.end)
+            #expect(store.activeScheduledEntry?.end == selection.end)
         }
     }
 
@@ -84,7 +84,7 @@ struct CreationDismissalTests {
             #expect((selection.end == nil) == shouldSnap)
             #expect(model.submitCreation(named: "Near Now"))
             #expect(store.runningEntry != nil)
-            #expect((store.activePlan == nil) == shouldSnap)
+            #expect((store.activeScheduledEntry == nil) == shouldSnap)
         }
     }
 

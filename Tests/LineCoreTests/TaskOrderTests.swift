@@ -67,7 +67,7 @@ struct TaskOrderTests {
     }
 
     @Test(arguments: ["", #", "taskOrder":"futureOrder""#])
-    func missingOrUnknownOrderDefaultsToRecencyWithoutRewriting(field: String) throws {
+    func missingOrUnknownOrderDefaultsToRecencyWithOriginalBackup(field: String) throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -75,7 +75,7 @@ struct TaskOrderTests {
         let data = Data((#"{"version":1,"tasks":[],"entries":[]"# + field + "}").utf8)
         try data.write(to: url)
         #expect(try TrackingStore(url: url).taskOrder == .recentlyUsed)
-        #expect(try Data(contentsOf: url) == data)
+        #expect(try Data(contentsOf: url.appendingPathExtension("before-unified-entries-v1.json")) == data)
     }
 
     @Test func failedSaveKeepsPreviousChoiceAndTracking() throws {

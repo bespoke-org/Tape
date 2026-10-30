@@ -55,10 +55,10 @@ public final class TrackingInterruption {
         }
         if !wasAway && (locked || sleeping) && pendingStop == nil {
             if let entry = store.runningEntry {
-                let planned = store.activePlan?.runningEntryID == entry.id
+                let planned = store.activeScheduledEntry?.id == entry.id
                 interruptedTask = store.automaticResumeEnabled && !planned ? store.runningTask : nil
                 interruptedEntryID = store.automaticResumeEnabled && !planned ? entry.id : nil
-                pendingStop = (entry.id, min(now(), store.activePlan?.end ?? .distantFuture), planned)
+                pendingStop = (entry.id, min(now(), store.activeScheduledEntry?.end ?? .distantFuture), planned)
             }
         }
         try retryStop()
@@ -126,7 +126,7 @@ public final class TrackingInterruption {
             return
         }
         guard store.runningEntry == nil else { cancelContinuation(); return }
-        let previous = store.entries.last
+        let previous = store.entries.filter { !$0.recorded.isEmpty }.max { ($0.recorded.last?.end ?? .distantPast) < ($1.recorded.last?.end ?? .distantPast) }
         let previousID = interruptedEntryID
         // Clear before committing so failure or another callback cannot silently try again.
         cancelContinuation()

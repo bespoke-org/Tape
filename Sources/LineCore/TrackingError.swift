@@ -6,6 +6,7 @@ public enum TrackingError: LocalizedError {
     case unsupportedStoreVersion
     case emptyInterval
     case futureInterval
+    case entryHasRecordedTime
     case pastPlanStart
     case overlappingEntry
     case missingEntry
@@ -18,6 +19,7 @@ public enum TrackingError: LocalizedError {
         case .clockMovedBackwards: "The Mac's clock moved backward. Tracking was not changed. Check Date & Time settings and try again."
         case .unsupportedStoreVersion: "This data was saved by a different version of Tape. It has not been changed."
         case .emptyInterval: "The end must be after the start."
+        case .entryHasRecordedTime: "Entries with recorded time can be resized, but cannot be moved into the future."
         case .pastPlanStart: "Choose a future start when rescheduling a plan."
         case .futureInterval: "Time entries must start in the past."
         case .overlappingEntry: "This interval overlaps tracked time. Choose an empty interval."

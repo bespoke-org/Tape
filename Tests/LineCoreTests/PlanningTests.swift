@@ -16,24 +16,24 @@ struct PlanningTests {
         let schedule = TrackingSchedule(store: store, now: { clock.now })
         try body(store, schedule, clock, url)
     }
-    @discardableResult private func plan(_ store: TrackingStore, from: Date, to: Date, name: String = "Coding", overwrite: Bool = false) throws -> PlannedEntry {
+    @discardableResult private func plan(_ store: TrackingStore, from: Date, to: Date, name: String = "Coding", overwrite: Bool = false) throws -> TimeEntry {
         let selection = try store.prepareEntry(from: from, to: to, overwriting: overwrite)
         try store.createEntry(named: name, selection: selection)
-        return try #require(store.plans.last)
+        return try #require(store.entries.last)
     }
 
     @Test func plansPersistWithoutCountingAsTrackedTime() throws {
         try fixture { store, _, clock, url in
             let start = clock.now + 600
             let planned = try plan(store, from: start, to: start + 3_600, name: "Code :work")
-            #expect(store.entries.isEmpty && store.runningEntry == nil)
+            #expect(store.entries.count == 1 && store.entries[0].recorded.isEmpty && store.runningEntry == nil)
             #expect(store.tasks.first?.tags == ["work"])
             let report = StatisticsReport(tasks: store.tasks, entries: store.entries,
                                           interval: DateInterval(start: clock.now, duration: 86_400), now: clock.now)
             #expect(report.total == 0)
             let reopened = try TrackingStore(url: url, now: { clock.now })
-            #expect(reopened.plans == [planned] && reopened.tasks == store.tasks)
-            #expect(reopened.plannedSegments(in: DateInterval(start: clock.now, duration: 86_400), at: clock.now).first?.label == "Planned")
+            #expect(reopened.entries == [planned] && reopened.tasks == store.tasks)
+            #expect(reopened.timelineSegments(in: DateInterval(start: clock.now, duration: 86_400), at: clock.now).first?.kind == .planned)
         }
     }
 
@@ -59,7 +59,7 @@ struct PlanningTests {
             clock.now = base + 180.2
             try scheduler.poll(available: true)
             #expect(store.runningEntry == nil && store.entries.last?.end == planned.end)
-            #expect(store.plans.first?.state == .completed)
+            #expect(store.entries.last?.state == .completed)
         }
     }
 
@@ -70,11 +70,11 @@ struct PlanningTests {
             clock.now = base + 51
             try scheduler.poll(available: true)
             try scheduler.accept(available: true)
-            #expect(store.runningEntry?.start == clock.now && store.activePlan?.end == planned.end)
+            #expect(store.runningEntry?.start == clock.now && store.activeScheduledEntry?.end == planned.end)
             clock.now = base + 171
             try scheduler.poll(available: true)
             try scheduler.reject()
-            #expect(store.runningEntry != nil && store.activePlan == nil)
+            #expect(store.runningEntry != nil && store.activeScheduledEntry == nil)
             clock.now = base + 190
             try scheduler.poll(available: true)
             #expect(store.runningTask?.name == "Coding")
@@ -85,7 +85,7 @@ struct PlanningTests {
             clock.now = base + 250
             try scheduler.poll(available: true)
             #expect(store.runningTask?.name == "Coding")
-            #expect(store.plans.first(where: { $0.id == second.id })?.state == .skipped)
+            #expect(store.entries.first(where: { $0.id == second.id })?.state == .skipped)
             let third = try plan(store, from: base + 360, to: base + 420, name: "Review")
             clock.now = base + 351
             try scheduler.poll(available: true)
@@ -94,7 +94,7 @@ struct PlanningTests {
             try scheduler.poll(available: true)
             try scheduler.accept(available: true)
             #expect(store.runningEntry == nil && store.entries.last?.end == clock.now)
-            #expect(store.plans.first(where: { $0.id == third.id })?.state == .skipped)
+            #expect(store.entries.first(where: { $0.id == third.id })?.state == .completed)
         }
     }
 
@@ -110,17 +110,17 @@ struct PlanningTests {
             #expect(scheduler.notice?.deadline == base + 99)
             clock.now = base + 99
             try scheduler.poll(available: true)
-            #expect(store.runningEntry?.start == base + 99)
+            #expect(store.runningEntry?.recorded.last?.start == base + 99)
             clock.now = base + 181
             try scheduler.poll(available: true)
             try plan(store, from: base + 240, to: base + 300, name: "Too late")
             clock.now = base + 295
             try scheduler.poll(available: true)
-            #expect(store.plans.last?.state == .missed && scheduler.notice == nil)
+            #expect(store.entries.last?.state == .missed && scheduler.notice == nil)
             try plan(store, from: base + 360, to: base + 420, name: "Expired")
             clock.now = base + 430
             try scheduler.poll(available: true)
-            #expect(store.plans.last?.state == .missed && store.entries.count == 1)
+            #expect(store.entries.last?.state == .missed && store.entries.filter { !$0.recorded.isEmpty }.count == 1)
         }
     }
 
@@ -132,7 +132,7 @@ struct PlanningTests {
             clock.now = base + 30
             try interruption.handle(.locked)
             scheduler.suspend()
-            #expect(store.runningEntry == nil && store.plans.first?.state == .paused)
+            #expect(store.runningEntry == nil && store.entries.first?.state == .paused)
             #expect(interruption.interruptedTask == nil)
             clock.now = base + 60
             try interruption.handle(.unlocked)
@@ -140,8 +140,8 @@ struct PlanningTests {
             #expect(scheduler.notice?.deadline == base + 69)
             clock.now = base + 69
             try scheduler.poll(available: true)
-            #expect(store.entries.count == 2 && store.entries[0].end == base + 30)
-            #expect(store.runningEntry?.start == base + 69 && store.activePlan?.end == planned.end)
+            #expect(store.entries.count == 1 && store.entries[0].recorded.first?.end == base + 30)
+            #expect(store.runningEntry?.recorded.last?.start == base + 69 && store.activeScheduledEntry?.end == planned.end)
         }
     }
 
@@ -151,7 +151,7 @@ struct PlanningTests {
             try plan(store, from: base - 60, to: base + 120)
             clock.now += 10
             try store.startTask(named: "Manual")
-            #expect(store.plans.first?.state == .skipped)
+            #expect(store.entries.first?.state == .completed)
             clock.now = base + 121
             try scheduler.poll(available: true)
             #expect(store.runningTask?.name == "Manual")
@@ -164,7 +164,7 @@ struct PlanningTests {
             try store.stop()
             clock.now = base + 190
             try scheduler.poll(available: true)
-            #expect(store.runningEntry == nil && store.plans.last?.state == .skipped)
+            #expect(store.runningEntry == nil && store.entries.last?.state == .completed)
         }
     }
 
@@ -173,15 +173,14 @@ struct PlanningTests {
             let base = clock.now
             try store.setAutomaticResumeEnabled(false)
             try store.startTask(named: "Coding")
-            let id = store.runningEntry?.id
-            try plan(store, from: base + 60, to: base + 180)
+            let planned = try plan(store, from: base + 60, to: base + 180)
             clock.now = base + 51
             try scheduler.poll(available: true)
             #expect(scheduler.notice == nil)
             clock.now = base + 60
             try scheduler.poll(available: true)
-            #expect(store.runningEntry?.id == id && store.entries.count == 1)
-            #expect(store.activePlan != nil)
+            #expect(store.runningEntry?.id == planned.id && store.entries.count == 2)
+            #expect(store.activeScheduledEntry != nil)
             clock.now = base + 171
             try scheduler.poll(available: true)
             #expect(scheduler.notice?.action == .stop)
@@ -196,8 +195,8 @@ struct PlanningTests {
             try store.checkpoint()
             clock.now = base + 90
             let reopened = try TrackingStore(url: url, now: { clock.now })
-            #expect(reopened.entries.first?.end == base + 30)
-            #expect(reopened.plans.first?.state == .paused)
+            #expect(reopened.entries.first?.recorded.last?.end == base + 30)
+            #expect(reopened.entries.first?.state == .paused)
             let scheduler = TrackingSchedule(store: reopened, now: { clock.now })
             try scheduler.poll(available: true)
             #expect(scheduler.notice?.deadline == base + 99)
@@ -212,24 +211,24 @@ struct PlanningTests {
             #expect(bounded.end == base + 120)
             #expect(throws: TrackingError.overlappingEntry) { try store.prepareEntry(from: base + 180, to: base + 300) }
             try plan(store, from: base + 240, to: base + 360, name: "Meeting", overwrite: true)
-            #expect(store.entries.isEmpty && store.plans.count == 3)
-            #expect(store.plans.contains { $0.start == base + 120 && $0.end == base + 240 })
-            #expect(store.plans.contains { $0.start == base + 360 && $0.end == base + 480 })
+            #expect(store.entries.allSatisfy { $0.recorded.isEmpty } && store.entries.count == 3)
+            #expect(store.entries.contains { $0.start == base + 120 && $0.end == base + 240 })
+            #expect(store.entries.contains { $0.start == base + 360 && $0.end == base + 480 })
         }
     }
 
-    @Test func plannedEditingResizesIntoPastReassignsAndDeletesWithoutLosingHistory() throws {
+    @Test func plannedEditingResizesIntoPastReassignsAndDeletesEntireEntry() throws {
         try fixture { store, _, clock, _ in
             let base = clock.now
             let planned = try plan(store, from: base + 120, to: base + 300)
             try store.reassignEntry(id: planned.id, taskName: "Meeting :work")
-            #expect(store.task(id: store.plans[0].taskID)?.name == "Meeting")
+            #expect(store.task(id: store.entries[0].taskID)?.name == "Meeting")
             try store.resizeEntry(id: planned.id, edge: .start, to: base - 60)
-            #expect(store.runningEntry?.start == base - 60 && store.activePlan?.end == base + 300)
+            #expect(store.runningEntry?.start == base - 60 && store.activeScheduledEntry?.end == base + 300)
             try store.resizeEntry(id: planned.id, edge: .end, to: base + 600)
-            #expect(store.activePlan?.end == base + 600)
+            #expect(store.activeScheduledEntry?.end == base + 600)
             try store.deleteEntry(id: planned.id)
-            #expect(store.plans.isEmpty && store.runningEntry != nil)
+            #expect(store.entries.isEmpty && store.runningEntry == nil)
         }
     }
 
@@ -242,10 +241,10 @@ struct PlanningTests {
             clock.now = base + 99
             try scheduler.poll(available: true)
             clock.now = base + 120
-            let segments = store.plannedSegments(in: DateInterval(start: base, duration: 300), at: clock.now)
+            let segments = store.timelineSegments(in: DateInterval(start: base, duration: 300), at: clock.now).filter { $0.kind != .recorded }
             #expect(segments.count == 2)
-            #expect(segments.first?.label == "Missed" && segments.first?.interval.end == base + 99)
-            #expect(segments.last?.label == "Planned" && segments.last?.interval.start == base + 120)
+            #expect(segments.first?.kind == .untracked && segments.first?.interval.end == base + 99)
+            #expect(segments.last?.kind == .planned && segments.last?.interval.start == base + 120)
         }
     }
 
@@ -260,7 +259,7 @@ struct PlanningTests {
             try FileManager.default.createDirectory(at: url, withIntermediateDirectories: false)
             clock.now = base + 60
             #expect(throws: (any Error).self) { try scheduler.poll(available: true) }
-            #expect(store.entries.isEmpty && scheduler.notice != nil && store.plans.first?.state == .scheduled)
+            #expect(store.entries[0].recorded.isEmpty && scheduler.notice != nil && store.entries.first?.state == .scheduled)
             try FileManager.default.removeItem(at: url)
             try saved.write(to: url)
             try scheduler.poll(available: true)
@@ -271,22 +270,21 @@ struct PlanningTests {
         try fixture { store, scheduler, clock, _ in
             let base = clock.now
             try plan(store, from: base - 60, to: base + 120)
-            let firstID = store.runningEntry?.id
-            try plan(store, from: base + 120, to: base + 240)
+            let second = try plan(store, from: base + 120, to: base + 240)
             try plan(store, from: base + 240, to: base + 360, name: "Meeting")
             clock.now = base + 111
             try scheduler.poll(available: true)
             #expect(scheduler.notice == nil)
             clock.now = base + 120.2
             try scheduler.poll(available: true)
-            #expect(store.runningEntry?.id == firstID && store.entries.count == 1)
+            #expect(store.runningEntry?.id == second.id && store.entries.count == 3)
             clock.now = base + 231
             try scheduler.poll(available: true)
             #expect(scheduler.notice?.action == .start)
             clock.now = base + 240.2
             try scheduler.poll(available: true)
             #expect(store.runningTask?.name == "Meeting")
-            #expect(store.entries[0].end == base + 240 && store.entries[1].start == base + 240)
+            #expect(store.entries[1].end == base + 240 && store.entries[2].recorded.first?.start == base + 240)
         }
     }
 
@@ -299,14 +297,14 @@ struct PlanningTests {
             let entries = store.entries
             clock.now = base + 90
             try store.resizeEntry(id: planned.id, edge: .end, to: base + 600)
-            #expect(store.entries == entries && store.plans[0].state == .paused)
+            #expect(store.entries[0].recorded == entries[0].recorded && store.entries[0].state == .paused)
             try scheduler.poll(available: true)
             #expect(scheduler.notice != nil)
             try store.reassignEntry(id: planned.id, taskName: "Changed")
             try scheduler.reject()
-            #expect(store.plans[0].state == .paused)
+            #expect(store.entries[0].state == .paused)
             try scheduler.poll(available: true)
-            #expect(scheduler.notice?.taskID == store.plans[0].taskID)
+            #expect(scheduler.notice?.taskID == store.entries[0].taskID)
         }
     }
 
@@ -318,7 +316,7 @@ struct PlanningTests {
             try store.resizeEntry(id: planned.id, edge: .start, to: base - 240, overwriting: true)
             #expect(store.entries[0].end == base - 240)
             #expect(store.runningEntry?.start == base - 240)
-            #expect(store.entries.count == 2 && store.activePlan != nil)
+            #expect(store.entries.count == 2 && store.activeScheduledEntry != nil)
         }
     }
 
@@ -328,7 +326,7 @@ struct PlanningTests {
             let selection = try store.prepareEntry(from: base - 60, to: base + 300)
             try store.startTask(named: "Other")
             #expect(throws: TrackingError.overlappingEntry) { try store.createEntry(named: "Draft", selection: selection) }
-            #expect(store.entries.count == 1 && store.plans.isEmpty)
+            #expect(store.entries.count == 1 && store.scheduledEntries.isEmpty)
         }
     }
 
@@ -343,7 +341,7 @@ struct PlanningTests {
             try FileManager.default.createDirectory(at: url, withIntermediateDirectories: false)
             clock.now = base + 120
             #expect(throws: (any Error).self) { try scheduler.poll(available: true) }
-            #expect(store.activePlan != nil && store.runningEntry != nil)
+            #expect(store.activeScheduledEntry != nil && store.runningEntry != nil)
             try FileManager.default.removeItem(at: url)
             try saved.write(to: url)
             clock.now = base + 125
@@ -359,12 +357,12 @@ struct PlanningTests {
             #expect(selection.startsInFuture)
             clock.now = base + 90
             try store.createEntry(named: "Typed slowly", selection: selection)
-            #expect(store.entries.isEmpty && store.plans[0].state == .scheduled)
+            #expect(store.entries[0].recorded.isEmpty && store.entries[0].state == .scheduled)
             try scheduler.poll(available: true)
             #expect(scheduler.notice?.deadline == base + 99)
             clock.now = base + 99
             try scheduler.poll(available: true)
-            #expect(store.runningEntry?.start == base + 99)
+            #expect(store.runningEntry?.recorded.last?.start == base + 99)
         }
     }
 
@@ -374,15 +372,15 @@ struct PlanningTests {
             let selection = try store.prepareEntry(from: base + 60, to: base + 120)
             clock.now = base + 180
             try store.createEntry(named: "Missed draft", selection: selection)
-            let id = store.plans[0].id
-            #expect(store.plans[0].state == .missed && store.entries.isEmpty)
-            try store.reschedulePlan(id: id, start: base + 240, end: base + 300)
-            #expect(store.plans[0].state == .scheduled && store.entries.isEmpty)
-            #expect(throws: TrackingError.pastPlanStart) { try store.reschedulePlan(id: id, start: base, end: base + 300) }
+            let id = store.entries[0].id
+            #expect(store.entries[0].state == .missed && store.entries[0].recorded.isEmpty)
+            try store.rescheduleEntry(id: id, start: base + 240, end: base + 300)
+            #expect(store.entries[0].state == .scheduled && store.entries[0].recorded.isEmpty)
+            #expect(throws: TrackingError.pastPlanStart) { try store.rescheduleEntry(id: id, start: base, end: base + 300) }
             try scheduler.poll(available: true)
             #expect(scheduler.notice == nil)
             let data = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as! [String: Any]
-            #expect(data["version"] as? Int == 2)
+            #expect(data["version"] as? Int == 3)
         }
     }
 
@@ -394,7 +392,7 @@ struct PlanningTests {
             #expect(selection.startsInFuture && selection.start >= clock.now)
             clock.now += 5
             try store.createEntry(named: "Still planned", selection: selection)
-            #expect(store.runningEntry == nil && store.entries.isEmpty)
+            #expect(store.runningEntry == nil && store.entries.allSatisfy { $0.recorded.isEmpty })
         }
     }
 
@@ -408,10 +406,10 @@ struct PlanningTests {
             if !wasRunning { try store.stop() }
             clock.now = base + 120
             let preview = try store.prepareResize(id: id, edge: .end, to: base + 600)
-            #expect(preview.end == base + 600 && store.plans.isEmpty)
+            #expect(preview.end == base + 600 && store.scheduledEntries.isEmpty)
             try store.resizeEntry(id: id, edge: .end, to: base + 600)
             #expect(store.runningEntry?.id == id && store.runningEntry?.start == base)
-            #expect(store.entries.count == 1 && store.activePlan?.end == base + 600)
+            #expect(store.entries.count == 1 && store.activeScheduledEntry?.end == base + 600)
             clock.now = base + 600
             try scheduler.poll(available: true)
             #expect(store.runningEntry == nil && store.entries[0].end == base + 600)
@@ -426,15 +424,15 @@ struct PlanningTests {
             clock.now = base + 120
             try store.resizeEntry(id: id, edge: .end, to: base + 600)
             try store.resizeEntry(id: id, edge: .end, to: base + 660)
-            #expect(store.plans.count == 1 && store.activePlan?.end == base + 660)
-            let planID = store.activePlan!.id
+            #expect(store.entries.count == 1 && store.activeScheduledEntry?.end == base + 660)
+            let planID = store.activeScheduledEntry!.id
             #expect(try store.prepareResize(id: planID, edge: .end, to: clock.now + 1, reachesNow: true).end == nil)
             try store.resizeEntry(id: planID, edge: .end, to: clock.now + 1, reachesNow: true)
-            #expect(store.runningEntry?.id == id && store.activePlan == nil)
+            #expect(store.runningEntry?.id == id && store.activeScheduledEntry == nil)
             try store.resizeEntry(id: id, edge: .end, to: base + 720)
             #expect(try store.prepareResize(id: id, edge: .end, to: clock.now - 1, reachesNow: true).end == nil)
             try store.resizeEntry(id: id, edge: .end, to: clock.now - 1, reachesNow: true)
-            #expect(store.runningEntry?.id == id && store.activePlan == nil)
+            #expect(store.runningEntry?.id == id && store.activeScheduledEntry == nil)
         }
     }
 
@@ -447,10 +445,10 @@ struct PlanningTests {
             try plan(store, from: base + 600, to: base + 900, name: "Later")
             #expect(try store.prepareResize(id: id, edge: .end, to: base + 720).end == base + 600)
             try store.resizeEntry(id: id, edge: .end, to: base + 720)
-            #expect(store.activePlan?.end == base + 600)
+            #expect(store.activeScheduledEntry?.end == base + 600)
             try store.resizeEntry(id: id, edge: .end, to: base + 780, overwriting: true)
-            #expect(store.activePlan?.end == base + 780 && store.entries.count == 1)
-            #expect(store.plans.contains { $0.start == base + 780 && $0.end == base + 900 && $0.state == .scheduled })
+            #expect(store.activeScheduledEntry?.end == base + 780 && store.entries.count == 2)
+            #expect(store.entries.contains { $0.start == base + 780 && $0.end == base + 900 && $0.state == .scheduled })
         }
     }
 
@@ -465,8 +463,8 @@ struct PlanningTests {
             #expect(try store.prepareResize(id: firstID, edge: .end, to: base + 600).end == base + 60)
             try store.resizeEntry(id: firstID, edge: .end, to: base + 600, overwriting: true)
             #expect(store.entries.count == 1 && store.runningEntry?.id == firstID)
-            #expect(store.activePlan?.end == base + 600)
-            #expect(store.entries.allSatisfy { $0.start <= clock.now && ($0.end ?? clock.now) <= clock.now })
+            #expect(store.activeScheduledEntry?.end == base + 600)
+            #expect(store.entries.flatMap(\.recorded).allSatisfy { $0.start <= clock.now && ($0.end ?? clock.now) <= clock.now })
         }
     }
 
@@ -482,7 +480,7 @@ struct PlanningTests {
             try FileManager.default.createDirectory(at: url, withIntermediateDirectories: false)
             clock.now = base + 120
             #expect(throws: (any Error).self) { try store.resizeEntry(id: original[0].id, edge: .end, to: base + 600) }
-            #expect(store.entries == original && store.plans.isEmpty)
+            #expect(store.entries == original && store.scheduledEntries.isEmpty)
             try FileManager.default.removeItem(at: url)
             try data.write(to: url)
         }

@@ -39,10 +39,10 @@ struct EntryEditor: View {
                             .strokeBorder(.quaternary, lineWidth: 0.5)
                             .allowsHitTesting(false)
                     }
-                if let plan = store.plans.first(where: { $0.id == entry.id }) {
+                if entry.recorded.isEmpty, let end = entry.end {
                     Button("Reschedule…") {
-                        plannedStart = Date(timeIntervalSince1970: ceil(max(plan.start, Date.now.addingTimeInterval(60)).timeIntervalSince1970 / 60) * 60)
-                        plannedEnd = plannedStart.addingTimeInterval(plan.end.timeIntervalSince(plan.start))
+                        plannedStart = Date(timeIntervalSince1970: ceil(max(entry.start, Date.now.addingTimeInterval(60)).timeIntervalSince1970 / 60) * 60)
+                        plannedEnd = plannedStart.addingTimeInterval(end.timeIntervalSince(entry.start))
                         showsReschedule = true
                     }
                     .buttonStyle(.borderless)
@@ -104,8 +104,8 @@ struct EntryEditor: View {
             Button("Cancel", role: .cancel) {}
             Button("Delete", role: .destructive) { _ = model.deleteEntry(id: entry.id) }
         } message: {
-            Text(store.plans.contains(where: { $0.id == entry.id }) ? "This will cancel the plan and keep any time already recorded." : entry.end == nil ? "This will stop tracking and remove this entry. This cannot be undone." :
-                    "This will remove the recorded time. This cannot be undone.")
+            Text(entry.isRunning ? "This will stop tracking and remove the entire entry, including its recorded and scheduled time. This cannot be undone." :
+                    "This will remove the entire entry, including any recorded and scheduled time. This cannot be undone.")
         }
     }
 

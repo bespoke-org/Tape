@@ -30,6 +30,7 @@ final class AppModel {
     var creationName: String?
     private(set) var isOverwriting = false
     private(set) var editingEntryID: UUID?
+    private(set) var resizingPreview: TimeEntry?
     private(set) var resizingEntryID: UUID?
     private var resizingEdge: EntryEdge?
     var isResizingEnd: Bool { resizingEdge == .end }
@@ -81,7 +82,7 @@ final class AppModel {
             if event == .locked || event == .willSleep { schedule?.suspend() }
             try interruptions.handle(event)
             try schedule?.poll(available: interruptions.isAvailable && SystemActivityMonitor.sessionIsUsable())
-            if schedule?.notice != nil || store?.activePlan != nil { interruptions.cancelContinuation() }
+            if schedule?.notice != nil || store?.activeScheduledEntry != nil { interruptions.cancelContinuation() }
             try interruptions.pollContinuation(sessionIsUsable: SystemActivityMonitor.sessionIsUsable())
             errorMessage = nil
             interruptionError = nil
@@ -119,7 +120,7 @@ final class AppModel {
     }
 
     func acceptContinuation() {
-        guard schedule?.notice == nil, store?.activePlan == nil else { return }
+        guard schedule?.notice == nil, store?.activeScheduledEntry == nil else { return }
         guard let interruptions, interruptions.pendingContinuation != nil else { return }
         perform {
             try interruptions.acceptContinuation(sessionIsUsable: SystemActivityMonitor.sessionIsUsable())
@@ -127,21 +128,21 @@ final class AppModel {
     }
 
     func pollSchedule() {
-        guard let schedule, let store, schedule.notice != nil || store.plans.contains(where: { $0.state.isAutomatic }) else { return }
+        guard let schedule, let store, schedule.notice != nil || store.entries.contains(where: { $0.isAutomatic }) else { return }
         let previousNotice = schedule.notice
-        let previousPlans = store.plans
+        let previousEntries = store.entries
         let previousError = errorMessage
         do {
             try interruptions?.retryStop()
             try schedule.poll(available: interruptions?.isAvailable == true && SystemActivityMonitor.sessionIsUsable())
             if errorMessage == schedulingError { errorMessage = nil }
             schedulingError = nil
-            if schedule.notice != nil || store.activePlan != nil { interruptions?.cancelContinuation() }
+            if schedule.notice != nil || store.activeScheduledEntry != nil { interruptions?.cancelContinuation() }
         } catch {
             errorMessage = error.localizedDescription
             schedulingError = errorMessage
         }
-        if previousNotice != schedule.notice || previousPlans != store.plans || previousError != errorMessage { onChange?() }
+        if previousNotice != schedule.notice || previousEntries != store.entries || previousError != errorMessage { onChange?() }
     }
 
     func acceptScheduledAction() {
@@ -170,23 +171,17 @@ final class AppModel {
         guard let store else { return }
         guard finishCreation() else { return }
         let instant = Date.now
-        // Match the visible blocks, including the two-point minimum for short entries.
-        // Later entries draw on top and win at shared boundaries.
-        let visible = store.entries(overlapping: timeline.range(at: instant), now: instant)
-        if let entry = visible.reversed().first(where: {
-            let left = max(0, timeline.fraction(for: $0.start, now: instant))
-            let right = min(1, timeline.fraction(for: $0.end ?? instant, now: instant))
-            return fraction >= left && fraction < max(left + minimumWidth, right)
-        }) {
-            editEntry(id: entry.id)
-        } else if let segment = store.plannedSegments(in: timeline.range(at: instant), at: instant).reversed().first(where: {
-            let date = timeline.date(at: fraction, now: instant)
-            return $0.interval.start <= date && date < $0.interval.end
-        }) {
-            editEntry(id: segment.plan.id)
-        } else if editingEntryID != nil {
-            cancelEntry()
-        }
+        let segments = store.timelineSegments(in: timeline.range(at: instant), at: instant)
+        let hit = segments.reversed().sorted { ($0.kind == .recorded ? 0 : 1) < ($1.kind == .recorded ? 0 : 1) }
+            .first {
+                let left = max(0, timeline.fraction(for: $0.interval.start, now: instant))
+                let end = timeline.fraction(for: $0.interval.end, now: instant)
+                // Keep tiny recorded entries easy to select without extending their hit target past Now.
+                let right = $0.kind == .recorded ? min(timeline.fraction(for: instant, now: instant), max(end, left + minimumWidth)) : end
+                return left <= fraction && fraction < min(1, right)
+            }
+        if let hit { editEntry(id: hit.entry.id) }
+        else if editingEntryID != nil { cancelEntry() }
     }
 
     func reassignEntry(id: UUID, taskName: String) -> Bool {
@@ -196,7 +191,7 @@ final class AppModel {
 
     func reschedulePlan(id: UUID, start: Date, end: Date) -> Bool {
         guard let store else { return false }
-        return performEntryEdit { try store.reschedulePlan(id: id, start: start, end: end) }
+        return performEntryEdit { try store.rescheduleEntry(id: id, start: start, end: end) }
     }
 
     func saveTaskColor(id: UUID, color: TaskColor) -> Bool {
@@ -222,15 +217,10 @@ final class AppModel {
             timeline.fraction(for: $0.start, now: instant) <= fraction &&
                 fraction < timeline.fraction(for: $0.end ?? instant, now: instant)
         }?.id ?? editingEntryID
-        let planEdges = store.plans.flatMap { plan -> [(UUID, EntryEdge, Double)] in
-            let start: [(UUID, EntryEdge, Double)] = plan.state == .active ? [] : [(plan.id, .start, timeline.fraction(for: plan.start, now: instant))]
-            return start + [(plan.id, .end, timeline.fraction(for: plan.end, now: instant))]
-        }
-        let edges = (visible.flatMap { entry -> [(UUID, EntryEdge, Double)] in
-            let end = entry.end ?? instant
-            return [(entry.id, .start, timeline.fraction(for: entry.start, now: instant)),
-                    (entry.id, .end, timeline.fraction(for: end, now: instant))]
-        } + planEdges).filter { $0.2 >= 0 && $0.2 <= 1 && abs($0.2 - fraction) <= tolerance }
+        let edges = visible.flatMap { entry -> [(UUID, EntryEdge, Double)] in
+            [(entry.id, .start, timeline.fraction(for: entry.start, now: instant)),
+             (entry.id, .end, timeline.fraction(for: entry.end ?? instant, now: instant))]
+        }.filter { $0.2 >= 0 && $0.2 <= 1 && abs($0.2 - fraction) <= tolerance }
         return edges.min(by: {
             let firstDistance = abs($0.2 - fraction)
             let secondDistance = abs($1.2 - fraction)
@@ -261,8 +251,10 @@ final class AppModel {
         isOverwriting = overwriting
         if let selection = try? store.prepareResize(id: id, edge: edge, to: date, reachesNow: reachesNow, overwriting: overwriting) {
             drawnRange = DateInterval(start: selection.start, end: selection.end ?? .now)
+            resizingPreview = try? store.previewResizedEntry(id: id, edge: edge, selection: selection)
         } else {
             drawnRange = nil
+            resizingPreview = nil
         }
     }
 
@@ -289,7 +281,9 @@ final class AppModel {
         guard finishCreation() else { return false }
         let instant = Date.now
         let start = timeline.date(at: fraction, now: instant)
-        guard overwriting || !store.entries.contains(where: { $0.start <= start && ($0.end ?? instant) > start }) else { return false }
+        guard overwriting || !store.timelineSegments(in: timeline.range(at: instant), at: instant).contains(where: {
+            $0.kind != .untracked && $0.interval.start <= start && $0.interval.end > start
+        }) else { return false }
         rejectContinuation()
         cancelEntry()
         isOverwriting = overwriting
@@ -375,6 +369,7 @@ final class AppModel {
         creationName = nil
         editingEntryID = nil
         resizingEntryID = nil
+        resizingPreview = nil
         resizingEdge = nil
         isOverwriting = false
         drawingStart = nil

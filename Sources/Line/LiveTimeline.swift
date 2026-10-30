@@ -47,105 +47,15 @@ struct LiveTimeline: View {
                             .accessibilityHidden(true)
                     }
 
-                    ForEach(store.plannedSegments(in: visibleRange, at: now).filter {
-                        !model.isResizingEnd || $0.plan.runningEntryID != model.resizingEntryID
-                    }) { segment in
-                        if let task = store.task(id: segment.plan.taskID) {
-                            let plan = segment.plan
-                            let selected = model.editingEntryID == plan.id || model.resizingEntryID == plan.id
-                            let preview = model.resizingEntryID == plan.id && segment.interval.end == plan.end ? model.drawnRange : nil
-                            let leftDate = preview.map { plan.state == .active ? max(now, $0.start) : $0.start } ?? segment.interval.start
-                            let left = max(0, position(leftDate, width: width))
-                            let rightDate = preview?.end ?? segment.interval.end
-                            let right = min(width, position(rightDate, width: width))
-                            let shape = entryShape(from: leftDate, to: rightDate, width: width)
-                            let blockWidth = max(2, right - left)
-                            let color = segment.isMissed ? Color.secondary : task.color.displayColor
-                            Button { model.editEntry(id: plan.id) } label: {
-                                shape
-                                    .fill(reduceTransparency ? Color(nsColor: .controlBackgroundColor) : color.opacity(0.08))
-                                    .overlay {
-                                        shape
-                                            .strokeBorder(color.opacity(contrast == .increased || selected ? 1 : 0.6),
-                                                          style: StrokeStyle(lineWidth: selected || contrast == .increased ? 2 : 1, dash: [5, 3]))
-                                    }
-                                    .overlay(alignment: .leading) {
-                                        if blockWidth > 42 {
-                                            Text(task.name).font(.caption.weight(.medium)).lineLimit(1)
-                                                .foregroundStyle(.secondary).padding(.horizontal, 6)
-                                        }
-                                    }
-                                    .frame(width: blockWidth, height: 46)
-                            }
-                            .buttonStyle(.plain)
-                            .offset(x: left, y: stripTop + (stripHeight - 46) / 2)
-                            .help("\(segment.label): \(task.inputText), \(model.timeFormat.string(from: plan.start, includeDate: true)) to \(model.timeFormat.string(from: plan.end, includeDate: true))")
-                            .accessibilityLabel("\(segment.label): \(task.name)")
-                        }
-                    }
-
-                    ForEach(visibleEntries) { entry in
-                        if let task = store.task(id: entry.taskID) {
-                            let isSelected = model.editingEntryID == entry.id || model.resizingEntryID == entry.id
-                            let preview = model.resizingEntryID == entry.id ? model.drawnRange : nil
-                            let start = preview?.start ?? entry.start
-                            let end = min(preview?.end ?? entry.end ?? now, now)
-                            let left = max(0, position(start, width: width))
-                            let right = min(width, position(end, width: width))
-                            let shape = entryShape(from: start, to: end, width: width)
-                            // A minimum width would push newly started entries past Now.
-                            let entryWidth = max(0, right - left)
-                            Button { model.editEntry(id: entry.id) } label: {
-                                shape
-                                    .fill(reduceTransparency ? Color(nsColor: .controlBackgroundColor) : task.color.displayColor.opacity(0.23))
-                                    .overlay {
-                                        if isSelected {
-                                            selectionStripes(color: task.color.displayColor, shape: shape)
-                                        }
-                                    }
-                                    .overlay {
-                                        shape
-                                            .strokeBorder(task.color.displayColor, lineWidth: contrast == .increased || isSelected ? 2 : 1)
-                                    }
-                                    .overlay(alignment: .leading) {
-                                        if entryWidth > 42 {
-                                            Text(task.name).font(.caption.weight(.medium)).lineLimit(1)
-                                                .foregroundStyle(.primary)
-                                                .padding(.horizontal, 6)
-                                        }
-                                    }
-                                    .frame(width: entryWidth, height: 46)
-                                    .clipped()
-                            }
-                                .buttonStyle(.plain)
-                                .zIndex(model.resizingEntryID == entry.id ? 1 : 0)
-                                .offset(x: left, y: stripTop + (stripHeight - 46) / 2)
-                                .help(entryDescription(entry, task: task))
-                                .accessibilityElement(children: .ignore)
-                                .accessibilityLabel(entryDescription(entry, task: task))
-                            if let preview, preview.end > now {
-                                let futureLeft = max(0, position(now, width: width))
-                                let futureRight = min(width, position(preview.end, width: width))
-                                if futureRight > futureLeft {
-                                    let futureShape = entryShape(from: now, to: preview.end, width: width)
-                                    futureShape.fill(task.color.displayColor.opacity(0.08))
-                                        .overlay {
-                                            futureShape.strokeBorder(task.color.displayColor.opacity(0.6),
-                                                                     style: StrokeStyle(lineWidth: 2, dash: [5, 3]))
-                                        }
-                                        .frame(width: futureRight - futureLeft, height: 46)
-                                        .offset(x: futureLeft, y: stripTop + (stripHeight - 46) / 2)
-                                        .allowsHitTesting(false)
-                                        .accessibilityHidden(true)
-                                }
-                            }
-                        }
+                    ForEach(displayedSegments) { segment in
+                        entrySegment(segment, width: width)
                     }
 
                     if let selection = selectionRange {
                         let left = max(0, position(selection.start, width: width))
                         let right = min(width, position(selection.end, width: width))
                         if right > left {
+                            let pastWidth = min(right - left, max(0, position(now, width: width) - left))
                             let shape = entryShape(from: selection.start, to: selection.end, width: width)
                             shape
                                 .fill(Color.gray.opacity(reduceTransparency ? 0.35 : 0.18))
@@ -155,6 +65,16 @@ struct LiveTimeline: View {
                                 .overlay {
                                     shape
                                         .strokeBorder(Color.gray, lineWidth: 2)
+                                        .mask(alignment: .leading) {
+                                            Rectangle().frame(width: pastWidth)
+                                        }
+                                }
+                                .overlay {
+                                    shape
+                                        .strokeBorder(Color.gray, style: StrokeStyle(lineWidth: 2, dash: [5, 3]))
+                                        .mask(alignment: .trailing) {
+                                            Rectangle().frame(width: right - left - pastWidth)
+                                        }
                                 }
                                 .frame(width: right - left, height: 46)
                                 .offset(x: left, y: stripTop + (stripHeight - 46) / 2)
@@ -239,6 +159,58 @@ struct LiveTimeline: View {
             }
             .accessibilityElement(children: .contain)
             .accessibilityLabel("Timeline, \(dateContext), \(model.timeline.isFollowingNow ? "following now" : "browsing")")
+        }
+    }
+
+    private var displayedSegments: [EntrySegment] {
+        var segments = store.timelineSegments(in: visibleRange, at: now)
+        if let preview = model.resizingPreview {
+            segments.removeAll { $0.entry.id == preview.id }
+            segments += store.timelineSegments(for: preview, in: visibleRange, at: now)
+        }
+        // Recorded work stays above untracked reservations where their ranges overlap.
+        return segments.sorted { ($0.kind == .recorded ? 1 : 0) < ($1.kind == .recorded ? 1 : 0) }
+    }
+
+    @ViewBuilder private func entrySegment(_ segment: EntrySegment, width: CGFloat) -> some View {
+        if let task = store.task(id: segment.entry.taskID) {
+            let entry = segment.entry
+            let selected = model.editingEntryID == entry.id || model.resizingEntryID == entry.id
+            let left = max(0, position(segment.interval.start, width: width))
+            let right = min(width, position(segment.interval.end, width: width))
+            let shape = entryShape(from: segment.interval.start, to: segment.interval.end, width: width)
+            let recorded = segment.kind == .recorded
+            let color = segment.kind == .untracked ? Color.secondary : task.color.displayColor
+            Button { model.editEntry(id: entry.id) } label: {
+                shape
+                    .fill(reduceTransparency ? Color(nsColor: .controlBackgroundColor) : color.opacity(recorded ? 0.23 : 0.08))
+                    .overlay {
+                        if selected { selectionStripes(color: color, shape: shape) }
+                    }
+                    .overlay {
+                        shape.strokeBorder(color.opacity(recorded || selected || contrast == .increased ? 1 : 0.6),
+                                           style: StrokeStyle(lineWidth: selected || contrast == .increased ? 2 : 1,
+                                                              dash: recorded ? [] : [5, 3]))
+                    }
+                    .frame(width: max(0, right - left), height: 46)
+                    .clipped()
+            }
+            .buttonStyle(.plain)
+            .offset(x: left, y: stripTop + (stripHeight - 46) / 2)
+            .help(entryDescription(entry, task: task))
+            .accessibilityLabel(segment.kind == .planned ? "Planned: \(task.name)" : entryDescription(entry, task: task))
+            // One title for the whole entry, even where Now divides its drawing style.
+            if segment.interval.start == max(entry.start, visibleRange.start) {
+                let labelRight = min(width, position(entry.end ?? now, width: width))
+                if labelRight - left > 42 {
+                    Text(task.name).font(.caption.weight(.medium)).lineLimit(1)
+                        .foregroundStyle(.primary).padding(.horizontal, 6)
+                        .frame(width: labelRight - left, height: 46, alignment: .leading)
+                        .offset(x: left, y: stripTop + (stripHeight - 46) / 2)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                }
+            }
         }
     }
 
