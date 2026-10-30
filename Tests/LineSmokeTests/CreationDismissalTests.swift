@@ -64,6 +64,30 @@ struct CreationDismissalTests {
         }
     }
 
+    @Test(arguments: [1.0, 8.0, 24.0], [-8.0, 8.0, 24.0])
+    func drawingPreviewAndSaveAgreeNearNow(hours: Double, offset: Double) throws {
+        try withModel { model, store in
+            model.timeline = TimelineViewport(span: hours * 3_600)
+            let tolerance = 12.0 / 600
+            let end = 0.5 + offset / 600
+            try #require(model.beginDrawing(at: 0.25, overwriting: false))
+            model.updateDrawing(to: end, tolerance: tolerance)
+            let preview = try #require(model.drawnRange)
+            let shouldSnap = abs(offset) < 12
+            if shouldSnap {
+                #expect(abs(preview.end.timeIntervalSinceNow) < 1)
+            } else {
+                #expect(preview.end > .now)
+            }
+            model.finishDrawing(at: end, tolerance: tolerance)
+            let selection = try #require(model.entrySelection)
+            #expect((selection.end == nil) == shouldSnap)
+            #expect(model.submitCreation(named: "Near Now"))
+            #expect(store.runningEntry != nil)
+            #expect((store.activePlan == nil) == shouldSnap)
+        }
+    }
+
     @Test(arguments: ["", "  \n ", ":coding"])
     func emptyNamesAreDiscarded(name: String) throws {
         try withModel { model, store in

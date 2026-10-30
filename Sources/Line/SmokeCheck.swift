@@ -1234,9 +1234,9 @@ enum SmokeCheck {
         let resizeInstant = Date.now
         let endFraction = model.timeline.fraction(for: remaining.end!, now: resizeInstant)
         let nowFraction = model.timeline.fraction(for: resizeInstant, now: resizeInstant)
-        try draw(endFraction, nowFraction + 1 / width, in: popover, finish: false)
+        try draw(endFraction, nowFraction + 8 / width, in: popover, finish: false)
         try require(model.drawnRange != nil, "Resizing through Now must retain the preview")
-        let nowPoint = hoverInput.convert(NSPoint(x: hoverInput.bounds.width * nowFraction, y: 60), to: nil)
+        let nowPoint = hoverInput.convert(NSPoint(x: hoverInput.bounds.width * (nowFraction + 8 / width), y: 60), to: nil)
         _ = hoverInput.handle(TimelineTestEvent(type: .leftMouseUp, window: hoverInput.window!, location: nowPoint))
         try await settle()
         try require(store.runningEntry?.id == remaining.id && store.runningEntry?.start == remaining.start && store.entries.count == 1,
@@ -1248,27 +1248,30 @@ enum SmokeCheck {
                     "Dragging the running start must preserve tracking")
         let runningFrame = try contentView(popover).window!.frame
         let liveEnd = model.timeline.fraction(for: .now, now: .now)
-        try draw(liveEnd, liveEnd + 6 / width, in: popover)
+        try draw(liveEnd, liveEnd + 8 / width, in: popover)
+        try require(store.runningEntry?.id == remaining.id && store.activePlan == nil,
+                    "A small overshoot past Now must keep tracking open-ended")
+        try draw(liveEnd, liveEnd + 24 / width, in: popover)
         try require(store.runningEntry?.id == remaining.id && store.activePlan?.end ?? .distantPast > .now,
                     "Dragging a running end beyond Now must keep tracking and set an automatic stop")
         let plannedEnd = store.activePlan!.end
         let snapNowFraction = model.timeline.fraction(for: .now, now: .now)
-        try draw(model.timeline.fraction(for: plannedEnd, now: .now), snapNowFraction + 1 / width, in: popover, finish: false)
+        try draw(model.timeline.fraction(for: plannedEnd, now: .now), snapNowFraction + 8 / width, in: popover, finish: false)
         try require(abs(model.drawnRange!.end.timeIntervalSinceNow) < 1, "The planned endpoint preview must snap to Now")
         let snapInput = try timelineInput(in: popover)
         _ = snapInput.handle(TimelineTestEvent(type: .leftMouseUp, window: snapInput.window!,
-                                              location: snapInput.convert(NSPoint(x: snapInput.bounds.width * (snapNowFraction + 1 / width), y: 60), to: nil)))
+                                              location: snapInput.convert(NSPoint(x: snapInput.bounds.width * (snapNowFraction + 8 / width), y: 60), to: nil)))
         try require(store.runningEntry?.id == remaining.id && store.activePlan == nil,
                     "Releasing at Now must remove the planned stop and keep tracking")
         try draw(model.timeline.fraction(for: .now, now: .now),
-                 model.timeline.fraction(for: base - 600, now: .now), in: popover)
+                 model.timeline.fraction(for: base - 1_200, now: .now), in: popover)
         try await settle()
-        try require(store.runningEntry == nil && store.entries[0].end == base - 600 && store.entries[0].id == remaining.id,
+        try require(store.runningEntry == nil && store.entries[0].end == base - 1_200 && store.entries[0].id == remaining.id,
                     "Dragging the running end into the past must stop at that time")
         let stoppedFrame = try contentView(popover).window!.frame
         try require(abs(runningFrame.minY - stoppedFrame.minY) < 0.25 && abs(runningFrame.height - stoppedFrame.height) < 0.25,
                     "Stopping by resize must not shift the popover: running \(runningFrame), stopped \(stoppedFrame)")
-        try draw(model.timeline.fraction(for: base - 600, now: .now),
+        try draw(model.timeline.fraction(for: base - 1_200, now: .now),
                  model.timeline.fraction(for: .now, now: .now), in: popover)
         try await settle()
         let resumedFrame = try contentView(popover).window!.frame

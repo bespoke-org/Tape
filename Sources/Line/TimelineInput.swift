@@ -10,13 +10,13 @@ struct TimelineInput: NSViewRepresentable {
     let drawingBounds: CGRect
     let interruptNavigation: () -> Void
     let beginDraw: (Double, Bool) -> Bool
-    let updateDraw: (Double) -> Void
+    let updateDraw: (Double, Double) -> Void
     let endDraw: (Double, Double) -> Void
     let cancelDraw: () -> Void
     let selectEntry: (Double, Double) -> Void
     let resizeEdge: (Double, Double) -> EntryEdge?
     let beginResize: (Double, Double) -> EntryEdge?
-    let updateResize: (Double, Bool) -> Void
+    let updateResize: (Double, Double, Bool) -> Void
     let endResize: (Double, Double, Bool) -> Void
     let cancelEdit: () -> Bool
 
@@ -53,18 +53,20 @@ final class TimelineInputView: NSView {
     var drawingBounds: CGRect = .zero
     var interruptNavigation: () -> Void = {}
     var beginDraw: (Double, Bool) -> Bool = { _, _ in false }
-    var updateDraw: (Double) -> Void = { _ in }
+    var updateDraw: (Double, Double) -> Void = { _, _ in }
     var endDraw: (Double, Double) -> Void = { _, _ in }
     var cancelDraw: () -> Void = {}
     var selectEntry: (Double, Double) -> Void = { _, _ in }
     var resizeEdge: (Double, Double) -> EntryEdge? = { _, _ in nil }
     var beginResize: (Double, Double) -> EntryEdge? = { _, _ in nil }
-    var updateResize: (Double, Bool) -> Void = { _, _ in }
+    var updateResize: (Double, Double, Bool) -> Void = { _, _, _ in }
     var endResize: (Double, Double, Bool) -> Void = { _, _, _ in }
     var cancelEdit: () -> Bool = { false }
     private var hoverArea: NSTrackingArea?
     private var showsResizeCursor = false
     private let resizeTolerance: CGFloat = 5
+    private let nowSnapDistance: CGFloat = 12
+    private var nowSnapTolerance: Double { nowSnapDistance / max(bounds.width, 1) }
     private var monitor: Any?
     private var magnificationScale: Double = 1
     private var dragOrigin: NSPoint?
@@ -151,7 +153,7 @@ final class TimelineInputView: NSView {
         guard let window, event.window === window else { return false }
         if event.type == .flagsChanged {
             if isResizing, let fraction = lastResizeFraction {
-                updateResize(fraction, event.modifierFlags.contains(.command))
+                updateResize(fraction, nowSnapTolerance, event.modifierFlags.contains(.command))
             }
             refreshCursor(modifiers: event.modifierFlags)
             return false
@@ -193,8 +195,8 @@ final class TimelineInputView: NSView {
             }
             if isResizing {
                 lastResizeFraction = fraction
-                updateResize(fraction, event.modifierFlags.contains(.command))
-            } else { updateDraw(fraction) }
+                updateResize(fraction, nowSnapTolerance, event.modifierFlags.contains(.command))
+            } else { updateDraw(fraction, nowSnapTolerance) }
             updateCursor(at: point, modifiers: event.modifierFlags)
             return true
         }
@@ -205,7 +207,7 @@ final class TimelineInputView: NSView {
             if isResizing {
                 draggingEdge = nil
                 lastResizeFraction = nil
-                endResize(fraction, 3 / max(bounds.width, 1), event.modifierFlags.contains(.command))
+                endResize(fraction, nowSnapTolerance, event.modifierFlags.contains(.command))
                 return true
             }
             if !isDrawing, let origin, abs(point.x - origin.x) < 3, drawingBounds.contains(point), !dragOverwrites {
@@ -214,7 +216,7 @@ final class TimelineInputView: NSView {
             }
             guard isDrawing else { return false }
             isDrawing = false
-            endDraw(fraction, 3 / max(bounds.width, 1))
+            endDraw(fraction, nowSnapTolerance)
             return true
         }
         guard bounds.contains(point) else { return false }

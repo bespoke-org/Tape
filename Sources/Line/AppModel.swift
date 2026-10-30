@@ -32,7 +32,6 @@ final class AppModel {
     private(set) var editingEntryID: UUID?
     private(set) var resizingEntryID: UUID?
     private var resizingEdge: EntryEdge?
-    private var resizingNowTolerance: Double = 0
     var isResizingEnd: Bool { resizingEdge == .end }
     private var drawingStart: Date?
     var isDrawing: Bool { drawingStart != nil }
@@ -251,15 +250,14 @@ final class AppModel {
         timeline.pauseFollowing(at: instant)
         resizingEntryID = nearest.0
         resizingEdge = nearest.1
-        resizingNowTolerance = tolerance * 3 / 5
         return nearest.1
     }
 
-    func updateResizing(to fraction: Double, overwriting: Bool) {
+    func updateResizing(to fraction: Double, tolerance: Double, overwriting: Bool) {
         guard let id = resizingEntryID, let edge = resizingEdge, let store else { return }
         let instant = Date.now
         let date = timeline.date(at: min(max(fraction, 0), 1), now: instant)
-        let reachesNow = abs(date.timeIntervalSince(instant)) <= timeline.span * resizingNowTolerance
+        let reachesNow = abs(date.timeIntervalSince(instant)) <= timeline.span * tolerance
         isOverwriting = overwriting
         if let selection = try? store.prepareResize(id: id, edge: edge, to: date, reachesNow: reachesNow, overwriting: overwriting) {
             drawnRange = DateInterval(start: selection.start, end: selection.end ?? .now)
@@ -300,11 +298,12 @@ final class AppModel {
         return true
     }
 
-    func updateDrawing(to fraction: Double) {
+    func updateDrawing(to fraction: Double, tolerance: Double) {
         guard let start = drawingStart, let store else { return }
         let instant = Date.now
         let end = timeline.date(at: min(max(fraction, 0), 1), now: instant)
-        if let selection = try? store.prepareEntry(from: start, to: end, snap: timeline.entrySnap, overwriting: isOverwriting) {
+        let reachesNow = abs(max(start, end).timeIntervalSince(instant)) <= timeline.span * tolerance
+        if let selection = try? store.prepareEntry(from: start, to: end, reachesNow: reachesNow, snap: timeline.entrySnap, overwriting: isOverwriting) {
             drawnRange = DateInterval(start: selection.start, end: selection.end ?? instant)
         } else {
             drawnRange = nil
@@ -377,7 +376,6 @@ final class AppModel {
         editingEntryID = nil
         resizingEntryID = nil
         resizingEdge = nil
-        resizingNowTolerance = 0
         isOverwriting = false
         drawingStart = nil
         drawnRange = nil
