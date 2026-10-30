@@ -157,10 +157,10 @@ struct TrackingPopover: View {
                                completion: tagCompletion, accessibilityLabel: "Task name or search",
                                submit: { start(trimmedName) }, cancel: { closeTaskPicker() })
                     .frame(height: 22)
-                    .padding(.horizontal, 6)
+                    .padding(.horizontal, 12)
                     .padding(.vertical, 3)
                     .overlay {
-                        RoundedRectangle(cornerRadius: 5)
+                        Capsule()
                             .strokeBorder(.quaternary, lineWidth: 0.5)
                             .allowsHitTesting(false)
                     }
@@ -170,6 +170,7 @@ struct TrackingPopover: View {
                     .buttonStyle(.glassProminent)
                     .disabled(TaskInput(taskName).name.isEmpty)
             }
+            .controlSize(.large)
             if isTaskFieldFocused { TagCompletionList(completion: tagCompletion) }
             if !matches.isEmpty {
                 ScrollView {

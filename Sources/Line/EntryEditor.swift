@@ -32,10 +32,10 @@ struct EntryEditor: View {
                                completion: tagCompletion, accessibilityLabel: "Entry task name or search",
                                submit: { chooseTask(taskName) }, cancel: { model.cancelEntry() })
                     .frame(height: 22)
-                    .padding(.horizontal, 6)
+                    .padding(.horizontal, 12)
                     .padding(.vertical, 3)
                     .overlay {
-                        RoundedRectangle(cornerRadius: 5)
+                        Capsule()
                             .strokeBorder(.quaternary, lineWidth: 0.5)
                             .allowsHitTesting(false)
                     }
@@ -46,6 +46,7 @@ struct EntryEditor: View {
                         showsReschedule = true
                     }
                     .buttonStyle(.borderless)
+                    .frame(height: 28)
                     .popover(isPresented: $showsReschedule) {
                         VStack(alignment: .leading, spacing: 12) {
                             DatePicker("Start", selection: $plannedStart, displayedComponents: [.date, .hourAndMinute])
@@ -72,9 +73,11 @@ struct EntryEditor: View {
                         .labelStyle(.iconOnly)
                 }
                 .buttonStyle(.borderless)
+                .frame(width: 28, height: 28)
                 .help("Delete entry")
                 .accessibilityLabel("Delete entry")
             }
+            .controlSize(.large)
             if isTaskFocused { TagCompletionList(completion: tagCompletion) }
             if isTaskFocused && !matches.isEmpty {
                 ScrollView {
@@ -163,7 +166,7 @@ private struct TaskColorPicker: NSViewRepresentable {
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSPopUpButton, context: Context) -> CGSize? {
-        CGSize(width: 28, height: 22)
+        CGSize(width: 28, height: 28)
     }
 
     private func colorSwatch(_ color: TaskColor, diameter: CGFloat) -> NSImage {
