@@ -11,6 +11,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--skip-build', action='store_true', help='Reuse the existing build/smoke/Tape.app bundle')
 parser.add_argument('--timeout', type=int, help='Maximum seconds per app launch, including on slower CI runners')
 modes = parser.add_mutually_exclusive_group()
+modes.add_argument('--calendars', action='store_true', help='Verify calendar settings and timeline using isolated fixtures')
 modes.add_argument('--planning', action='store_true', help='Verify planned entries and scheduled start/stop notifications')
 modes.add_argument('--statistics', action='store_true', help='Verify statistics charts, filters and navigation')
 modes.add_argument('--tags', action='store_true', help='Verify native task tags, autocomplete, and editing')
@@ -24,7 +25,7 @@ modes.add_argument('--overwrite', action='store_true', help='Verify Command-drag
 modes.add_argument('--dismissal', action='store_true', help='Verify outside-click dismissal after color menu use')
 modes.add_argument('--editing', action='store_true', help='Verify inline entry correction, resizing, and deletion')
 args = parser.parse_args()
-run_timeout = 60 if args.planning else 50 if args.statistics or args.tags or args.continuation or args.main_window else 40 if args.editing or args.creation else 20
+run_timeout = 60 if args.planning or args.calendars else 50 if args.statistics or args.tags or args.continuation or args.main_window else 40 if args.editing or args.creation else 20
 if args.timeout is not None:
     if args.timeout <= 0:
         parser.error('--timeout must be positive')
@@ -36,7 +37,7 @@ if not args.skip_build:
                    env=dict(os.environ, LINE_APP_OUTPUT=str(app)), check=True, timeout=180)
 elif not os.access(app / 'Contents/MacOS/Tape', os.X_OK):
     parser.error('--skip-build requires an existing executable at build/smoke/Tape.app/Contents/MacOS/Tape')
-output = root / 'build' / ('planning-smoke-results' if args.planning else 'statistics-smoke-results' if args.statistics else 'tags-smoke-results' if args.tags else 'main-window-smoke-results' if args.main_window else 'continuation-smoke-results' if args.continuation else 'system-activity-smoke-results' if args.system_activity else 'dismissal-smoke-results' if args.dismissal else 'editing-smoke-results' if args.editing else 'resize-overwrite-smoke-results' if args.resize_overwrite else 'overwrite-smoke-results' if args.overwrite else 'creation-smoke-results' if args.creation else 'timeline-smoke-results' if args.timeline else 'smoke-results')
+output = root / 'build' / ('calendar-smoke-results' if args.calendars else 'planning-smoke-results' if args.planning else 'statistics-smoke-results' if args.statistics else 'tags-smoke-results' if args.tags else 'main-window-smoke-results' if args.main_window else 'continuation-smoke-results' if args.continuation else 'system-activity-smoke-results' if args.system_activity else 'dismissal-smoke-results' if args.dismissal else 'editing-smoke-results' if args.editing else 'resize-overwrite-smoke-results' if args.resize_overwrite else 'overwrite-smoke-results' if args.overwrite else 'creation-smoke-results' if args.creation else 'timeline-smoke-results' if args.timeline else 'smoke-results')
 output.mkdir(parents=True, exist_ok=True)
 report = output / 'result.txt'
 
@@ -46,7 +47,7 @@ with tempfile.TemporaryDirectory(prefix='line-smoke-') as data:
         try:
             result = subprocess.run(
                 [str(app / 'Contents/MacOS/Tape'), '--smoke-test', str(output)],
-                env=dict(os.environ, LINE_DATA_DIRECTORY=data, LINE_SMOKE_PLANNING='1' if args.planning else '0', LINE_SMOKE_STATISTICS='1' if args.statistics else '0', LINE_SMOKE_TAGS='1' if args.tags else '0', LINE_SMOKE_MAIN_WINDOW='1' if args.main_window else '0', LINE_SMOKE_RESIZE_OVERWRITE='1' if args.resize_overwrite else '0', LINE_SMOKE_CONTINUATION='1' if args.continuation else '0', LINE_SMOKE_SYSTEM_ACTIVITY='1' if args.system_activity else '0', LINE_SMOKE_DISMISSAL='1' if args.dismissal else '0', LINE_SMOKE_TIMELINE='1' if args.timeline else '0',
+                env=dict(os.environ, LINE_DATA_DIRECTORY=data, LINE_SMOKE_CALENDARS='1' if args.calendars else '0', LINE_SMOKE_PLANNING='1' if args.planning else '0', LINE_SMOKE_STATISTICS='1' if args.statistics else '0', LINE_SMOKE_TAGS='1' if args.tags else '0', LINE_SMOKE_MAIN_WINDOW='1' if args.main_window else '0', LINE_SMOKE_RESIZE_OVERWRITE='1' if args.resize_overwrite else '0', LINE_SMOKE_CONTINUATION='1' if args.continuation else '0', LINE_SMOKE_SYSTEM_ACTIVITY='1' if args.system_activity else '0', LINE_SMOKE_DISMISSAL='1' if args.dismissal else '0', LINE_SMOKE_TIMELINE='1' if args.timeline else '0',
                          LINE_SMOKE_EDITING='1' if args.editing else '0', LINE_SMOKE_CREATION='1' if args.creation else '0', LINE_SMOKE_OVERWRITE='1' if args.overwrite else '0'),
                 capture_output=True, text=True, timeout=run_timeout,
             )
@@ -66,7 +67,13 @@ with tempfile.TemporaryDirectory(prefix='line-smoke-') as data:
         if result.returncode:
             raise SystemExit(result.returncode)
         records = json.loads((Path(data) / 'tracking.json').read_text())
-        if args.planning:
+        if args.calendars:
+            assert records['version'] == 4
+            assert records['calendars']['enabled'] and records['calendars']['automaticTracking']
+            assert any(item['detached'] for item in records['calendars']['occurrences'])
+            assert any(item['suppressed'] for item in records['calendars']['occurrences'])
+            assert len(records['entries']) == 2
+        elif args.planning:
             assert records['version'] == 3 and 'plans' not in records
             assert len(records['entries']) == 5
             assert sum(entry['state'] == 'skipped' for entry in records['entries']) == 2

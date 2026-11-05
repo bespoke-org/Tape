@@ -22,6 +22,13 @@ enum SmokeCheck {
             try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
             try require(NSApp.activationPolicy() == .accessory, "App must have no Dock icon")
             try require(button.image != nil, "Status item must have an icon")
+            if ProcessInfo.processInfo.environment["LINE_SMOKE_CALENDARS"] == "1" {
+                try await checkCalendars(button: button, popover: popover, model: model, output: output)
+                try Data("PASS: calendar settings, passive events, overlap lanes, skip, disconnect confirmation, and conflict choices.\n".utf8)
+                    .write(to: output.appendingPathComponent("result.txt"))
+                NSApp.terminate(nil)
+                return
+            }
             if ProcessInfo.processInfo.environment["LINE_SMOKE_PLANNING"] == "1" {
                 try await checkPlanning(button: button, popover: popover, model: model, output: output)
                 try Data("PASS: future and cross-Now drawing, plan editing, dashed timeline, scheduled notifications, manual and automatic actions.\n".utf8)
@@ -292,7 +299,7 @@ enum SmokeCheck {
         guard let sidebar = descendants(split.splitViewItems[0].viewController.view).compactMap({ $0 as? NSOutlineView }).first else {
             throw NSError(domain: "LineSmokeCheck", code: 12, userInfo: [NSLocalizedDescriptionKey: "Native sidebar is missing"])
         }
-        try require(sidebar.numberOfRows == 3 && sidebar.selectedRow == 0, "Sidebar must show General, Statistics, About, initially selecting General")
+        try require(sidebar.numberOfRows == 4 && sidebar.selectedRow == 0, "Sidebar must show General, Calendars, Statistics, About, initially selecting General")
         guard let navigation = window.toolbar?.items.compactMap({ $0.view as? NSSegmentedControl }).first,
               let heading = window.toolbar?.items.first(where: { $0.itemIdentifier.rawValue == "Tape.SettingsTitle" })?.view as? NSTextField else {
             throw NSError(domain: "LineSmokeCheck", code: 20)
@@ -318,11 +325,11 @@ enum SmokeCheck {
             sidebar.mouseDown(with: down)
             try await Task.sleep(for: .milliseconds(1_200))
         }
-        try await clickSidebarRow(1)
-        try require(sidebar.selectedRow == 1 && window.firstResponder === sidebar,
-                    "Opening Statistics must keep keyboard focus in the sidebar after the page settles")
         try await clickSidebarRow(2)
         try require(sidebar.selectedRow == 2 && window.firstResponder === sidebar,
+                    "Opening Statistics must keep keyboard focus in the sidebar after the page settles")
+        try await clickSidebarRow(3)
+        try require(sidebar.selectedRow == 3 && window.firstResponder === sidebar,
                     "Clicking a sidebar page must keep keyboard focus in the sidebar (selected=\(sidebar.selectedRow), sidebar=\(sidebar), responder=\(String(describing: window.firstResponder)))")
         try await clickSidebarRow(0)
         guard let sidebarToggle = window.toolbar?.items.first(where: { $0.itemIdentifier == .toggleSidebar }),
@@ -546,7 +553,7 @@ enum SmokeCheck {
         }
         let sidebarWidth = sidebar.enclosingScrollView?.frame.width
         try await enterCountdown("17", submit: false)
-        sidebar.selectRowIndexes(IndexSet(integer: 2), byExtendingSelection: false)
+        sidebar.selectRowIndexes(IndexSet(integer: 3), byExtendingSelection: false)
         try await settle()
         try require(heading.stringValue == "About" && split.splitViewItems.last?.viewController is NSHostingController<AboutView>,
                     "Selecting About must update the detail and toolbar title")
@@ -578,7 +585,7 @@ enum SmokeCheck {
         try require(sidebar.selectedRow == 0 && heading.stringValue == "General" && navigation.isEnabled(forSegment: 1),
                     "Back must restore General and enable Forward (row=\(sidebar.selectedRow), heading=\(heading.stringValue), forward=\(navigation.isEnabled(forSegment: 1)))")
         try await navigate(1)
-        try require(sidebar.selectedRow == 2 && heading.stringValue == "About", "Forward must restore About")
+        try require(sidebar.selectedRow == 3 && heading.stringValue == "About", "Forward must restore About")
         try require(NSApp.target(forAction: #selector(MainWindowController.goBack(_:))) as? MainWindowController === delegate.mainWindowController,
                     "Back shortcut must target the settings controller, got \(String(describing: NSApp.target(forAction: #selector(MainWindowController.goBack(_:)))))")
         try command(String(UnicodeScalar(NSLeftArrowFunctionKey)!), keyCode: 123)
@@ -587,10 +594,10 @@ enum SmokeCheck {
                     "Command-Left must navigate back through page history (row=\(sidebar.selectedRow), title=\(heading.stringValue), forward=\(navigation.isEnabled(forSegment: 1)), key=\(window.isKeyWindow))")
         try command(String(UnicodeScalar(NSRightArrowFunctionKey)!), keyCode: 124)
         try await settle()
-        try require(sidebar.selectedRow == 2 && heading.stringValue == "About" && !navigation.isEnabled(forSegment: 1),
+        try require(sidebar.selectedRow == 3 && heading.stringValue == "About" && !navigation.isEnabled(forSegment: 1),
                     "Command-Right must navigate forward through page history")
         try await navigate(0)
-        sidebar.selectRowIndexes(IndexSet(integer: 2), byExtendingSelection: false)
+        sidebar.selectRowIndexes(IndexSet(integer: 3), byExtendingSelection: false)
         try await settle()
         try require(!navigation.isEnabled(forSegment: 1), "Selecting a page after Back must clear forward history")
         sidebar.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
@@ -611,15 +618,15 @@ enum SmokeCheck {
         try await settle()
         try require(window.isMiniaturized && NSApp.activationPolicy() == .regular, "Minimizing must keep Dock presence")
         let actions = delegate.makeActionsMenu()
-        try require(actions.items.map(\.title) == ["General Settings", "Statistics", "About Tape", "", "Quit Tape"] && actions.items[3].isSeparatorItem,
-                    "Status menu must order General, Statistics, About, then a separator and Quit")
+        try require(actions.items.map(\.title) == ["General Settings", "Calendars", "Statistics", "About Tape", "", "Quit Tape"] && actions.items[4].isSeparatorItem,
+                    "Status menu must order General, Calendars, Statistics, About, then a separator and Quit")
         let general = actions.item(withTitle: "General Settings")!
         let about = actions.item(withTitle: "About Tape")!
         try require(NSApp.sendAction(about.action!, to: about.target, from: about), "Status menu must open About")
         try await settle()
         try require(!window.isMiniaturized && window.isKeyWindow && delegate.mainWindowController?.window === window,
                     "Opening a minimized window must restore and focus it (minimized=\(window.isMiniaturized), key=\(window.isKeyWindow), active=\(NSApp.isActive), front=\(NSWorkspace.shared.frontmostApplication?.bundleIdentifier ?? "unknown"))")
-        try require(sidebar.selectedRow == 2 && heading.stringValue == "About", "About menu item must select About even when General was minimized")
+        try require(sidebar.selectedRow == 3 && heading.stringValue == "About", "About menu item must select About even when General was minimized")
         try require(NSApp.sendAction(general.action!, to: general.target, from: general), "Status menu must open General Settings")
         try await settle()
         try require(sidebar.selectedRow == 0 && heading.stringValue == "General" && delegate.mainWindowController?.window === window,
@@ -634,7 +641,7 @@ enum SmokeCheck {
         try require(model.store?.runningEntry?.id == runningID, "Closing must keep tracking")
         try require(NSApp.sendAction(about.action!, to: about.target, from: about), "About must reopen a closed window")
         try await settle()
-        try require(window.isKeyWindow && sidebar.selectedRow == 2 && heading.stringValue == "About" && NSApp.activationPolicy() == .regular,
+        try require(window.isKeyWindow && sidebar.selectedRow == 3 && heading.stringValue == "About" && NSApp.activationPolicy() == .regular,
                     "About must directly select its page when reopening from menu-bar-only operation")
         try require(model.store?.runningEntry?.id == runningID && delegate.mainWindowController?.window === window,
                     "Section menu actions must preserve tracking and reuse the window")
@@ -1641,6 +1648,139 @@ enum SmokeCheck {
     private static func requireSelection(_ model: AppModel) throws -> EntrySelection {
         try require(model.entrySelection != nil, "Drawing must produce a selection")
         return model.entrySelection!
+    }
+
+    private static func checkCalendars(button: NSStatusBarButton, popover: NSPopover, model: AppModel, output: URL) async throws {
+        let store = model.store!
+        let service = model.calendars!
+        let base = Date.now
+        let events = [CalendarEvent(key: "design", calendarID: "fixture", calendarTitle: "Work", title: "Design review", start: base + 300, end: base + 1_500),
+                      CalendarEvent(key: "planning", calendarID: "fixture", calendarTitle: "Work", title: "Planning", start: base + 600, end: base + 1_800)]
+        service.installFixture(calendars: [CalendarDescriptor(id: "fixture", title: "Work", account: "Outlook")], events: events)
+        let delegate = NSApp.delegate as! AppDelegate
+        let item = delegate.makeActionsMenu().item(withTitle: "Calendars")!
+        try require(item.image != nil && NSApp.sendAction(item.action!, to: item.target, from: item), "Calendars menu opens the native page")
+        try await settle()
+        let window = delegate.mainWindowController!.window!
+        let integration: NSSwitch = try await waitFor("Native calendar integration switch") {
+            descendants(window.contentView!).compactMap { $0 as? NSSwitch }.first
+        }
+        try require(accessibilityElement(named: "Calendar integration", in: window.contentView!) != nil, "Calendar integration must have an accessible label")
+        integration.performClick(nil)
+        try await settle()
+        if ProcessInfo.processInfo.environment["LINE_SMOKE_CAPTURE"] == "1" {
+            let capture = Process()
+            capture.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+            capture.arguments = ["-x", "-l", String(window.windowNumber), output.appendingPathComponent("calendar-groups.png").path]
+            try capture.run(); capture.waitUntilExit()
+        }
+        try await pressAccessibleControl(named: "Work", in: window.contentView!, role: .checkBox)
+        try await settle()
+        try require(store.calendarsEnabled && store.selectedCalendarIDs == ["fixture"] && store.automaticCalendarTracking, "Selected calendar events must be scheduled by default")
+        try require(store.entries.isEmpty && store.tasks.isEmpty, "Showing calendars must not populate history or task suggestions")
+        window.toolbar?.validateVisibleItems()
+        guard let refresh = window.toolbar?.items.first(where: { $0.itemIdentifier.rawValue == "Tape.CalendarRefresh" }),
+              let refreshAction = refresh.action else {
+            throw NSError(domain: "CalendarSmoke", code: 3, userInfo: [NSLocalizedDescriptionKey: "Calendar refresh toolbar item is missing"])
+        }
+        try require(refresh.isEnabled && NSApp.sendAction(refreshAction, to: refresh.target, from: refresh),
+                    "Toolbar refresh must be enabled and operable for selected calendars")
+        try require(accessibilityElement(named: "Refresh Calendars", in: window.contentView!) == nil,
+                    "Calendar content must no longer contain a refresh button")
+        let refreshMenu = NSApp.mainMenu!.items.compactMap(\.submenu).flatMap(\.items).first { $0.title == "Refresh Calendars" }!
+        let refreshKey = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: .command,
+                                         timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+                                         context: nil, characters: "r", charactersIgnoringModifiers: "r", isARepeat: false, keyCode: 15)!
+        store.calendarAccessAvailable = false
+        try require(NSApp.mainMenu?.performKeyEquivalent(with: refreshKey) == true && store.calendarAccessAvailable,
+                    "Command-R must invoke calendar refresh through the native menu")
+        delegate.mainWindowController!.present(page: .general)
+        try require(!delegate.mainWindowController!.validateMenuItem(refreshMenu),
+                    "Command-R must be disabled outside Calendars")
+        try require(window.toolbar?.items.contains(where: { $0.itemIdentifier.rawValue == "Tape.CalendarRefresh" }) == false,
+                    "Calendar refresh must be absent on other pages")
+        delegate.mainWindowController!.present(page: .calendars)
+        try await settle()
+        try require(window.toolbar?.items.contains(where: { $0.itemIdentifier.rawValue == "Tape.CalendarRefresh" }) == true,
+                    "Returning to Calendars must restore toolbar refresh")
+        window.close()
+        model.setDefaultZoomHours(1)
+        try clickStatusItem(button)
+        try await settle()
+        let first = store.calendarOccurrences.first { $0.event.key == "design" }!
+        let second = store.calendarOccurrences.first { $0.event.key == "planning" }!
+        let lanes = TimelineLane.layout(store.timelineEntries(at: .now), now: .now)
+        try require(lanes[first.id]?.count == 2 && lanes[second.id]?.index == 1, "Overlaps must share the timeline in two lanes")
+        let fraction = model.timeline.fraction(for: base + 900, now: .now)
+        model.setTimelinePointerHeight((9 + 11) / 64.0)
+        model.selectEntry(at: fraction, minimumWidth: 0)
+        try require(model.editingEntryID == first.id, "Top lane selects its own occurrence")
+        model.setTimelinePointerHeight((9 + 34) / 64.0)
+        model.selectEntry(at: fraction, minimumWidth: 0)
+        try require(model.editingEntryID == second.id, "Bottom lane selects its own occurrence")
+        try await settle()
+        try require(accessibilityElement(named: "Track this event", in: contentView(popover)) == nil &&
+                    accessibilityElement(named: "Scheduled", in: contentView(popover)) == nil,
+                    "Calendar entries must not require a scheduling button")
+        guard let colorPicker = descendants(try contentView(popover)).compactMap({ $0 as? NSPopUpButton }).first,
+              let menu = colorPicker.menu,
+              let item = menu.items.first(where: { $0.representedObject as? String == TaskColor.orange.rawValue }) else {
+            throw NSError(domain: "CalendarSmoke", code: 2, userInfo: [NSLocalizedDescriptionKey: "Calendar color picker is missing"])
+        }
+        menu.performActionForItem(at: menu.index(of: item))
+        try await settle()
+        try require(store.task(id: second.id)?.color == .orange && store.entries.isEmpty && store.tasks.isEmpty,
+                    "Changing a calendar color must update the passive block without creating history")
+        if ProcessInfo.processInfo.environment["LINE_SMOKE_CAPTURE"] == "1", let host = popover.contentViewController?.view.window {
+            let capture = Process()
+            capture.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+            capture.arguments = ["-x", "-l", String(host.windowNumber), output.appendingPathComponent("calendar-timeline.png").path]
+            try capture.run(); capture.waitUntilExit()
+        }
+        try await pressAccessibleControl(named: "Skip", in: contentView(popover))
+        try await settle()
+        service.refresh()
+        try require(store.calendarOccurrence(id: second.id)?.suppressed == true && store.timelineEntries(at: .now).count == 1, "Skip hides an occurrence across refreshes")
+        func resize() throws {
+            let from = model.timeline.fraction(for: events[0].end, now: .now)
+            try draw(from, from + 0.05, in: popover)
+        }
+        func alertContent() throws -> NSView {
+            let host = try contentView(popover).window!
+            guard let content = (host.attachedSheet ?? NSApp.modalWindow)?.contentView else {
+                throw NSError(domain: "CalendarSmoke", code: 1, userInfo: [NSLocalizedDescriptionKey: "Disconnect confirmation is missing"])
+            }
+            return content
+        }
+        try resize()
+        try await settle()
+        try require(model.pendingCalendarResize?.id == first.id && store.entries.isEmpty, "Dragging must wait for disconnection confirmation")
+        let cancel = descendants(try alertContent()).compactMap { $0 as? NSButton }.first { $0.title == "Cancel" && $0.isEnabled }!
+        cancel.performClick(nil)
+        try await settle()
+        try require(store.entries.isEmpty && store.isLinkedToCalendar(id: first.id), "Cancel must leave the calendar entry unchanged")
+        try resize()
+        try await settle()
+        let confirm = descendants(try alertContent()).compactMap { $0 as? NSButton }.first { $0.title == "Disconnect and Resize" && $0.isEnabled }!
+        confirm.performClick(nil)
+        try await settle()
+        try require(store.entries.first?.id == first.id && !store.isLinkedToCalendar(id: first.id), "Confirmation retains identity while disconnecting")
+        let near = Date.now
+        service.installFixture(calendars: [CalendarDescriptor(id: "fixture", title: "Work", account: "Outlook")], events: events + [
+            CalendarEvent(key: "choice1", calendarID: "fixture", calendarTitle: "Work", title: "Choice one", start: near + 3, end: near + 60),
+            CalendarEvent(key: "choice2", calendarID: "fixture", calendarTitle: "Work", title: "Choice two", start: near + 3, end: near + 60)])
+        try await settle()
+        try require(model.schedule?.calendarConflict.count == 2 && store.runningEntry == nil, "Conflicts must require a choice")
+        let chosen = model.schedule!.calendarConflict[0]
+        let panel: NSWindow = try await waitFor("Calendar conflict panel") {
+            NSApp.windows.first { $0.isVisible && $0.contentView.map { accessibilityElement(named: "Which event would you like to track?", in: $0) != nil } == true }
+        }
+        try require(!panel.canBecomeKey, "Conflict choices must not steal focus")
+        let choiceButton = descendants(panel.contentView!).compactMap { $0 as? NSButton }.first { $0.identifier?.rawValue == chosen.id.uuidString }!
+        choiceButton.performClick(nil)
+        let _: Bool = try await waitFor("Chosen calendar event starts", timeout: .seconds(12)) { store.runningEntry?.id == chosen.id ? true : nil }
+        try require(store.entries.filter { $0.id == chosen.id }.count == 1, "Chosen event must have one entry")
+        try require(model.stop(), "Finish the fixture recording")
     }
 
     private static func checkPlanning(button: NSStatusBarButton, popover: NSPopover, model: AppModel, output: URL) async throws {

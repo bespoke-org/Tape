@@ -38,6 +38,8 @@ enum TapeApp {
         view.addItem(.separator())
         view.addItem(withTitle: "Back", action: #selector(MainWindowController.goBack(_:)), keyEquivalent: String(UnicodeScalar(NSLeftArrowFunctionKey)!))
         view.addItem(withTitle: "Forward", action: #selector(MainWindowController.goForward(_:)), keyEquivalent: String(UnicodeScalar(NSRightArrowFunctionKey)!))
+        view.addItem(.separator())
+        view.addItem(withTitle: "Refresh Calendars", action: #selector(MainWindowController.refreshCalendars(_:)), keyEquivalent: "r")
         let viewItem = NSMenuItem(title: "View", action: nil, keyEquivalent: "")
         viewItem.submenu = view
         menu.addItem(viewItem)
@@ -66,6 +68,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private var presentedContinuationID: UUID?
     private var scheduleTimer: Timer?
     private(set) var schedulePanel: ContinuationPanel?
+    private var calendarConflictPanel: CalendarConflictPanel?
+    private var presentedConflict: [TimeEntry] = []
+    private var presentedConflictTasks: [TrackedTask] = []
+    private var presentedScheduleTask: TrackedTask?
     private var presentedScheduleID: UUID?
     private(set) var mainWindowController: MainWindowController?
 
@@ -97,7 +103,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         }
 
         let timer = Timer(timeInterval: 5, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.model.checkpoint() }
+            MainActor.assumeIsolated { self?.model.checkpoint(); self?.model.calendars?.tick() }
         }
         timer.tolerance = 0.5
         RunLoop.main.add(timer, forMode: .common)
@@ -135,12 +141,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             popover.close()
             continuationPanel?.dismiss()
             schedulePanel?.dismiss()
+            calendarConflictPanel?.orderOut(nil)
         case .unlocked, .didWake:
             break
         }
     }
 
     private func syncSchedule() {
+        let conflict = model.schedule?.calendarConflict ?? []
+        if !conflict.isEmpty, let store = model.store, let button = statusItem.button {
+            schedulePanel?.dismiss(); schedulePanel = nil; presentedScheduleID = nil
+            let conflictTasks = conflict.compactMap { store.task(id: $0.taskID) }
+            if presentedConflict != conflict || presentedConflictTasks != conflictTasks {
+                calendarConflictPanel?.orderOut(nil)
+                presentedConflict = conflict
+                presentedConflictTasks = conflictTasks
+                calendarConflictPanel = CalendarConflictPanel(entries: conflict, store: store,
+                    choose: { [weak self] id in self?.model.chooseCalendarConflict(id: id) },
+                    skip: { [weak self] in self?.model.skipCalendarConflict() })
+            }
+            calendarConflictPanel?.show(below: button, avoiding: popover.isShown ? popover.contentViewController?.view.window?.frame : nil)
+            return
+        }
+        calendarConflictPanel?.orderOut(nil); calendarConflictPanel = nil; presentedConflict = []
         guard let notice = model.schedule?.notice, let task = model.store?.task(id: notice.taskID),
               let button = statusItem.button else {
             schedulePanel?.dismiss()
@@ -148,9 +171,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             presentedScheduleID = nil
             return
         }
-        if presentedScheduleID != notice.id {
+        if presentedScheduleID != notice.id || presentedScheduleTask != task {
             schedulePanel?.dismiss()
             presentedScheduleID = notice.id
+            presentedScheduleTask = task
             let starts = notice.action == .start
             schedulePanel = ContinuationPanel(task: task, remainingSeconds: notice.remainingSeconds(at: .now),
                                              hoverChanged: { _ in },
@@ -406,6 +430,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         }
         checkpointTimer?.invalidate()
         continuationTimer?.invalidate()
+        calendarConflictPanel?.orderOut(nil)
         scheduleTimer?.invalidate()
         schedulePanel?.dismiss()
         continuationPanel?.dismiss()

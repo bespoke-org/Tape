@@ -8,6 +8,8 @@ final class AppModel {
     private(set) var store: TrackingStore?
     private(set) var interruptions: TrackingInterruption?
     private(set) var schedule: TrackingSchedule?
+    private(set) var calendars: CalendarService?
+    var pendingCalendarResize: CalendarResizeRequest?
     private(set) var errorMessage: String?
     private var interruptionError: String?
     private var schedulingError: String?
@@ -38,6 +40,7 @@ final class AppModel {
     var isDrawing: Bool { drawingStart != nil }
     private let storeURL: URL
     var dataURL: URL { storeURL }
+    @ObservationIgnored private var pointerHeight = 0.5
     var onChange: (() -> Void)?
 
     init(storeURL: URL) {
@@ -51,6 +54,8 @@ final class AppModel {
             if let store {
                 interruptions = TrackingInterruption(store: store)
                 schedule = TrackingSchedule(store: store)
+                calendars = CalendarService(store: store)
+                calendars?.onChange = { [weak self] in self?.pollSchedule(); self?.onChange?() }
             }
         }
     }
@@ -82,7 +87,7 @@ final class AppModel {
             if event == .locked || event == .willSleep { schedule?.suspend() }
             try interruptions.handle(event)
             try schedule?.poll(available: interruptions.isAvailable && SystemActivityMonitor.sessionIsUsable())
-            if schedule?.notice != nil || store?.activeScheduledEntry != nil { interruptions.cancelContinuation() }
+            if schedule?.notice != nil || schedule?.calendarConflict.isEmpty == false || store?.activeScheduledEntry != nil { interruptions.cancelContinuation() }
             try interruptions.pollContinuation(sessionIsUsable: SystemActivityMonitor.sessionIsUsable())
             errorMessage = nil
             interruptionError = nil
@@ -120,7 +125,7 @@ final class AppModel {
     }
 
     func acceptContinuation() {
-        guard schedule?.notice == nil, store?.activeScheduledEntry == nil else { return }
+        guard schedule?.notice == nil, schedule?.calendarConflict.isEmpty != false, store?.activeScheduledEntry == nil else { return }
         guard let interruptions, interruptions.pendingContinuation != nil else { return }
         perform {
             try interruptions.acceptContinuation(sessionIsUsable: SystemActivityMonitor.sessionIsUsable())
@@ -128,8 +133,9 @@ final class AppModel {
     }
 
     func pollSchedule() {
-        guard let schedule, let store, schedule.notice != nil || store.entries.contains(where: { $0.isAutomatic }) else { return }
+        guard let schedule, let store, schedule.notice != nil || !schedule.calendarConflict.isEmpty || !store.scheduledEntries.isEmpty else { return }
         let previousNotice = schedule.notice
+        let previousConflict = schedule.calendarConflict
         let previousEntries = store.entries
         let previousError = errorMessage
         do {
@@ -137,12 +143,12 @@ final class AppModel {
             try schedule.poll(available: interruptions?.isAvailable == true && SystemActivityMonitor.sessionIsUsable())
             if errorMessage == schedulingError { errorMessage = nil }
             schedulingError = nil
-            if schedule.notice != nil || store.activeScheduledEntry != nil { interruptions?.cancelContinuation() }
+            if schedule.notice != nil || !schedule.calendarConflict.isEmpty || store.activeScheduledEntry != nil { interruptions?.cancelContinuation() }
         } catch {
             errorMessage = error.localizedDescription
             schedulingError = errorMessage
         }
-        if previousNotice != schedule.notice || previousEntries != store.entries || previousError != errorMessage { onChange?() }
+        if previousNotice != schedule.notice || previousConflict != schedule.calendarConflict || previousEntries != store.entries || previousError != errorMessage { onChange?() }
     }
 
     func acceptScheduledAction() {
@@ -152,6 +158,27 @@ final class AppModel {
     func rejectScheduledAction() {
         perform { try schedule?.reject() }
     }
+
+
+    func confirmCalendarResize(_ request: CalendarResizeRequest) {
+        guard let store else { return }
+        if performEntryEdit({ try store.disconnectAndResizeCalendarEntry(id: request.id, edge: request.edge,
+            to: request.date, reachesNow: request.reachesNow, overwriting: request.overwriting) }) { cancelEntry() }
+    }
+
+    func assignCalendarTask(id: UUID, input: String, scope: CalendarScope) -> Bool {
+        performEntryEdit { try store?.assignCalendarTask(id: id, input: input, scope: scope) }
+    }
+
+    func skipCalendar(id: UUID, scope: CalendarScope) {
+        if performEntryEdit({ try store?.suppressCalendarOccurrence(id: id, scope: scope) }) { cancelEntry() }
+    }
+
+    func chooseCalendarConflict(id: UUID) {
+        perform { try schedule?.chooseCalendar(id: id, available: interruptions?.isAvailable == true && SystemActivityMonitor.sessionIsUsable()) }
+    }
+
+    func skipCalendarConflict() { perform { try schedule?.skipCalendarConflict() } }
 
     func preparePopover() {
         stopTimelineAnimation()
@@ -172,7 +199,8 @@ final class AppModel {
         guard finishCreation() else { return }
         let instant = Date.now
         let segments = store.timelineSegments(in: timeline.range(at: instant), at: instant)
-        let hit = segments.reversed().sorted { ($0.kind == .recorded ? 0 : 1) < ($1.kind == .recorded ? 0 : 1) }
+        let lanes = TimelineLane.layout(store.timelineEntries(at: instant), now: instant)
+        let hit = segments.filter { pointerMatches(lanes[$0.entry.id] ?? TimelineLane()) }.reversed().sorted { ($0.kind == .recorded ? 0 : 1) < ($1.kind == .recorded ? 0 : 1) }
             .first {
                 let left = max(0, timeline.fraction(for: $0.interval.start, now: instant))
                 let end = timeline.fraction(for: $0.interval.end, now: instant)
@@ -194,6 +222,11 @@ final class AppModel {
         return performEntryEdit { try store.rescheduleEntry(id: id, start: start, end: end) }
     }
 
+    func saveCalendarColor(id: UUID, color: TaskColor) -> Bool {
+        guard let store else { return false }
+        return performEntryEdit { try store.setCalendarColor(id: id, color: color) }
+    }
+
     func saveTaskColor(id: UUID, color: TaskColor) -> Bool {
         guard let store else { return false }
         return performEntryEdit { try store.setTaskColor(id: id, color: color) }
@@ -204,6 +237,12 @@ final class AppModel {
         let deleted = performEntryEdit { try store.deleteEntry(id: id) }
         if deleted { cancelEntry() }
         return deleted
+    }
+
+    func setTimelinePointerHeight(_ fraction: Double) { pointerHeight = (fraction * 64 - 9) / 46 }
+
+    private func pointerMatches(_ lane: TimelineLane) -> Bool {
+        lane.count == 1 || (pointerHeight >= Double(lane.index) / Double(lane.count) && pointerHeight < Double(lane.index + 1) / Double(lane.count))
     }
 
     func resizeEdge(at fraction: Double, tolerance: Double) -> EntryEdge? {
@@ -217,7 +256,8 @@ final class AppModel {
             timeline.fraction(for: $0.start, now: instant) <= fraction &&
                 fraction < timeline.fraction(for: $0.end ?? instant, now: instant)
         }?.id ?? editingEntryID
-        let edges = visible.flatMap { entry -> [(UUID, EntryEdge, Double)] in
+        let lanes = TimelineLane.layout(store.timelineEntries(at: instant), now: instant)
+        let edges = visible.filter { pointerMatches(lanes[$0.id] ?? TimelineLane()) }.flatMap { entry -> [(UUID, EntryEdge, Double)] in
             [(entry.id, .start, timeline.fraction(for: entry.start, now: instant)),
              (entry.id, .end, timeline.fraction(for: entry.end ?? instant, now: instant))]
         }.filter { $0.2 >= 0 && $0.2 <= 1 && abs($0.2 - fraction) <= tolerance }
@@ -263,6 +303,10 @@ final class AppModel {
         let instant = Date.now
         let date = timeline.date(at: min(max(fraction, 0), 1), now: instant)
         let reachesNow = abs(date.timeIntervalSince(instant)) <= timeline.span * tolerance
+        if store.isLinkedToCalendar(id: id) {
+            pendingCalendarResize = CalendarResizeRequest(id: id, edge: edge, date: date, reachesNow: reachesNow, overwriting: overwriting)
+            return
+        }
         cancelEntry()
         do {
             try interruptions?.retryStop()
@@ -370,6 +414,7 @@ final class AppModel {
         editingEntryID = nil
         resizingEntryID = nil
         resizingPreview = nil
+        pendingCalendarResize = nil
         resizingEdge = nil
         isOverwriting = false
         drawingStart = nil
@@ -518,4 +563,12 @@ final class AppModel {
             return false
         }
     }
+}
+
+struct CalendarResizeRequest: Identifiable {
+    let id: UUID
+    let edge: EntryEdge
+    let date: Date
+    let reachesNow: Bool
+    let overwriting: Bool
 }

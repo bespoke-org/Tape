@@ -30,8 +30,11 @@ struct TrackingPopover: View {
                     }
                 }
                 if let id = model.editingEntryID, let entry = store.editableEntry(id: id) {
-                    EntryEditor(model: model, store: store, entry: entry)
-                        .id(id)
+                    if store.isLinkedToCalendar(id: id), let occurrence = store.calendarOccurrence(id: id) {
+                        CalendarEntryEditor(model: model, store: store, entry: entry, occurrence: occurrence).id(id)
+                    } else {
+                        EntryEditor(model: model, store: store, entry: entry).id(id)
+                    }
                 } else if isTaskPickerShown {
                     taskPicker(store: store)
                         .task {
@@ -67,6 +70,14 @@ struct TrackingPopover: View {
             proxy.size
         } action: { size in
             contentSizeDidChange(size)
+        }
+        .alert("Disconnect this event from its calendar?", isPresented: Binding(
+            get: { model.pendingCalendarResize != nil }, set: { if !$0 { model.pendingCalendarResize = nil } }),
+               presenting: model.pendingCalendarResize) { request in
+            Button("Cancel", role: .cancel) { model.cancelEntry() }
+            Button("Disconnect and Resize") { model.confirmCalendarResize(request) }
+        } message: { _ in
+            Text("The resized entry will stay in Tape. Further calendar changes will no longer update this occurrence.")
         }
         .onExitCommand {
             if isTaskPickerShown || model.editingEntryID != nil || model.resizingEntryID != nil || model.isDrawing || model.entryError != nil {

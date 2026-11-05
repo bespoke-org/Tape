@@ -3,22 +3,28 @@ import LineCore
 import SwiftUI
 
 @MainActor
-final class MainWindowController: NSWindowController, NSWindowDelegate, NSToolbarDelegate, NSMenuItemValidation {
+final class MainWindowController: NSWindowController, NSWindowDelegate, NSToolbarDelegate, NSToolbarItemValidation, NSMenuItemValidation {
     private static let sidebarSeparator = NSToolbarItem.Identifier("Tape.SidebarSeparator")
     private static let navigation = NSToolbarItem.Identifier("Tape.Navigation")
     private static let settingsTitle = NSToolbarItem.Identifier("Tape.SettingsTitle")
+    private static let calendarRefresh = NSToolbarItem.Identifier("Tape.CalendarRefresh")
+    private let model: AppModel
     private let navigation = SettingsNavigation()
     let statisticsSelection = StatisticsSelection()
     private let statisticsController: StatisticsHostingController
-    private let generalController: SettingsHostingController
+    private let calendarsController: NativeSettingsHostingController<CalendarsView>
+    private let generalController: NativeSettingsHostingController<SettingsView>
     private let aboutController: NSHostingController<AboutView>
     private weak var navigationControl: NSSegmentedControl?
     private weak var pageTitle: NSTextField?
 
     init(model: AppModel) {
+        self.model = model
         statisticsController = StatisticsHostingController(rootView: StatisticsView(model: model, selection: statisticsSelection))
         statisticsController.sizingOptions = []
-        generalController = SettingsHostingController(rootView: SettingsView(model: model))
+        generalController = NativeSettingsHostingController(rootView: SettingsView(model: model))
+        calendarsController = NativeSettingsHostingController(rootView: CalendarsView(model: model))
+        calendarsController.sizingOptions = []
         aboutController = NSHostingController(rootView: AboutView(dataURL: model.dataURL))
         generalController.sizingOptions = []
         aboutController.sizingOptions = []
@@ -78,7 +84,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSToolba
     }
 
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        toolbarDefaultItemIdentifiers(toolbar)
+        toolbarDefaultItemIdentifiers(toolbar) + [Self.calendarRefresh]
     }
 
     func toolbar(_ toolbar: NSToolbar, itemForItemIdentifier identifier: NSToolbarItem.Identifier,
@@ -110,6 +116,16 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSToolba
             item.autovalidates = false
             return item
         }
+        if identifier == Self.calendarRefresh {
+            let item = NSToolbarItem(itemIdentifier: identifier)
+            item.label = "Refresh Calendars"
+            item.toolTip = "Refresh Calendars (⌘R)"
+            item.image = NSImage(systemSymbolName: "arrow.clockwise", accessibilityDescription: "Refresh Calendars")
+            item.target = self
+            item.action = #selector(refreshCalendars(_:))
+            item.isBordered = true
+            return item
+        }
         if identifier == Self.settingsTitle {
             let item = NSToolbarItem(itemIdentifier: identifier)
             let title = NSTextField(labelWithString: navigation.page.title)
@@ -127,6 +143,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSToolba
         guard let window, let split = window.contentViewController as? NSSplitViewController else { return }
         let controller: NSViewController = switch navigation.page {
         case .statistics: statisticsController
+        case .calendars: calendarsController
         case .general: generalController
         case .about: aboutController
         }
@@ -136,7 +153,32 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSToolba
         }
         pageTitle?.stringValue = navigation.page.title
         pageTitle?.sizeToFit()
+        if let toolbar = window.toolbar {
+            let refreshIndex = toolbar.items.firstIndex { $0.itemIdentifier == Self.calendarRefresh }
+            if navigation.page == .calendars && refreshIndex == nil {
+                toolbar.insertItem(withItemIdentifier: Self.calendarRefresh, at: toolbar.items.count)
+            } else if navigation.page != .calendars, let refreshIndex {
+                toolbar.removeItem(at: refreshIndex)
+            }
+            toolbar.validateVisibleItems()
+        }
         updateNavigationControls()
+    }
+
+    private var canRefreshCalendars: Bool {
+        navigation.page == .calendars && model.store?.calendarsEnabled == true &&
+            model.calendars?.accessGranted == true && model.calendars?.isRefreshing == false
+    }
+
+    @objc func refreshCalendars(_ sender: Any?) {
+        guard canRefreshCalendars else { return }
+        model.calendars?.refresh()
+        window?.toolbar?.validateVisibleItems()
+    }
+
+    func validateToolbarItem(_ item: NSToolbarItem) -> Bool {
+        guard item.itemIdentifier == Self.calendarRefresh else { return true }
+        return canRefreshCalendars
     }
 
     private func updateNavigationControls() {
@@ -163,6 +205,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSToolba
         case #selector(toggleSettingsSidebar(_:)): return true
         case #selector(goBack(_:)): return navigation.canGoBack
         case #selector(goForward(_:)): return navigation.canGoForward
+        case #selector(refreshCalendars(_:)): return canRefreshCalendars
         default: return true
         }
     }
@@ -243,6 +286,7 @@ private struct SettingsSidebarIcon: View {
 
     private var color: Color {
         switch page {
+        case .calendars: .red
         case .general: .gray
         case .statistics: .orange
         case .about: .blue
@@ -311,7 +355,7 @@ private final class StatisticsHostingController: NSHostingController<StatisticsV
     }
 }
 
-private final class SettingsHostingController: NSHostingController<SettingsView> {
+private final class NativeSettingsHostingController<Content: View>: NSHostingController<Content> {
     override func viewDidAppear() {
         super.viewDidAppear()
         DispatchQueue.main.async { [weak self] in

@@ -1,12 +1,13 @@
 import Observation
 
 enum SettingsPage: String, CaseIterable, Hashable {
-    case general, statistics, about
+    case general, calendars, statistics, about
 
     var title: String {
         switch self {
         case .statistics: "Statistics"
         case .general: "General"
+        case .calendars: "Calendars"
         case .about: "About"
         }
     }
@@ -14,6 +15,7 @@ enum SettingsPage: String, CaseIterable, Hashable {
         switch self {
         case .statistics: "chart.bar"
         case .general: "gearshape"
+        case .calendars: "calendar"
         case .about: "info.circle"
         }
     }
@@ -21,6 +23,7 @@ enum SettingsPage: String, CaseIterable, Hashable {
         switch self {
         case .statistics: "Statistics"
         case .general: "General Settings"
+        case .calendars: "Calendars"
         case .about: "About Tape"
         }
     }

@@ -8,10 +8,11 @@ public final class TrackingStore {
     var snapshot: TrackingSnapshot
     private let url: URL
     let now: () -> Date
+    public var calendarAccessAvailable = false
 
     public var tasks: [TrackedTask] { snapshot.tasks }
     public var entries: [TimeEntry] { snapshot.entries }
-    public var scheduledEntries: [TimeEntry] { entries.filter { $0.isAutomatic } }
+    public var scheduledEntries: [TimeEntry] { schedulingEntries(at: now()) }
     public var activeScheduledEntry: TimeEntry? { entries.first { $0.isRunning && $0.end != nil } }
     public static let defaultZoomPresets = [1, 2, 4, 8, 12, 16, 24]
     public var defaultZoomHours: Int { Self.nearestZoomPreset(snapshot.defaultZoomHours ?? 8) }
@@ -43,7 +44,7 @@ public final class TrackingStore {
         } else {
             snapshot = TrackingSnapshot()
         }
-        guard (1...3).contains(snapshot.version) else { throw TrackingError.unsupportedStoreVersion }
+        guard (1...4).contains(snapshot.version) else { throw TrackingError.unsupportedStoreVersion }
         let migrating = snapshot.version < 3
         if migrating {
             let backup = url.appendingPathExtension("before-unified-entries-v\(snapshot.version).json")
@@ -64,7 +65,7 @@ public final class TrackingStore {
     }
 
     public func task(id: UUID) -> TrackedTask? {
-        tasks.first { $0.id == id }
+        tasks.first { $0.id == id } ?? calendarDisplayTask(id: id)
     }
 
     public func taskSuggestions(matching query: String) -> [TrackedTask] {
@@ -95,7 +96,7 @@ public final class TrackingStore {
     }
 
     public func entries(overlapping range: DateInterval, now: Date) -> ArraySlice<TimeEntry> {
-        ArraySlice(entries.filter { $0.start < range.end && ($0.end ?? now) > range.start })
+        ArraySlice(timelineEntries(at: now).filter { $0.start < range.end && ($0.end ?? now) > range.start })
     }
 
     /// Collision checks use actual intervals; the entry remains the editing identity.
@@ -196,7 +197,7 @@ public final class TrackingStore {
 
     public func prepareResize(id: UUID, edge: EntryEdge, to date: Date, reachesNow: Bool = false,
                               overwriting: Bool = false) throws -> EntrySelection {
-        guard let entry = entries.first(where: { $0.id == id }) else { throw TrackingError.missingEntry }
+        guard let entry = editableEntry(id: id) else { throw TrackingError.missingEntry }
         guard date.timeIntervalSince1970.isFinite else { throw TrackingError.emptyInterval }
         let instant = try checkedInstant()
         var boundary = Date(timeIntervalSince1970: (date.timeIntervalSince1970 / 60).rounded() * 60)
@@ -239,14 +240,19 @@ public final class TrackingStore {
     public func resizeEntry(id: UUID, edge: EntryEdge, to date: Date, reachesNow: Bool = false,
                             overwriting: Bool = false) throws {
         let selection = try prepareResize(id: id, edge: edge, to: date, reachesNow: reachesNow, overwriting: overwriting)
-        let instant = try checkedInstant()
         let entry = try previewResizedEntry(id: id, edge: edge, selection: selection)
-        var candidate = snapshot
+        try saveResizedEntry(entry, selection: selection, in: snapshot)
+    }
+
+    func saveResizedEntry(_ entry: TimeEntry, selection: EntrySelection, in original: TrackingSnapshot) throws {
+        let instant = try checkedInstant()
+        let id = entry.id
+        var candidate = original
         candidate.entries.removeAll { $0.id == id }
-        if overwriting { removeOverlaps(with: selection, from: &candidate, at: instant) }
+        if selection.overwritesExisting { removeOverlaps(with: selection, from: &candidate, at: instant) }
         candidate.entries.append(entry)
         candidate.entries.sort { $0.start < $1.start }
-        if overwriting, let index = candidate.entries.firstIndex(where: { $0.id == id }) {
+        if selection.overwritesExisting, let index = candidate.entries.firstIndex(where: { $0.id == id }) {
             mergeConnectedEntries(at: index, in: &candidate, preserving: id)
         }
         candidate.checkpoint = candidate.entries.contains(where: \.isRunning) ? instant : nil
@@ -254,7 +260,7 @@ public final class TrackingStore {
     }
 
     public func previewResizedEntry(id: UUID, edge: EntryEdge, selection: EntrySelection) throws -> TimeEntry {
-        guard var entry = entries.first(where: { $0.id == id }) else { throw TrackingError.missingEntry }
+        guard var entry = editableEntry(id: id) else { throw TrackingError.missingEntry }
         let instant = try checkedInstant()
         let oldStart = entry.start
         let oldEnd = entry.end
@@ -279,7 +285,7 @@ public final class TrackingStore {
         } else if entry.state == .paused && edge == .end {
             // Extending a paused entry never backfills the pause or starts tracking.
         } else if edge == .end || (edge == .start && wasScheduled) {
-            extendRecording(&entry, from: wasScheduled ? entry.start : min(oldEnd ?? instant, instant), through: instant, running: true)
+            extendRecording(&entry, from: wasScheduled ? (isLinkedToCalendar(id: id) ? max(entry.start, instant) : entry.start) : min(oldEnd ?? instant, instant), through: instant, running: true)
             entry.state = .active
         }
         if edge == .start && entry.start < oldStart && entry.start < instant {
@@ -309,6 +315,14 @@ public final class TrackingStore {
     func removeOverlaps(with selection: EntrySelection, from candidate: inout TrackingSnapshot, at instant: Date) {
         let end = selection.end ?? .distantFuture
         var changedRunningEntry = false
+        // Confirmed overwrites own the resulting fragments. A refresh must not restore the source bounds.
+        let overwrittenIDs = Set(candidate.entries.filter { $0.start < end && ($0.end ?? .distantFuture) > selection.start }.map(\.id))
+        if var calendars = candidate.calendars {
+            for index in calendars.occurrences.indices where overwrittenIDs.contains(calendars.occurrences[index].id) {
+                calendars.occurrences[index].detached = true
+            }
+            candidate.calendars = calendars
+        }
         candidate.entries = candidate.entries.flatMap { original -> [TimeEntry] in
             let entryEnd = original.end ?? .distantFuture
             guard original.start < end, entryEnd > selection.start else { return [original] }
@@ -358,7 +372,8 @@ public final class TrackingStore {
     }
 
     private func canMerge(_ left: TimeEntry, _ right: TimeEntry) -> Bool {
-        left.taskID == right.taskID && left.end == right.start && !left.state.awaitsStart && !right.state.awaitsStart
+        left.taskID == right.taskID && left.end == right.start && !left.state.awaitsStart && !right.state.awaitsStart &&
+            !isLinkedToCalendar(id: left.id) && !isLinkedToCalendar(id: right.id)
     }
 
     private func merged(_ left: TimeEntry, _ right: TimeEntry, id: UUID) -> TimeEntry {
@@ -372,6 +387,16 @@ public final class TrackingStore {
     }
 
     public func deleteEntry(id: UUID) throws {
+        if isLinkedToCalendar(id: id) {
+            var candidate = snapshot
+            let index = candidate.calendars!.occurrences.firstIndex { $0.id == id }!
+            candidate.calendars!.occurrences[index].suppressed = true
+            let wasRunning = candidate.entries.contains { $0.id == id && $0.isRunning }
+            candidate.entries.removeAll { $0.id == id }
+            if wasRunning { candidate.checkpoint = nil }
+            try commit(candidate)
+            return
+        }
         guard entries.contains(where: { $0.id == id }) else { throw TrackingError.missingEntry }
         var candidate = snapshot
         candidate.entries.removeAll { $0.id == id }
@@ -548,7 +573,11 @@ public final class TrackingStore {
 
     func commit(_ candidate: TrackingSnapshot) throws {
         var candidate = candidate
-        candidate.version = 3
+        if candidate.calendars != nil && snapshot.version < 4 && FileManager.default.fileExists(atPath: url.path) {
+            let backup = url.appendingPathExtension("before-calendars-v\(snapshot.version).json")
+            if !FileManager.default.fileExists(atPath: backup.path) { try FileManager.default.copyItem(at: url, to: backup) }
+        }
+        candidate.version = candidate.calendars == nil ? max(3, candidate.version) : 4
         candidate.plans = nil
         candidate.entries.sort { $0.start < $1.start }
         let usedTasks = Set(candidate.entries.map(\.taskID))

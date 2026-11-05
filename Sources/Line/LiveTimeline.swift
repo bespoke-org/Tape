@@ -19,6 +19,8 @@ struct LiveTimeline: View {
         store.entries(overlapping: visibleRange, now: now)
     }
 
+    private var lanes: [UUID: TimelineLane] { TimelineLane.layout(store.timelineEntries(at: now), now: now) }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             GeometryReader { geometry in
@@ -153,11 +155,13 @@ struct LiveTimeline: View {
                         guard model.editingEntryID != nil else { return false }
                         model.cancelEntry()
                         return true
-                    })
+                    }, pointerHeight: model.setTimelinePointerHeight)
                     .accessibilityHidden(true)
                 }
             }
             .accessibilityElement(children: .contain)
+            .onAppear { model.calendars?.show(range: visibleRange) }
+            .onChange(of: visibleRange) { _, _ in model.calendars?.show(range: visibleRange) }
             .accessibilityLabel("Timeline, \(dateContext), \(model.timeline.isFollowingNow ? "following now" : "browsing")")
         }
     }
@@ -175,6 +179,9 @@ struct LiveTimeline: View {
     @ViewBuilder private func entrySegment(_ segment: EntrySegment, width: CGFloat) -> some View {
         if let task = store.task(id: segment.entry.taskID) {
             let entry = segment.entry
+            let lane = lanes[entry.id] ?? TimelineLane()
+            let blockHeight = lane.count == 1 ? 46.0 : max(1, 46.0 / Double(lane.count) - 2)
+            let offsetY = stripTop + (stripHeight - 46) / 2 + Double(lane.index) * 46 / Double(lane.count)
             let selected = model.editingEntryID == entry.id || model.resizingEntryID == entry.id
             let left = max(0, position(segment.interval.start, width: width))
             let right = min(width, position(segment.interval.end, width: width))
@@ -192,21 +199,24 @@ struct LiveTimeline: View {
                                            style: StrokeStyle(lineWidth: selected || contrast == .increased ? 2 : 1,
                                                               dash: recorded ? [] : [5, 3]))
                     }
-                    .frame(width: max(0, right - left), height: 46)
+                    .frame(width: max(0, right - left), height: blockHeight)
                     .clipped()
             }
             .buttonStyle(.plain)
-            .offset(x: left, y: stripTop + (stripHeight - 46) / 2)
+            .offset(x: left, y: offsetY)
             .help(entryDescription(entry, task: task))
             .accessibilityLabel(segment.kind == .planned ? "Planned: \(task.name)" : entryDescription(entry, task: task))
             // One title for the whole entry, even where Now divides its drawing style.
             if segment.interval.start == max(entry.start, visibleRange.start) {
                 let labelRight = min(width, position(entry.end ?? now, width: width))
-                if labelRight - left > 42 {
-                    Text(task.name).font(.caption.weight(.medium)).lineLimit(1)
+                if labelRight - left > 42 && blockHeight >= 12 {
+                    HStack(spacing: 3) {
+                        if store.isLinkedToCalendar(id: entry.id) { Image(systemName: "calendar") }
+                        Text(task.name)
+                    }.font(.caption.weight(.medium)).lineLimit(1)
                         .foregroundStyle(.primary).padding(.horizontal, 6)
-                        .frame(width: labelRight - left, height: 46, alignment: .leading)
-                        .offset(x: left, y: stripTop + (stripHeight - 46) / 2)
+                        .frame(width: labelRight - left, height: blockHeight, alignment: .leading)
+                        .offset(x: left, y: offsetY)
                         .allowsHitTesting(false)
                         .accessibilityHidden(true)
                 }

@@ -1,7 +1,7 @@
 import Foundation
 
 extension TrackingStore {
-    public func editableEntry(id: UUID) -> TimeEntry? { entries.first { $0.id == id } }
+    public func editableEntry(id: UUID) -> TimeEntry? { entries.first { $0.id == id } ?? calendarOccurrences.first { $0.id == id && !$0.suppressed && !$0.detached }.map(projection) }
 
     func occupiedIntervals(at instant: Date, excluding id: UUID? = nil) -> [DateInterval] {
         entries.filter { $0.id != id }.flatMap { entry in
@@ -59,9 +59,16 @@ extension TrackingStore {
     }
 
     public func skipScheduledEntry(id: UUID) throws {
+        if isLinkedToCalendar(id: id), entries.first(where: { $0.id == id })?.isRunning != true {
+            try suppressCalendarOccurrence(id: id)
+            return
+        }
         var candidate = snapshot
         guard let index = candidate.entries.firstIndex(where: { $0.id == id }) else { return }
         if candidate.entries[index].isRunning {
+            if let calendarIndex = candidate.calendars?.occurrences.firstIndex(where: { $0.id == id }) {
+                candidate.calendars!.occurrences[calendarIndex].detached = true
+            }
             // Keep tracking removes the deadline from this entry; there is no leftover plan.
             candidate.entries[index].end = nil
         } else {
@@ -71,6 +78,7 @@ extension TrackingStore {
     }
 
     public func markEntryMissed(id: UUID) throws {
+        if isLinkedToCalendar(id: id) { try suppressCalendarOccurrence(id: id); return }
         var candidate = snapshot
         guard let index = candidate.entries.firstIndex(where: { $0.id == id }), candidate.entries[index].state.awaitsStart else { return }
         candidate.entries[index].state = candidate.entries[index].recorded.isEmpty ? .missed : .completed
@@ -79,11 +87,13 @@ extension TrackingStore {
 
     public func startScheduledEntry(id: UUID, at boundary: Date? = nil) throws {
         let instant = try checkedInstant()
-        guard let entry = entries.first(where: { $0.id == id }), entry.state.awaitsStart,
+        guard let entry = editableEntry(id: id), entry.state.awaitsStart,
               let end = entry.end, instant < end else { return }
+        guard !calendarStartIsBlocked(entry, at: instant) else { throw TrackingError.overlappingEntry }
         let start = boundary ?? instant
         guard start <= instant, start < end else { throw TrackingError.futureInterval }
         var candidate = snapshot
+        if !entries.contains(where: { $0.id == id }) { try materializeCalendarEntry(id: id, in: &candidate, explicit: false) }
         let latest = entries.flatMap(\.recorded).compactMap(\.end).max() ?? .distantPast
         let actualStart = max(start, runningEntry?.recorded.last?.start ?? .distantPast, latest)
         guard actualStart < end else { return }
@@ -106,7 +116,7 @@ extension TrackingStore {
     }
 
     public func timelineSegments(in range: DateInterval, at instant: Date) -> [EntrySegment] {
-        entries.flatMap { timelineSegments(for: $0, in: range, at: instant) }
+        timelineEntries(at: instant).flatMap { timelineSegments(for: $0, in: range, at: instant) }
     }
 
     public func timelineSegments(for entry: TimeEntry, in range: DateInterval, at instant: Date) -> [EntrySegment] {

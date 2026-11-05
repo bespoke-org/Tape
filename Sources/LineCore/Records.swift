@@ -119,6 +119,7 @@ struct TrackingSnapshot: Codable {
     var version = 3
     var tasks: [TrackedTask] = []
     var entries: [TimeEntry] = []
+    var calendars: CalendarPreferences?
     var plans: [LegacyPlannedEntry]?
     var checkpoint: Date?
     var defaultZoomHours: Int?

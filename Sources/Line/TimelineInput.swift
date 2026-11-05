@@ -19,6 +19,7 @@ struct TimelineInput: NSViewRepresentable {
     let updateResize: (Double, Double, Bool) -> Void
     let endResize: (Double, Double, Bool) -> Void
     let cancelEdit: () -> Bool
+    var pointerHeight: (Double) -> Void = { _ in }
 
     func makeNSView(context: Context) -> TimelineInputView { TimelineInputView() }
 
@@ -38,6 +39,7 @@ struct TimelineInput: NSViewRepresentable {
         view.updateResize = updateResize
         view.endResize = endResize
         view.cancelEdit = cancelEdit
+        view.pointerHeight = pointerHeight
         view.refreshCursor()
     }
 
@@ -62,6 +64,7 @@ final class TimelineInputView: NSView {
     var updateResize: (Double, Double, Bool) -> Void = { _, _, _ in }
     var endResize: (Double, Double, Bool) -> Void = { _, _, _ in }
     var cancelEdit: () -> Bool = { false }
+    var pointerHeight: (Double) -> Void = { _ in }
     private var hoverArea: NSTrackingArea?
     private var showsResizeCursor = false
     private let resizeTolerance: CGFloat = 5
@@ -111,6 +114,7 @@ final class TimelineInputView: NSView {
     }
 
     private func updateCursor(at point: NSPoint, modifiers: NSEvent.ModifierFlags) {
+        if !isDrawing && !isResizing { pointerHeight((point.y - drawingBounds.minY) / max(drawingBounds.height, 1)) }
         let canHover = !isDrawing && !modifiers.contains(.control) && drawingBounds.contains(point)
         let edge = draggingEdge ?? (canHover ? resizeEdge(point.x / max(bounds.width, 1), resizeTolerance / max(bounds.width, 1)) : nil)
         if let edge {
@@ -186,6 +190,7 @@ final class TimelineInputView: NSView {
         if event.type == .leftMouseDragged, let origin = dragOrigin {
             if !isDrawing && !isResizing {
                 guard abs(point.x - origin.x) >= 3 else { return false }
+                pointerHeight((origin.y - drawingBounds.minY) / max(drawingBounds.height, 1))
                 let start = origin.x / max(bounds.width, 1)
                 draggingEdge = beginResize(start, resizeTolerance / max(bounds.width, 1))
                 if !isResizing {
@@ -211,6 +216,7 @@ final class TimelineInputView: NSView {
                 return true
             }
             if !isDrawing, let origin, abs(point.x - origin.x) < 3, drawingBounds.contains(point), !dragOverwrites {
+                pointerHeight((point.y - drawingBounds.minY) / max(drawingBounds.height, 1))
                 selectEntry(fraction, 2 / max(bounds.width, 1))
                 return true
             }
