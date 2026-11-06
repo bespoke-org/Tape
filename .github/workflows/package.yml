@@ -1,0 +1,46 @@
+name: Package
+
+on:
+  workflow_call:
+    outputs:
+      version:
+        description: CFBundleShortVersionString of the built app
+        value: ${{ jobs.package.outputs.version }}
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: macos-26
+    timeout-minutes: 15
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Build and package the universal app
+        run: ./scripts/package-app.sh
+
+      - name: Read the app version
+        id: version
+        run: |
+          version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' build/package/Tape.app/Contents/Info.plist)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      # Upload each file directly so the release job can download it unchanged.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          path: build/dist/Tape-${{ steps.version.outputs.version }}.dmg
+          archive: false
+          retention-days: 7
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          path: build/dist/Tape-${{ steps.version.outputs.version }}.zip
+          archive: false
+          retention-days: 7
+          if-no-files-found: error

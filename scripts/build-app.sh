@@ -6,11 +6,21 @@ cd "$project_dir"
 configuration="${1:-release}"
 case "$configuration" in
     debug|release) ;;
-    *) echo "Usage: $0 [debug|release]" >&2; exit 2 ;;
+    *) echo "Usage: $0 [debug|release] [--universal]" >&2; exit 2 ;;
 esac
+build_flags=(-c "$configuration")
+case "${2:-}" in
+    '') ;;
+    --universal) build_flags+=(--arch arm64 --arch x86_64) ;;
+    *) echo "Usage: $0 [debug|release] [--universal]" >&2; exit 2 ;;
+esac
+if (( $# > 2 )); then
+    echo "Usage: $0 [debug|release] [--universal]" >&2
+    exit 2
+fi
 
-swift build -c "$configuration"
-binary_dir="$(swift build -c "$configuration" --show-bin-path)"
+swift build "${build_flags[@]}"
+binary_dir="$(swift build "${build_flags[@]}" --show-bin-path)"
 app_dir="${LINE_APP_OUTPUT:-$project_dir/build/Tape.app}"
 mkdir -p "$app_dir/Contents/MacOS" "$app_dir/Contents/Resources"
 cp "$binary_dir/Tape" "$app_dir/Contents/MacOS/Tape"

@@ -14,6 +14,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  package:
+    uses: ./.github/workflows/package.yml
+
   verify:
     runs-on: macos-26
     timeout-minutes: 15
@@ -31,12 +34,6 @@ jobs:
         run: |
           mkdir -p build/reports
           swift test --xunit-output build/reports/tests.xml
-
-      - name: Build release app
-        run: ./scripts/build-app.sh release
-
-      - name: Validate app bundle
-        run: ./scripts/verify-app.sh
 
       - name: Upload test report
         if: always()
