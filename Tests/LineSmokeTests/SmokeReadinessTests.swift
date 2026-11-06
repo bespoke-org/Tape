@@ -6,7 +6,7 @@ import Testing
 
 @MainActor
 struct SmokeReadinessTests {
-    @Test func overwriteDrawingStartsOutsideResizeHandlesAtEverySnapPhase() throws {
+    @Test func overwriteDrawingStartsOutsideResizeHandlesAtEverySnapPhase() async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
         let model = AppModel(storeURL: directory.appendingPathComponent("tracking.json"))
@@ -25,6 +25,8 @@ struct SmokeReadinessTests {
 
             try #require(model.resizeEdge(at: SmokeCheck.overwriteThroughNowStart, tolerance: 5.0 / 580) == nil,
                          "The overwrite smoke drag hits a resize handle at snap phase \(phase)")
+            // Let concurrent readiness checks and their timers run on the main actor.
+            await Task.yield()
         }
     }
 
