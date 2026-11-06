@@ -1,0 +1,73 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  package:
+    uses: ./.github/workflows/package.yml
+
+  release:
+    needs: package
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ github.ref_name }}
+      VERSION: ${{ needs.package.outputs.version }}
+    steps:
+      - name: Check that the tag matches the app version
+        run: |
+          base=${TAG#v}
+          base=${base%%-*}
+          if [[ "$base" != "$VERSION" ]]; then
+            echo "Tag $TAG does not match CFBundleShortVersionString $VERSION" >&2
+            exit 1
+          fi
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: Tape-${{ needs.package.outputs.version }}.*
+          path: build/dist
+          merge-multiple: true
+          skip-decompress: true
+
+      - name: Write the release notes
+        run: |
+          gh api "repos/$GH_REPO/releases/generate-notes" -f tag_name="$TAG" --jq .body > notes.md
+          cat >> notes.md <<'EOF'
+
+          ### Installing
+
+          Requires macOS 26 or later. The app supports Apple Silicon and Intel Macs.
+
+          Open the DMG and drag Tape.app to Applications, or extract the ZIP and move Tape.app there.
+          This build is signed ad hoc and is not notarized. If macOS blocks the downloaded app, run:
+
+          ```sh
+          xattr -d com.apple.quarantine /Applications/Tape.app
+          ```
+          EOF
+
+      - name: Publish or update the release
+        run: |
+          flags=()
+          [[ "$TAG" == *-* ]] && flags+=(--prerelease)
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --title "Tape ${TAG#v}" --notes-file notes.md "${flags[@]}"
+            gh release upload "$TAG" "build/dist/Tape-$VERSION.dmg" "build/dist/Tape-$VERSION.zip" --clobber
+          else
+            gh release create "$TAG" "build/dist/Tape-$VERSION.dmg" "build/dist/Tape-$VERSION.zip" \
+              --title "Tape ${TAG#v}" --notes-file notes.md --verify-tag "${flags[@]}"
+          fi
