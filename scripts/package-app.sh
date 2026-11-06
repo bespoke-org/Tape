@@ -10,7 +10,7 @@ trap 'rm -rf "$dmg_root"' EXIT
 
 LINE_APP_OUTPUT="$app_dir" ./scripts/build-app.sh release --universal
 ./scripts/verify-app.sh "$app_dir"
-lipo -verify_arch arm64 x86_64 "$app_dir/Contents/MacOS/Tape"
+lipo "$app_dir/Contents/MacOS/Tape" -verify_arch arm64 x86_64
 
 version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app_dir/Contents/Info.plist")
 mkdir -p "$dist_dir"
